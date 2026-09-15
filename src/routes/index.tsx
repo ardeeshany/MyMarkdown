@@ -256,10 +256,10 @@ function Index() {
   const [mode, setMode] = useState<"edit" | "preview">("preview");
   const [copied, setCopied] = useState(false);
   const [tocOpen, setTocOpen] = useState(true);
-  const headings = useMemo(() => getTocHeadings(markdown), [markdown]);
+  const previewMarkdown = useMemo(() => promoteInlineJsonToFences(markdown), [markdown]);
+  const headings = useMemo(() => getTocHeadings(previewMarkdown), [previewMarkdown]);
   const firstH1Id = useMemo(() => headings.find((heading) => heading.level === 1)?.id, [headings]);
   const [activeHeading, setActiveHeading] = useState(headings[0]?.id ?? "");
-  const previewMarkdown = useMemo(() => promoteInlineJsonToFences(markdown), [markdown]);
   const issues = useMemo(() => lintMarkdown(markdown), [markdown]);
   const [showScrollTop, setShowScrollTop] = useState(false);
 
