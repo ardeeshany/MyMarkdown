@@ -78,6 +78,19 @@ function getTocHeadings(source: string): TocHeading[] {
   return headings;
 }
 
+function promoteInlineJsonToFences(source: string) {
+  return source.replace(/`([^`\n]+)`/g, (match, content) => {
+    const trimmed = content.trim();
+    if (!/^[\{\[]/.test(trimmed) || !/"[^"]+"\s*:/.test(trimmed)) return match;
+    try {
+      JSON.parse(trimmed);
+      return `\n\n\`\`\`json\n${trimmed}\n\`\`\`\n\n`;
+    } catch {
+      return match;
+    }
+  });
+}
+
 function formatMarkdown(source: string) {
   const lines = source.replace(/\r\n/g, "\n").split("\n");
   const output: string[] = [];
