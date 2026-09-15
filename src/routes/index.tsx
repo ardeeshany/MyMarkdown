@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { Check, ChevronDown, ChevronUp, Clipboard, ListTree, Sparkles } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
@@ -172,6 +172,23 @@ function JsonCode({ value }: { value: string }) {
   );
 }
 
+function TruncatedLabel({ text, className }: { text: string; className?: string }) {
+  const ref = useRef<HTMLSpanElement>(null);
+  const [isTruncated, setIsTruncated] = useState(false);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const check = () => setIsTruncated(el.scrollWidth > el.clientWidth);
+    check();
+    const observer = new ResizeObserver(check);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [text]);
+
+  return <span ref={ref} className={className} title={isTruncated ? text : undefined}>{text}</span>;
+}
+
 function Index() {
   const [markdown, setMarkdown] = useState(SAMPLE);
   const [mode, setMode] = useState<"edit" | "preview">("preview");
@@ -306,9 +323,9 @@ function Index() {
                   return headings.map((heading) => {
                     if (heading.level === 1) h1Count += 1;
                     return (
-                      <Button key={`${heading.line}-${heading.id}`} type="button" variant="ghost" onClick={() => scrollToHeading(heading.id)} className={`mb-0.5 h-auto w-full justify-start whitespace-normal rounded-md py-2 text-left text-xs leading-5 ${heading.level === 2 ? "pl-5" : heading.level === 3 ? "pl-8" : "pl-2.5"} ${activeHeading === heading.id ? "bg-primary/10 font-semibold text-primary hover:bg-primary/15" : "text-muted-foreground"}`} aria-current={activeHeading === heading.id ? "location" : undefined}>
-                        {heading.level === 1 && <span className="mr-1.5 font-semibold text-primary">{h1Count}.</span>}
-                        <span className="line-clamp-2">{heading.title}</span>
+                      <Button key={`${heading.line}-${heading.id}`} type="button" variant="ghost" onClick={() => scrollToHeading(heading.id)} className={`mb-0.5 h-auto w-full justify-start whitespace-nowrap rounded-md py-2 text-left text-xs leading-5 ${heading.level === 2 ? "pl-5" : heading.level === 3 ? "pl-8" : "pl-2.5"} ${activeHeading === heading.id ? "bg-primary/10 font-semibold text-primary hover:bg-primary/15" : "text-muted-foreground"}`} aria-current={activeHeading === heading.id ? "location" : undefined}>
+                        {heading.level === 1 && <span className="mr-1.5 shrink-0 font-semibold text-primary">{h1Count}.</span>}
+                        <TruncatedLabel text={heading.title} className="block overflow-hidden text-ellipsis whitespace-nowrap" />
                       </Button>
                     );
                   });
