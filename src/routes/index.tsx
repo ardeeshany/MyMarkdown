@@ -279,7 +279,7 @@ function Index() {
                       const isJson = language === "json" || looksLikeJson;
                       if (!isFenced && !isJson) return <code className="rounded bg-foreground/5 px-1.5 py-0.5 font-mono text-[0.88em] text-heading-three">{children}</code>;
                       if (!isFenced && isJson) return <code className="rounded bg-foreground/5 px-1.5 py-0.5 font-mono text-[0.88em]"><JsonCode value={value} /></code>;
-                      return <code>{isJson ? <JsonCode value={value} /> : value}</code>;
+                      return <code className="bg-transparent">{isJson ? <JsonCode value={value} /> : value}</code>;
                     },
                   }}>{markdown || "*Your preview will appear here.*"}</ReactMarkdown>
                 </article>
