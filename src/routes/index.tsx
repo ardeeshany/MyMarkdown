@@ -262,7 +262,7 @@ function Index() {
             </div>
           </div>
 
-          <aside className="order-first rounded-xl bg-glass ring-1 ring-card/80 backdrop-blur-md lg:order-none lg:sticky lg:top-6" aria-label="Table of contents">
+          <aside className="sticky top-2 z-10 order-first max-h-[min(15rem,45vh)] overflow-y-auto rounded-xl bg-glass ring-1 ring-card/80 backdrop-blur-md lg:order-none lg:top-6 lg:max-h-[calc(100vh-3rem)]" aria-label="Table of contents">
             <div className="flex h-11 items-center justify-between px-3">
               <div className="flex items-center gap-2 text-sm font-semibold"><ListTree className="size-4 text-primary" />Contents</div>
               <Button type="button" size="icon" variant="ghost" className="size-8 text-muted-foreground" onClick={() => setTocOpen((open) => !open)} aria-expanded={tocOpen} aria-label={tocOpen ? "Collapse table of contents" : "Open table of contents"} title={tocOpen ? "Collapse table of contents" : "Open table of contents"}>
