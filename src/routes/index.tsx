@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { Check, Clipboard, Sparkles } from "lucide-react";
-import { useMemo, useState } from "react";
+import { Check, ChevronDown, ChevronUp, Clipboard, ListTree, Sparkles } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
@@ -39,6 +39,44 @@ Quiet by default. The editor steps back so your writing can lead; every control 
 \`\`\``;
 
 type LintIssue = { kind: "fix" | "warning"; message: string };
+type TocHeading = { id: string; level: 1 | 2 | 3; line: number; title: string };
+
+function slugifyHeading(value: string) {
+  return value
+    .toLowerCase()
+    .replace(/[`*_~[\]()]/g, "")
+    .replace(/[^\p{L}\p{N}]+/gu, "-")
+    .replace(/^-|-$/g, "") || "section";
+}
+
+function getTocHeadings(source: string): TocHeading[] {
+  const headings: TocHeading[] = [];
+  const slugCounts = new Map<string, number>();
+  let inFence = false;
+
+  source.replace(/\r\n/g, "\n").split("\n").forEach((line, index) => {
+    if (/^\s*```/.test(line)) {
+      inFence = !inFence;
+      return;
+    }
+    if (inFence) return;
+
+    const match = line.match(/^\s*(#{1,3})\s+(.+?)\s*#*\s*$/);
+    if (!match) return;
+    const title = (match[2] ?? "").trim();
+    const baseSlug = slugifyHeading(title);
+    const occurrence = slugCounts.get(baseSlug) ?? 0;
+    slugCounts.set(baseSlug, occurrence + 1);
+    headings.push({
+      id: occurrence ? `${baseSlug}-${occurrence + 1}` : baseSlug,
+      level: (match[1]?.length ?? 1) as 1 | 2 | 3,
+      line: index + 1,
+      title,
+    });
+  });
+
+  return headings;
+}
 
 function formatMarkdown(source: string) {
   const lines = source.replace(/\r\n/g, "\n").split("\n");
@@ -115,7 +153,30 @@ function Index() {
   const [markdown, setMarkdown] = useState(SAMPLE);
   const [mode, setMode] = useState<"edit" | "preview">("preview");
   const [copied, setCopied] = useState(false);
+  const [tocOpen, setTocOpen] = useState(true);
+  const headings = useMemo(() => getTocHeadings(markdown), [markdown]);
+  const [activeHeading, setActiveHeading] = useState(headings[0]?.id ?? "");
   const issues = useMemo(() => lintMarkdown(markdown), [markdown]);
+
+  useEffect(() => {
+    setActiveHeading((current) => headings.some((heading) => heading.id === current) ? current : (headings[0]?.id ?? ""));
+  }, [headings]);
+
+  useEffect(() => {
+    if (mode !== "preview" || !headings.length) return;
+
+    const updateActiveHeading = () => {
+      const visibleHeadings = headings
+        .map((heading) => ({ id: heading.id, element: document.getElementById(heading.id) }))
+        .filter((item): item is { id: string; element: HTMLElement } => Boolean(item.element));
+      const current = [...visibleHeadings].reverse().find(({ element }) => element.getBoundingClientRect().top <= 150);
+      setActiveHeading(current?.id ?? visibleHeadings[0]?.id ?? "");
+    };
+
+    updateActiveHeading();
+    window.addEventListener("scroll", updateActiveHeading, { passive: true });
+    return () => window.removeEventListener("scroll", updateActiveHeading);
+  }, [headings, mode]);
 
   const beautify = () => {
     setMarkdown(formatMarkdown(markdown));
@@ -128,63 +189,96 @@ function Index() {
     window.setTimeout(() => setCopied(false), 1600);
   };
 
+  const scrollToHeading = (id: string) => {
+    const target = document.getElementById(id);
+    if (!target) return;
+    const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    target.scrollIntoView({ behavior: reduceMotion ? "auto" : "smooth", block: "start" });
+    setActiveHeading(id);
+  };
+
   return (
-    <main className="relative min-h-screen overflow-hidden bg-background px-5 pb-16 pt-8 text-foreground sm:px-8 sm:pt-10">
+    <main className="relative min-h-screen overflow-x-clip bg-background px-5 pb-16 pt-8 text-foreground sm:px-8 sm:pt-10">
       <div className="pointer-events-none fixed -right-32 -top-32 size-[34rem] rounded-full bg-primary/15 blur-[130px]" />
       <div className="pointer-events-none fixed -bottom-40 -left-32 size-[30rem] rounded-full bg-heading-two/12 blur-[130px]" />
 
-      <div className="relative mx-auto max-w-3xl">
+      <div className="relative mx-auto max-w-6xl">
         <header className="flex items-center justify-between gap-4">
           <div className="flex items-center gap-2.5">
             <span className="grid size-8 place-items-center rounded-lg bg-foreground text-[13px] font-semibold text-background">BM</span>
             <div><p className="font-display text-[17px] font-semibold leading-none">BeautifyMD</p><p className="mt-1 text-[11px] text-muted-foreground">Markdown, made beautiful</p></div>
           </div>
-          <div className="flex items-center rounded-full bg-glass p-1 ring-1 ring-card/80 backdrop-blur-md" aria-label="Document mode">
-            {(["edit", "preview"] as const).map((item) => <Button key={item} type="button" size="sm" variant={mode === item ? "secondary" : "ghost"} onClick={() => setMode(item)} className={`h-8 rounded-full px-3.5 capitalize ${mode === item ? "bg-foreground text-background hover:bg-foreground/90" : "text-muted-foreground"}`}>{item}</Button>)}
-          </div>
         </header>
 
-        <section className="frosted-surface mt-8 overflow-hidden rounded-2xl ring-1 ring-card/80">
-          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border/70 bg-glass px-3 py-2.5 sm:px-4">
-            <div className="flex items-center gap-2"><span className="size-2.5 rounded-full bg-primary" /><span className="text-xs font-medium text-muted-foreground">untitled.md</span></div>
-            <div className="flex items-center gap-1.5">
-              <Button type="button" size="sm" variant="ghost" onClick={copy} className="text-muted-foreground"><span className="sr-only sm:not-sr-only">{copied ? "Copied" : "Copy"}</span>{copied ? <Check /> : <Clipboard />}</Button>
-              <Button type="button" size="sm" onClick={beautify} className="bg-primary text-primary-foreground hover:bg-primary/90"><Sparkles />Beautify</Button>
+        <div className="mt-8 grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_16rem]">
+          <div className="min-w-0">
+            <section className="frosted-surface overflow-hidden rounded-2xl ring-1 ring-card/80">
+              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border/70 bg-glass px-3 py-2.5 sm:px-4">
+                <div className="flex min-w-0 items-center gap-2">
+                  <span className="hidden size-2.5 shrink-0 rounded-full bg-primary sm:block" />
+                  <span className="hidden text-xs font-medium text-muted-foreground sm:block">untitled.md</span>
+                  <div className="flex items-center rounded-lg bg-background/55 p-0.5 ring-1 ring-border/70" aria-label="Document mode">
+                    {(["edit", "preview"] as const).map((item) => <Button key={item} type="button" size="sm" variant={mode === item ? "secondary" : "ghost"} onClick={() => setMode(item)} className={`h-7 rounded-md px-2.5 text-xs capitalize ${mode === item ? "bg-foreground text-background hover:bg-foreground/90" : "text-muted-foreground"}`}>{item}</Button>)}
+                  </div>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <Button type="button" size="sm" variant="ghost" onClick={copy} className="text-muted-foreground"><span className="sr-only sm:not-sr-only">{copied ? "Copied" : "Copy"}</span>{copied ? <Check /> : <Clipboard />}</Button>
+                  <Button type="button" size="sm" onClick={beautify} className="bg-primary text-primary-foreground hover:bg-primary/90"><Sparkles />Beautify</Button>
+                </div>
+              </div>
+
+              {mode === "edit" ? (
+                <textarea aria-label="Markdown editor" value={markdown} onChange={(event) => setMarkdown(event.target.value)} spellCheck="false" className="min-h-[590px] w-full resize-y bg-transparent px-6 py-8 font-mono text-[13px] leading-7 outline-none placeholder:text-muted-foreground sm:px-9 sm:py-10" placeholder="# Paste your Markdown here…" />
+              ) : (
+                <article className="min-h-[590px] px-6 py-8 sm:px-9 sm:py-10">
+                  <ReactMarkdown remarkPlugins={[remarkGfm]} components={{
+                    h1: ({ children, node }) => <h1 id={headings.find((heading) => heading.line === node?.position?.start.line)?.id} className="scroll-mt-8 font-display text-4xl font-semibold leading-tight text-heading-one sm:text-5xl">{children}</h1>,
+                    h2: ({ children, node }) => <h2 id={headings.find((heading) => heading.line === node?.position?.start.line)?.id} className="scroll-mt-8 mt-9 font-display text-2xl font-semibold leading-tight text-heading-two">{children}</h2>,
+                    h3: ({ children, node }) => <h3 id={headings.find((heading) => heading.line === node?.position?.start.line)?.id} className="scroll-mt-8 mt-8 font-display text-xl font-semibold leading-tight text-heading-three">{children}</h3>,
+                    h4: ({ children }) => <h4 className="mt-7 font-display text-lg font-semibold text-foreground">{children}</h4>,
+                    p: ({ children }) => <p className="mt-4 max-w-[62ch] text-[15px] leading-7 text-foreground/80">{children}</p>,
+                    ul: ({ children }) => <ul className="mt-4 max-w-[62ch] list-disc space-y-2 pl-5 text-[15px] leading-7 marker:text-heading-two">{children}</ul>,
+                    ol: ({ children }) => <ol className="mt-4 max-w-[62ch] list-decimal space-y-2 pl-5 text-[15px] leading-7 marker:font-medium marker:text-heading-one">{children}</ol>,
+                    blockquote: ({ children }) => <blockquote className="mt-5 border-l-2 border-heading-three bg-heading-three/5 px-4 py-1 italic text-foreground/75">{children}</blockquote>,
+                    a: ({ children, href }) => <a className="font-medium text-primary underline decoration-primary/30 underline-offset-4" href={href} target="_blank" rel="noreferrer">{children}</a>,
+                    table: ({ children }) => <div className="mt-5 overflow-x-auto"><table className="w-full border-collapse text-left text-sm">{children}</table></div>,
+                    th: ({ children }) => <th className="border-b border-border px-3 py-2 font-semibold text-heading-two">{children}</th>,
+                    td: ({ children }) => <td className="border-b border-border/70 px-3 py-2 text-foreground/80">{children}</td>,
+                    pre: ({ children }) => <pre className="mt-4 overflow-x-auto rounded-xl bg-foreground/[0.04] p-5 font-mono text-[13px] leading-6 ring-1 ring-border/70">{children}</pre>,
+                    code: ({ className, children }) => {
+                      const value = String(children).replace(/\n$/, "");
+                      const language = /language-(\w+)/.exec(className ?? "")?.[1];
+                      if (!className) return <code className="rounded bg-foreground/5 px-1.5 py-0.5 font-mono text-[0.88em] text-heading-three">{children}</code>;
+                      return <code>{language === "json" ? <JsonCode value={value} /> : value}</code>;
+                    },
+                  }}>{markdown || "*Your preview will appear here.*"}</ReactMarkdown>
+                </article>
+              )}
+            </section>
+
+            <div className="mt-5 flex flex-wrap items-center justify-between gap-2 rounded-xl bg-glass px-4 py-2.5 text-xs ring-1 ring-card/80 backdrop-blur-md">
+              <span className="text-muted-foreground">{markdown.length.toLocaleString()} characters · {markdown.trim() ? markdown.trim().split(/\s+/).length : 0} words</span>
+              <span className={`flex items-center gap-1.5 font-medium ${issues.length ? "text-heading-three" : "text-heading-two"}`}><span className={`size-1.5 rounded-full ${issues.length ? "bg-heading-three" : "bg-heading-two"}`} />{issues.length ? `${issues.length} ${issues.length === 1 ? "suggestion" : "suggestions"}: ${issues[0]?.message}` : "Structure looks good"}</span>
             </div>
           </div>
 
-          {mode === "edit" ? (
-            <textarea aria-label="Markdown editor" value={markdown} onChange={(event) => setMarkdown(event.target.value)} spellCheck="false" className="min-h-[590px] w-full resize-y bg-transparent px-6 py-8 font-mono text-[13px] leading-7 outline-none placeholder:text-muted-foreground sm:px-9 sm:py-10" placeholder="# Paste your Markdown here…" />
-          ) : (
-            <article className="min-h-[590px] px-6 py-8 sm:px-9 sm:py-10">
-              <ReactMarkdown remarkPlugins={[remarkGfm]} components={{
-                h1: ({ children }) => <h1 className="font-display text-4xl font-semibold leading-tight text-heading-one sm:text-5xl">{children}</h1>,
-                h2: ({ children }) => <h2 className="mt-9 font-display text-2xl font-semibold leading-tight text-heading-two">{children}</h2>,
-                h3: ({ children }) => <h3 className="mt-8 font-display text-xl font-semibold leading-tight text-heading-three">{children}</h3>,
-                h4: ({ children }) => <h4 className="mt-7 font-display text-lg font-semibold text-foreground">{children}</h4>,
-                p: ({ children }) => <p className="mt-4 max-w-[62ch] text-[15px] leading-7 text-foreground/80">{children}</p>,
-                ul: ({ children }) => <ul className="mt-4 max-w-[62ch] list-disc space-y-2 pl-5 text-[15px] leading-7 marker:text-heading-two">{children}</ul>,
-                ol: ({ children }) => <ol className="mt-4 max-w-[62ch] list-decimal space-y-2 pl-5 text-[15px] leading-7 marker:font-medium marker:text-heading-one">{children}</ol>,
-                blockquote: ({ children }) => <blockquote className="mt-5 border-l-2 border-heading-three bg-heading-three/5 px-4 py-1 italic text-foreground/75">{children}</blockquote>,
-                a: ({ children, href }) => <a className="font-medium text-primary underline decoration-primary/30 underline-offset-4" href={href} target="_blank" rel="noreferrer">{children}</a>,
-                table: ({ children }) => <div className="mt-5 overflow-x-auto"><table className="w-full border-collapse text-left text-sm">{children}</table></div>,
-                th: ({ children }) => <th className="border-b border-border px-3 py-2 font-semibold text-heading-two">{children}</th>,
-                td: ({ children }) => <td className="border-b border-border/70 px-3 py-2 text-foreground/80">{children}</td>,
-                pre: ({ children }) => <pre className="mt-4 overflow-x-auto rounded-xl bg-foreground/[0.04] p-5 font-mono text-[13px] leading-6 ring-1 ring-border/70">{children}</pre>,
-                code: ({ className, children }) => {
-                  const value = String(children).replace(/\n$/, "");
-                  const language = /language-(\w+)/.exec(className ?? "")?.[1];
-                  if (!className) return <code className="rounded bg-foreground/5 px-1.5 py-0.5 font-mono text-[0.88em] text-heading-three">{children}</code>;
-                  return <code>{language === "json" ? <JsonCode value={value} /> : value}</code>;
-                },
-              }}>{markdown || "*Your preview will appear here.*"}</ReactMarkdown>
-            </article>
-          )}
-        </section>
-
-        <div className="mt-5 flex flex-wrap items-center justify-between gap-2 rounded-xl bg-glass px-4 py-2.5 text-xs ring-1 ring-card/80 backdrop-blur-md">
-          <span className="text-muted-foreground">{markdown.length.toLocaleString()} characters · {markdown.trim() ? markdown.trim().split(/\s+/).length : 0} words</span>
-          <span className={`flex items-center gap-1.5 font-medium ${issues.length ? "text-heading-three" : "text-heading-two"}`}><span className={`size-1.5 rounded-full ${issues.length ? "bg-heading-three" : "bg-heading-two"}`} />{issues.length ? `${issues.length} ${issues.length === 1 ? "suggestion" : "suggestions"}: ${issues[0]?.message}` : "Structure looks good"}</span>
+          <aside className="order-first rounded-xl bg-glass ring-1 ring-card/80 backdrop-blur-md lg:order-none lg:sticky lg:top-6" aria-label="Table of contents">
+            <div className="flex h-11 items-center justify-between px-3">
+              <div className="flex items-center gap-2 text-sm font-semibold"><ListTree className="size-4 text-primary" />Contents</div>
+              <Button type="button" size="icon" variant="ghost" className="size-8 text-muted-foreground" onClick={() => setTocOpen((open) => !open)} aria-expanded={tocOpen} aria-label={tocOpen ? "Collapse table of contents" : "Open table of contents"} title={tocOpen ? "Collapse table of contents" : "Open table of contents"}>
+                {tocOpen ? <ChevronUp /> : <ChevronDown />}
+              </Button>
+            </div>
+            {tocOpen && (
+              <nav className="border-t border-border/70 px-2 py-2" aria-label="Document headings">
+                {headings.length ? headings.map((heading) => (
+                  <Button key={`${heading.line}-${heading.id}`} type="button" variant="ghost" onClick={() => scrollToHeading(heading.id)} className={`mb-0.5 h-auto w-full justify-start whitespace-normal rounded-md py-2 text-left text-xs leading-5 ${heading.level === 2 ? "pl-5" : heading.level === 3 ? "pl-8" : "pl-2.5"} ${activeHeading === heading.id ? "bg-primary/10 font-semibold text-primary hover:bg-primary/15" : "text-muted-foreground"}`} aria-current={activeHeading === heading.id ? "location" : undefined}>
+                    <span className="line-clamp-2">{heading.title}</span>
+                  </Button>
+                )) : <p className="px-2.5 py-3 text-xs text-muted-foreground">Add H1, H2, or H3 headings to see them here.</p>}
+              </nav>
+            )}
+          </aside>
         </div>
       </div>
     </main>
