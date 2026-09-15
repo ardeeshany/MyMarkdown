@@ -215,8 +215,6 @@ function Index() {
             <section className="frosted-surface overflow-hidden rounded-2xl ring-1 ring-card/80">
               <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border/70 bg-glass px-3 py-2.5 sm:px-4">
                 <div className="flex min-w-0 items-center gap-2">
-                  <span className="hidden size-2.5 shrink-0 rounded-full bg-primary sm:block" />
-                  <span className="hidden text-xs font-medium text-muted-foreground sm:block">untitled.md</span>
                   <div className="flex items-center rounded-lg bg-background/55 p-0.5 ring-1 ring-border/70" aria-label="Document mode">
                     {(["edit", "preview"] as const).map((item) => <Button key={item} type="button" size="sm" variant={mode === item ? "secondary" : "ghost"} onClick={() => setMode(item)} className={`h-7 rounded-md px-2.5 text-xs capitalize ${mode === item ? "bg-foreground text-background hover:bg-foreground/90" : "text-muted-foreground"}`}>{item}</Button>)}
                   </div>
