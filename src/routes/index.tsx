@@ -377,7 +377,7 @@ function Index() {
                   </div>
                 </div>
                 <div className="flex items-center gap-1.5">
-                  <Button type="button" size="sm" variant="ghost" onClick={copy} className="text-muted-foreground"><span className="sr-only sm:not-sr-only">{copied ? "Copied" : "Copy"}</span>{copied ? <Check /> : <Clipboard />}</Button>
+                  <Button type="button" size="sm" variant="ghost" onClick={copy} className="text-muted-foreground" title={copied ? "Copied" : "Copy to clipboard"} aria-label={copied ? "Copied" : "Copy to clipboard"}>{copied ? <Check /> : <Clipboard />}</Button>
                   <Button type="button" size="sm" onClick={beautify} className="bg-primary text-primary-foreground hover:bg-primary/90"><Sparkles />Beautify</Button>
                 </div>
               </div>
