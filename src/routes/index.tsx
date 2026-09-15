@@ -193,12 +193,22 @@ function lintMarkdown(source: string): LintIssue[] {
   return issues;
 }
 
+function expandEscapedNewlines(value: string) {
+  return /\\n/.test(value) ? value.replace(/\\n/g, "\n") : value;
+}
+
 function JsonCode({ value }: { value: string }) {
   let displayedValue = value;
   try {
     displayedValue = JSON.stringify(JSON.parse(value), null, 2);
   } catch {
-    // Keep invalid JSON visible so the lint message can help the user fix it.
+    const expanded = expandEscapedNewlines(value);
+    try {
+      displayedValue = JSON.stringify(JSON.parse(expanded), null, 2);
+    } catch {
+      // Not parseable even after expanding \n escapes — show it with real line breaks.
+      displayedValue = expanded;
+    }
   }
 
   const tokens: { text: string; type: "key" | "string" | "number" | "literal" | "plain" }[] = [];
@@ -384,7 +394,7 @@ function Index() {
                       const isJson = language === "json" || looksLikeJson;
                       if (!isFenced && !isJson) return <code className="rounded bg-foreground/5 px-1.5 py-0.5 font-mono text-[0.88em] text-heading-three">{children}</code>;
                       if (!isFenced && isJson) return <code className="font-mono text-[0.88em]"><JsonCode value={value} /></code>;
-                      return <code className="bg-transparent">{isJson ? <JsonCode value={value} /> : value}</code>;
+                      return <code className="bg-transparent">{isJson ? <JsonCode value={value} /> : expandEscapedNewlines(value)}</code>;
                     },
                   }}>{previewMarkdown || "*Your preview will appear here.*"}</ReactMarkdown>
                 </article>
