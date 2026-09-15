@@ -155,6 +155,7 @@ function Index() {
   const [copied, setCopied] = useState(false);
   const [tocOpen, setTocOpen] = useState(true);
   const headings = useMemo(() => getTocHeadings(markdown), [markdown]);
+  const firstH1Id = useMemo(() => headings.find((heading) => heading.level === 1)?.id, [headings]);
   const [activeHeading, setActiveHeading] = useState(headings[0]?.id ?? "");
   const issues = useMemo(() => lintMarkdown(markdown), [markdown]);
 
@@ -230,7 +231,11 @@ function Index() {
               ) : (
                 <article className="min-h-[590px] px-6 py-8 sm:px-9 sm:py-10">
                   <ReactMarkdown remarkPlugins={[remarkGfm]} components={{
-                    h1: ({ children, node }) => <h1 id={headings.find((heading) => heading.line === node?.position?.start.line)?.id} className="scroll-mt-8 pt-10 font-display text-4xl font-semibold leading-tight text-heading-one sm:text-5xl">{children}</h1>,
+                    h1: ({ children, node }) => {
+                      const id = headings.find((heading) => heading.line === node?.position?.start.line)?.id;
+                      const isFirstH1 = id === firstH1Id;
+                      return <h1 id={id} className={`scroll-mt-8 font-display text-4xl font-semibold leading-tight text-heading-one sm:text-5xl ${isFirstH1 ? "" : "pt-10"}`}>{children}</h1>;
+                    },
                     h2: ({ children, node }) => <h2 id={headings.find((heading) => heading.line === node?.position?.start.line)?.id} className="scroll-mt-8 mt-9 font-display text-2xl font-semibold leading-tight text-heading-two">{children}</h2>,
                     h3: ({ children, node }) => <h3 id={headings.find((heading) => heading.line === node?.position?.start.line)?.id} className="scroll-mt-8 mt-8 font-display text-xl font-semibold leading-tight text-heading-three">{children}</h3>,
                     h4: ({ children }) => <h4 className="mt-7 font-display text-lg font-semibold text-foreground">{children}</h4>,
