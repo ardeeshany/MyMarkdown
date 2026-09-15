@@ -172,6 +172,23 @@ function JsonCode({ value }: { value: string }) {
   );
 }
 
+function TruncatedLabel({ text, className }: { text: string; className?: string }) {
+  const ref = useRef<HTMLSpanElement>(null);
+  const [isTruncated, setIsTruncated] = useState(false);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const check = () => setIsTruncated(el.scrollWidth > el.clientWidth);
+    check();
+    const observer = new ResizeObserver(check);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [text]);
+
+  return <span ref={ref} className={className} title={isTruncated ? text : undefined}>{text}</span>;
+}
+
 function Index() {
   const [markdown, setMarkdown] = useState(SAMPLE);
   const [mode, setMode] = useState<"edit" | "preview">("preview");
