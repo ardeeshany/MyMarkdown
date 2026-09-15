@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { ArrowUp, Check, ChevronDown, ChevronUp, Clipboard, ClipboardPaste, ListTree, Sparkles } from "lucide-react";
+import { ArrowUp, Check, ChevronDown, ChevronUp, Clipboard, ClipboardPaste, ListTree, PenLine, Sparkles } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -295,6 +295,7 @@ function Index() {
   const [activeHeading, setActiveHeading] = useState(headings[0]?.id ?? "");
   const issues = useMemo(() => lintMarkdown(markdown), [markdown]);
   const [showScrollTop, setShowScrollTop] = useState(false);
+  const editorRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
     const onScroll = () => setShowScrollTop(window.scrollY > 150);
@@ -306,6 +307,12 @@ function Index() {
   const scrollToTop = () => {
     const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     window.scrollTo({ top: 0, behavior: reduceMotion ? "auto" : "smooth" });
+  };
+
+  const startBlankDocument = () => {
+    setMarkdown("");
+    setMode("edit");
+    window.setTimeout(() => editorRef.current?.focus(), 0);
   };
 
   const pasteFromClipboard = async () => {
@@ -372,9 +379,14 @@ function Index() {
           <p className="mt-3 max-w-xl text-sm text-muted-foreground sm:text-base">
             Paste any Markdown and get a polished document in seconds — vivid headings, beautifully formatted JSON, and lint-clean structure.
           </p>
-          <Button type="button" size="lg" onClick={pasteFromClipboard} className="mt-6 h-11 rounded-full bg-primary px-7 text-sm font-medium text-primary-foreground shadow-lg shadow-primary/25 hover:bg-primary/90" title="Paste Markdown from your clipboard and preview it">
-            <ClipboardPaste />Paste Markdown
-          </Button>
+          <div className="mt-6 flex flex-wrap items-center justify-center gap-2.5">
+            <Button type="button" size="lg" onClick={pasteFromClipboard} className="h-11 rounded-full bg-primary px-7 text-sm font-medium text-primary-foreground shadow-lg shadow-primary/25 hover:bg-primary/90" title="Paste Markdown from your clipboard and preview it">
+              <ClipboardPaste />Paste Markdown
+            </Button>
+            <Button type="button" size="lg" variant="outline" onClick={startBlankDocument} className="h-11 rounded-full border-border bg-card px-7 text-sm font-medium hover:bg-muted" title="Start an empty document and paste it in yourself">
+              <PenLine />Write it yourself
+            </Button>
+          </div>
         </header>
 
         <div className="mt-8 grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_16rem]">
@@ -393,7 +405,7 @@ function Index() {
               </div>
 
               {mode === "edit" ? (
-                <textarea aria-label="Markdown editor" value={markdown} onChange={(event) => setMarkdown(event.target.value)} spellCheck="false" className="min-h-[590px] w-full resize-y bg-transparent px-6 py-8 font-mono text-[13px] leading-7 outline-none placeholder:text-muted-foreground sm:px-9 sm:py-10" placeholder="# Paste your Markdown here…" />
+                <textarea ref={editorRef} aria-label="Markdown editor" value={markdown} onChange={(event) => setMarkdown(event.target.value)} spellCheck="false" className="min-h-[590px] w-full resize-y bg-transparent px-6 py-8 font-mono text-[13px] leading-7 outline-none placeholder:text-muted-foreground sm:px-9 sm:py-10" placeholder="# Paste your Markdown here…" />
               ) : (
                 <article className="min-h-[590px] px-6 py-8 sm:px-9 sm:py-10">
                   <ReactMarkdown remarkPlugins={[remarkGfm]} components={{
