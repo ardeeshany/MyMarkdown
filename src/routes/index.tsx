@@ -92,10 +92,17 @@ function lintMarkdown(source: string): LintIssue[] {
 }
 
 function JsonCode({ value }: { value: string }) {
-  const tokens = value.split(/("(?:\\.|[^"\\])*"(?=\s*:)|"(?:\\.|[^"\\])*"|-?\d+(?:\.\d+)?|\b(?:true|false|null)\b)/g);
+  let displayedValue = value;
+  try {
+    displayedValue = JSON.stringify(JSON.parse(value), null, 2);
+  } catch {
+    // Keep invalid JSON visible so the lint message can help the user fix it.
+  }
+
+  const tokens = displayedValue.split(/("(?:\\.|[^"\\])*"(?=\s*:)|"(?:\\.|[^"\\])*"|-?\d+(?:\.\d+)?|\b(?:true|false|null)\b)/g);
   return <>{tokens.map((token, index) => {
     let className = "text-foreground/55";
-    if (/^".*"$/.test(token)) className = token.trimEnd().endsWith('"') && value.slice(value.indexOf(token) + token.length).trimStart().startsWith(":") ? "text-code-key" : "text-code-string";
+    if (/^".*"$/.test(token)) className = displayedValue.slice(displayedValue.indexOf(token) + token.length).trimStart().startsWith(":") ? "text-code-key" : "text-code-string";
     if (/^-?\d/.test(token)) className = "text-code-number";
     if (/^(true|false|null)$/.test(token)) className = "text-code-literal";
     return <span className={className} key={`${index}-${token}`}>{token}</span>;
