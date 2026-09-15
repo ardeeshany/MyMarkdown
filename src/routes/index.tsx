@@ -9,13 +9,15 @@ import { Button } from "@/components/ui/button";
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
-      { title: "Lumen — Markdown Beautifier" },
-      { name: "description", content: "Paste Markdown and turn it into a polished, readable document with colorful headings and formatted JSON." },
-      { property: "og:title", content: "Lumen — Markdown Beautifier" },
-      { property: "og:description", content: "Beautiful, readable Markdown with colorful headings and formatted JSON." },
+      { title: "BeautifyMD — Markdown Beautifier & Formatter" },
+      { name: "description", content: "Paste Markdown and turn it into a polished, readable document with colorful headings, formatted JSON, and instant lint suggestions." },
+      { property: "og:title", content: "BeautifyMD — Markdown Beautifier & Formatter" },
+      { property: "og:description", content: "Beautiful, readable Markdown with colorful headings, formatted JSON, and instant lint suggestions." },
       { property: "og:type", content: "website" },
+      { property: "og:url", content: "/" },
       { name: "twitter:card", content: "summary_large_image" },
     ],
+    links: [{ rel: "canonical", href: "/" }],
   }),
   component: Index,
 });
@@ -134,8 +136,8 @@ function Index() {
       <div className="relative mx-auto max-w-3xl">
         <header className="flex items-center justify-between gap-4">
           <div className="flex items-center gap-2.5">
-            <span className="grid size-8 place-items-center rounded-lg bg-foreground text-[13px] font-semibold text-background">Lm</span>
-            <div><p className="font-display text-[17px] font-semibold leading-none">Lumen</p><p className="mt-1 text-[11px] text-muted-foreground">Markdown, made legible</p></div>
+            <span className="grid size-8 place-items-center rounded-lg bg-foreground text-[13px] font-semibold text-background">BM</span>
+            <div><p className="font-display text-[17px] font-semibold leading-none">BeautifyMD</p><p className="mt-1 text-[11px] text-muted-foreground">Markdown, made beautiful</p></div>
           </div>
           <div className="flex items-center rounded-full bg-glass p-1 ring-1 ring-card/80 backdrop-blur-md" aria-label="Document mode">
             {(["edit", "preview"] as const).map((item) => <Button key={item} type="button" size="sm" variant={mode === item ? "secondary" : "ghost"} onClick={() => setMode(item)} className={`h-8 rounded-full px-3.5 capitalize ${mode === item ? "bg-foreground text-background hover:bg-foreground/90" : "text-muted-foreground"}`}>{item}</Button>)}
