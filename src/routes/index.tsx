@@ -275,10 +275,10 @@ function Index() {
                       const value = String(children).replace(/\n$/, "");
                       const language = /language-(\w+)/.exec(className ?? "")?.[1];
                       const isFenced = Boolean(className);
-                      const looksLikeJson = !isFenced && /^[\[{]/.test(value) && /"[^"]+"\s*:/.test(value);
+                      const looksLikeJson = !isFenced && /"[^"]+"\s*:/.test(value);
                       const isJson = language === "json" || looksLikeJson;
                       if (!isFenced && !isJson) return <code className="rounded bg-foreground/5 px-1.5 py-0.5 font-mono text-[0.88em] text-heading-three">{children}</code>;
-                      if (!isFenced && isJson) return <code className="rounded bg-foreground/5 px-1.5 py-0.5 font-mono text-[0.88em]"><JsonCode value={value} /></code>;
+                      if (!isFenced && isJson) return <code className="font-mono text-[0.88em]"><JsonCode value={value} /></code>;
                       return <code className="bg-transparent">{isJson ? <JsonCode value={value} /> : value}</code>;
                     },
                   }}>{markdown || "*Your preview will appear here.*"}</ReactMarkdown>
@@ -301,11 +301,18 @@ function Index() {
             </div>
             {tocOpen && (
               <nav className="border-t border-border/70 px-2 py-2" aria-label="Document headings">
-                {headings.length ? headings.map((heading) => (
-                  <Button key={`${heading.line}-${heading.id}`} type="button" variant="ghost" onClick={() => scrollToHeading(heading.id)} className={`mb-0.5 h-auto w-full justify-start whitespace-normal rounded-md py-2 text-left text-xs leading-5 ${heading.level === 2 ? "pl-5" : heading.level === 3 ? "pl-8" : "pl-2.5"} ${activeHeading === heading.id ? "bg-primary/10 font-semibold text-primary hover:bg-primary/15" : "text-muted-foreground"}`} aria-current={activeHeading === heading.id ? "location" : undefined}>
-                    <span className="line-clamp-2">{heading.title}</span>
-                  </Button>
-                )) : <p className="px-2.5 py-3 text-xs text-muted-foreground">Add H1, H2, or H3 headings to see them here.</p>}
+                {headings.length ? (() => {
+                  let h1Count = 0;
+                  return headings.map((heading) => {
+                    if (heading.level === 1) h1Count += 1;
+                    return (
+                      <Button key={`${heading.line}-${heading.id}`} type="button" variant="ghost" onClick={() => scrollToHeading(heading.id)} className={`mb-0.5 h-auto w-full justify-start whitespace-normal rounded-md py-2 text-left text-xs leading-5 ${heading.level === 2 ? "pl-5" : heading.level === 3 ? "pl-8" : "pl-2.5"} ${activeHeading === heading.id ? "bg-primary/10 font-semibold text-primary hover:bg-primary/15" : "text-muted-foreground"}`} aria-current={activeHeading === heading.id ? "location" : undefined}>
+                        {heading.level === 1 && <span className="mr-1.5 font-semibold text-primary">{h1Count}.</span>}
+                        <span className="line-clamp-2">{heading.title}</span>
+                      </Button>
+                    );
+                  });
+                })() : <p className="px-2.5 py-3 text-xs text-muted-foreground">Add H1, H2, or H3 headings to see them here.</p>}
               </nav>
             )}
           </aside>
