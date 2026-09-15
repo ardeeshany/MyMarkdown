@@ -161,11 +161,12 @@ function Index() {
                 table: ({ children }) => <div className="mt-5 overflow-x-auto"><table className="w-full border-collapse text-left text-sm">{children}</table></div>,
                 th: ({ children }) => <th className="border-b border-border px-3 py-2 font-semibold text-heading-two">{children}</th>,
                 td: ({ children }) => <td className="border-b border-border/70 px-3 py-2 text-foreground/80">{children}</td>,
+                pre: ({ children }) => <pre className="mt-4 overflow-x-auto rounded-xl bg-foreground/[0.04] p-5 font-mono text-[13px] leading-6 ring-1 ring-border/70">{children}</pre>,
                 code: ({ className, children }) => {
                   const value = String(children).replace(/\n$/, "");
                   const language = /language-(\w+)/.exec(className ?? "")?.[1];
                   if (!className) return <code className="rounded bg-foreground/5 px-1.5 py-0.5 font-mono text-[0.88em] text-heading-three">{children}</code>;
-                  return <pre className="mt-4 overflow-x-auto rounded-xl bg-foreground/[0.04] p-5 font-mono text-[13px] leading-6 ring-1 ring-border/70"><code>{language === "json" ? <JsonCode value={value} /> : value}</code></pre>;
+                  return <code>{language === "json" ? <JsonCode value={value} /> : value}</code>;
                 },
               }}>{markdown || "*Your preview will appear here.*"}</ReactMarkdown>
             </article>
