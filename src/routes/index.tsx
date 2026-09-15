@@ -139,14 +139,37 @@ function JsonCode({ value }: { value: string }) {
     // Keep invalid JSON visible so the lint message can help the user fix it.
   }
 
-  const tokens = displayedValue.split(/("(?:\\.|[^"\\])*"(?=\s*:)|"(?:\\.|[^"\\])*"|-?\d+(?:\.\d+)?|\b(?:true|false|null)\b)/g);
-  return <>{tokens.map((token, index) => {
-    let className = "text-foreground/55";
-    if (/^".*"$/.test(token)) className = displayedValue.slice(displayedValue.indexOf(token) + token.length).trimStart().startsWith(":") ? "text-code-key" : "text-code-string";
-    if (/^-?\d/.test(token)) className = "text-code-number";
-    if (/^(true|false|null)$/.test(token)) className = "text-code-literal";
-    return <span className={className} key={`${index}-${token}`}>{token}</span>;
-  })}</>;
+  const tokens: { text: string; type: "key" | "string" | "number" | "literal" | "plain" }[] = [];
+  const pattern = /("(?:\\.|[^"\\])*")(\s*:)?|-?\d+(?:\.\d+)?|\b(?:true|false|null)\b|[^"]/g;
+  let match: RegExpExecArray | null;
+  while ((match = pattern.exec(displayedValue)) !== null) {
+    const [text, quoted, colon] = match;
+    if (quoted) {
+      tokens.push({ text: quoted, type: colon ? "key" : "string" });
+      if (colon) tokens.push({ text: colon, type: "plain" });
+    } else if (/^-?\d/.test(text)) {
+      tokens.push({ text, type: "number" });
+    } else if (/^(true|false|null)$/.test(text)) {
+      tokens.push({ text, type: "literal" });
+    } else {
+      tokens.push({ text, type: "plain" });
+    }
+  }
+
+  return (
+    <>
+      {tokens.map((token, index) => {
+        const className = {
+          key: "text-code-key font-medium",
+          string: "text-code-string",
+          number: "text-code-number",
+          literal: "text-code-literal",
+          plain: "text-foreground/55",
+        }[token.type];
+        return <span className={className} key={`${index}-${token.text.slice(0, 24)}`}>{token.text}</span>;
+      })}
+    </>
+  );
 }
 
 function Index() {
