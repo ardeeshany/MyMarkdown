@@ -356,9 +356,13 @@ function Index() {
 
       <div className="relative mx-auto max-w-6xl">
         <header className="flex flex-col items-center text-center">
-          <p className="font-display text-[17px] font-semibold leading-none">BeautifyMD</p>
-          <p className="mt-1.5 text-[11px] text-muted-foreground">Markdown, made beautiful</p>
-          <Button type="button" size="lg" onClick={pasteFromClipboard} className="mt-5 h-11 rounded-full bg-primary px-7 text-sm font-medium text-primary-foreground shadow-lg shadow-primary/25 hover:bg-primary/90" title="Paste Markdown from your clipboard and preview it">
+          <h1 className="font-display text-4xl font-bold tracking-tight leading-tight sm:text-5xl">
+            Markdown that reads like it was designed
+          </h1>
+          <p className="mt-3 max-w-xl text-sm text-muted-foreground sm:text-base">
+            Paste any Markdown and get a polished document in seconds — vivid headings, beautifully formatted JSON, and lint-clean structure. Free, instant, and entirely in your browser.
+          </p>
+          <Button type="button" size="lg" onClick={pasteFromClipboard} className="mt-6 h-11 rounded-full bg-primary px-7 text-sm font-medium text-primary-foreground shadow-lg shadow-primary/25 hover:bg-primary/90" title="Paste Markdown from your clipboard and preview it">
             <ClipboardPaste />Paste Markdown
           </Button>
         </header>
