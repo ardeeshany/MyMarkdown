@@ -197,14 +197,28 @@ function expandEscapedNewlines(value: string) {
   return /\\n/.test(value) ? value.replace(/\\n/g, "\n") : value;
 }
 
+function expandEscapedNewlinesInStrings(pretty: string) {
+  // Turn literal \n inside JSON string values into real line breaks, keeping the
+  // indentation of the line the string started on.
+  return pretty
+    .split("\n")
+    .flatMap((line) => {
+      if (!/\\n/.test(line)) return [line];
+      const indent = (line.match(/^\s*/)?.[0] ?? "") + "  ";
+      const [head, ...rest] = line.split(/\\n/);
+      return [head ?? "", ...rest.map((part) => indent + part)];
+    })
+    .join("\n");
+}
+
 function JsonCode({ value }: { value: string }) {
   let displayedValue = value;
   try {
-    displayedValue = JSON.stringify(JSON.parse(value), null, 2);
+    displayedValue = expandEscapedNewlinesInStrings(JSON.stringify(JSON.parse(value), null, 2));
   } catch {
     const expanded = expandEscapedNewlines(value);
     try {
-      displayedValue = JSON.stringify(JSON.parse(expanded), null, 2);
+      displayedValue = expandEscapedNewlinesInStrings(JSON.stringify(JSON.parse(expanded), null, 2));
     } catch {
       // Not parseable even after expanding \n escapes — show it with real line breaks.
       displayedValue = expanded;
