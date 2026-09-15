@@ -210,6 +210,7 @@ function Index() {
   const headings = useMemo(() => getTocHeadings(markdown), [markdown]);
   const firstH1Id = useMemo(() => headings.find((heading) => heading.level === 1)?.id, [headings]);
   const [activeHeading, setActiveHeading] = useState(headings[0]?.id ?? "");
+  const previewMarkdown = useMemo(() => promoteInlineJsonToFences(markdown), [markdown]);
   const issues = useMemo(() => lintMarkdown(markdown), [markdown]);
   const [showScrollTop, setShowScrollTop] = useState(false);
 
