@@ -78,6 +78,19 @@ function getTocHeadings(source: string): TocHeading[] {
   return headings;
 }
 
+function promoteInlineJsonToFences(source: string) {
+  return source.replace(/`([^`\n]+)`/g, (match, content) => {
+    const trimmed = content.trim();
+    if (!/^[\{\[]/.test(trimmed) || !/"[^"]+"\s*:/.test(trimmed)) return match;
+    try {
+      JSON.parse(trimmed);
+      return `\n\n\`\`\`json\n${trimmed}\n\`\`\`\n\n`;
+    } catch {
+      return match;
+    }
+  });
+}
+
 function formatMarkdown(source: string) {
   const lines = source.replace(/\r\n/g, "\n").split("\n");
   const output: string[] = [];
@@ -197,6 +210,7 @@ function Index() {
   const headings = useMemo(() => getTocHeadings(markdown), [markdown]);
   const firstH1Id = useMemo(() => headings.find((heading) => heading.level === 1)?.id, [headings]);
   const [activeHeading, setActiveHeading] = useState(headings[0]?.id ?? "");
+  const previewMarkdown = useMemo(() => promoteInlineJsonToFences(markdown), [markdown]);
   const issues = useMemo(() => lintMarkdown(markdown), [markdown]);
   const [showScrollTop, setShowScrollTop] = useState(false);
 
@@ -323,7 +337,7 @@ function Index() {
                       if (!isFenced && isJson) return <code className="font-mono text-[0.88em]"><JsonCode value={value} /></code>;
                       return <code className="bg-transparent">{isJson ? <JsonCode value={value} /> : value}</code>;
                     },
-                  }}>{markdown || "*Your preview will appear here.*"}</ReactMarkdown>
+                  }}>{previewMarkdown || "*Your preview will appear here.*"}</ReactMarkdown>
                 </article>
               )}
             </section>
