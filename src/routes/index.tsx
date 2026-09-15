@@ -405,7 +405,7 @@ function Index() {
               </div>
 
               {mode === "edit" ? (
-                <textarea aria-label="Markdown editor" value={markdown} onChange={(event) => setMarkdown(event.target.value)} spellCheck="false" className="min-h-[590px] w-full resize-y bg-transparent px-6 py-8 font-mono text-[13px] leading-7 outline-none placeholder:text-muted-foreground sm:px-9 sm:py-10" placeholder="# Paste your Markdown here…" />
+                <textarea ref={editorRef} aria-label="Markdown editor" value={markdown} onChange={(event) => setMarkdown(event.target.value)} spellCheck="false" className="min-h-[590px] w-full resize-y bg-transparent px-6 py-8 font-mono text-[13px] leading-7 outline-none placeholder:text-muted-foreground sm:px-9 sm:py-10" placeholder="# Paste your Markdown here…" />
               ) : (
                 <article className="min-h-[590px] px-6 py-8 sm:px-9 sm:py-10">
                   <ReactMarkdown remarkPlugins={[remarkGfm]} components={{
