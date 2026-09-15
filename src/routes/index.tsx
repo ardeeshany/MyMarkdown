@@ -453,9 +453,9 @@ function Index() {
       </div>
 
         <footer className="mt-8 text-center text-xs text-muted-foreground">
-          Have an idea?{" "}
+          If you have any idea to make this better,{" "}
           <a href="mailto:ardalan@mylens.ai?subject=MyMarkdown%20suggestion" className="underline underline-offset-4 hover:text-foreground">
-            Contact me
+            I'd love to hear it
           </a>
         </footer>
 
