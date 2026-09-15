@@ -4,8 +4,10 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
-import heroIcon from "@/assets/hero-icon.webp";
+import heroImage from "@/assets/mymarkdown-logo.webp.asset.json";
 import { Button } from "@/components/ui/button";
+
+const SHARE_IMAGE_URL = "https://mymarkdown.site/__l5e/assets-v1/41eb60a5-820f-422d-b7f7-cd591bbb79cc/mymarkdown-share.webp";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -16,13 +18,13 @@ export const Route = createFileRoute("/")({
       { property: "og:description", content: "Beautiful, readable Markdown with colorful headings, formatted JSON, and instant lint suggestions." },
       { property: "og:type", content: "website" },
       { property: "og:url", content: "https://mymarkdown.site" },
-      { property: "og:image", content: "https://mymarkdown.site/__l5e/assets-v1/41f763a2-1b5a-4fc7-9c6e-cb093a390766/mymarkdown-share.png" },
+      { property: "og:image", content: SHARE_IMAGE_URL },
       { property: "og:image:width", content: "1200" },
       { property: "og:image:height", content: "630" },
       { name: "twitter:card", content: "summary_large_image" },
       { name: "twitter:title", content: "MyMarkdown — Markdown Beautifier & Formatter" },
       { name: "twitter:description", content: "Beautiful, readable Markdown with colorful headings, formatted JSON, and instant lint suggestions." },
-      { name: "twitter:image", content: "https://mymarkdown.site/__l5e/assets-v1/41f763a2-1b5a-4fc7-9c6e-cb093a390766/mymarkdown-share.png" },
+      { name: "twitter:image", content: SHARE_IMAGE_URL },
     ],
     links: [{ rel: "canonical", href: "https://mymarkdown.site" }],
   }),
@@ -363,7 +365,7 @@ function Index() {
 
       <div className="relative mx-auto max-w-6xl">
         <header className="flex flex-col items-center text-center">
-          <img src={heroIcon} alt="MyMarkdown icon" className="mb-4 size-44 sm:size-56" draggable={false} />
+          <img src={heroImage.url} alt="MyMarkdown documents transforming into a polished page" className="mb-4 size-44 object-contain sm:size-56" draggable={false} />
           <h1 className="font-display text-4xl font-bold tracking-tight leading-tight sm:text-5xl">
             Markdown that reads beautifully
           </h1>
