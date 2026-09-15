@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
+import heroIcon from "@/assets/hero-icon.webp";
 import { Button } from "@/components/ui/button";
 
 export const Route = createFileRoute("/")({
