@@ -453,7 +453,7 @@ function Index() {
       </div>
 
         <footer className="mt-8 text-center text-xs text-muted-foreground">
-          Suggest feature or report bug?{" "}
+          Suggest new feature?{" "}
           <a href="mailto:ardalan@mylens.ai?subject=MyMarkdown%20suggestion" className="underline underline-offset-4 hover:text-foreground">
             Contact me
           </a>
