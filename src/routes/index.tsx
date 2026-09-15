@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { Check, ChevronDown, ChevronUp, Clipboard, ListTree, Sparkles } from "lucide-react";
+import { ArrowUp, Check, ChevronDown, ChevronUp, Clipboard, ClipboardPaste, ListTree, Sparkles } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -198,6 +198,30 @@ function Index() {
   const firstH1Id = useMemo(() => headings.find((heading) => heading.level === 1)?.id, [headings]);
   const [activeHeading, setActiveHeading] = useState(headings[0]?.id ?? "");
   const issues = useMemo(() => lintMarkdown(markdown), [markdown]);
+  const [showScrollTop, setShowScrollTop] = useState(false);
+
+  useEffect(() => {
+    const onScroll = () => setShowScrollTop(window.scrollY > 150);
+    onScroll();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
+
+  const scrollToTop = () => {
+    const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    window.scrollTo({ top: 0, behavior: reduceMotion ? "auto" : "smooth" });
+  };
+
+  const pasteFromClipboard = async () => {
+    try {
+      const text = await navigator.clipboard.readText();
+      if (!text.trim()) return;
+      setMarkdown(text);
+      setMode("preview");
+    } catch {
+      // Clipboard permission denied — keep the current document untouched.
+    }
+  };
 
   useEffect(() => {
     setActiveHeading((current) => headings.some((heading) => heading.id === current) ? current : (headings[0]?.id ?? ""));
@@ -261,6 +285,7 @@ function Index() {
                   </div>
                 </div>
                 <div className="flex items-center gap-1.5">
+                  <Button type="button" size="sm" variant="ghost" onClick={pasteFromClipboard} className="text-muted-foreground" title="Paste Markdown from your clipboard and preview it"><ClipboardPaste /><span className="sr-only sm:not-sr-only">Paste</span></Button>
                   <Button type="button" size="sm" variant="ghost" onClick={copy} className="text-muted-foreground"><span className="sr-only sm:not-sr-only">{copied ? "Copied" : "Copy"}</span>{copied ? <Check /> : <Clipboard />}</Button>
                   <Button type="button" size="sm" onClick={beautify} className="bg-primary text-primary-foreground hover:bg-primary/90"><Sparkles />Beautify</Button>
                 </div>
@@ -335,6 +360,12 @@ function Index() {
           </aside>
         </div>
       </div>
+
+      {showScrollTop && (
+        <Button type="button" size="icon" variant="secondary" onClick={scrollToTop} aria-label="Scroll back to top" title="Back to top" className="fixed bottom-6 right-6 z-20 size-10 rounded-full bg-glass shadow-lg ring-1 ring-border/70 backdrop-blur-md hover:bg-glass">
+          <ArrowUp />
+        </Button>
+      )}
     </main>
   );
 }
