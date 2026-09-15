@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
+import heroIcon from "@/assets/hero-icon.webp";
 import { Button } from "@/components/ui/button";
 
 export const Route = createFileRoute("/")({
@@ -362,6 +363,7 @@ function Index() {
 
       <div className="relative mx-auto max-w-6xl">
         <header className="flex flex-col items-center text-center">
+          <img src={heroIcon} alt="MyMarkdown icon" className="mb-2 size-24 sm:size-28" draggable={false} />
           <h1 className="font-display text-4xl font-bold tracking-tight leading-tight sm:text-5xl">
             Markdown that reads beautifully
           </h1>
