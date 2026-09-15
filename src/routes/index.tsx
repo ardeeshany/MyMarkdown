@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { ArrowUp, Check, ChevronDown, ChevronUp, Clipboard, ClipboardPaste, ListTree, Sparkles } from "lucide-react";
+import { ArrowUp, Check, ChevronDown, ChevronUp, Clipboard, ClipboardPaste, ListTree, PenLine, Sparkles } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
