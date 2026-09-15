@@ -337,7 +337,7 @@ function Index() {
                       if (!isFenced && isJson) return <code className="font-mono text-[0.88em]"><JsonCode value={value} /></code>;
                       return <code className="bg-transparent">{isJson ? <JsonCode value={value} /> : value}</code>;
                     },
-                  }}>{markdown || "*Your preview will appear here.*"}</ReactMarkdown>
+                  }}>{previewMarkdown || "*Your preview will appear here.*"}</ReactMarkdown>
                 </article>
               )}
             </section>
