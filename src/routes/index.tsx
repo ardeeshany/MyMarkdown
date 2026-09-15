@@ -198,6 +198,30 @@ function Index() {
   const firstH1Id = useMemo(() => headings.find((heading) => heading.level === 1)?.id, [headings]);
   const [activeHeading, setActiveHeading] = useState(headings[0]?.id ?? "");
   const issues = useMemo(() => lintMarkdown(markdown), [markdown]);
+  const [showScrollTop, setShowScrollTop] = useState(false);
+
+  useEffect(() => {
+    const onScroll = () => setShowScrollTop(window.scrollY > 320);
+    onScroll();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
+
+  const scrollToTop = () => {
+    const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    window.scrollTo({ top: 0, behavior: reduceMotion ? "auto" : "smooth" });
+  };
+
+  const pasteFromClipboard = async () => {
+    try {
+      const text = await navigator.clipboard.readText();
+      if (!text.trim()) return;
+      setMarkdown(text);
+      setMode("preview");
+    } catch {
+      // Clipboard permission denied — keep the current document untouched.
+    }
+  };
 
   useEffect(() => {
     setActiveHeading((current) => headings.some((heading) => heading.id === current) ? current : (headings[0]?.id ?? ""));
