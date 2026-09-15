@@ -360,6 +360,12 @@ function Index() {
           </aside>
         </div>
       </div>
+
+      {showScrollTop && (
+        <Button type="button" size="icon" variant="secondary" onClick={scrollToTop} aria-label="Scroll back to top" title="Back to top" className="fixed bottom-6 right-6 z-20 size-10 rounded-full bg-glass shadow-lg ring-1 ring-border/70 backdrop-blur-md hover:bg-glass">
+          <ArrowUp />
+        </Button>
+      )}
     </main>
   );
 }
