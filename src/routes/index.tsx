@@ -379,9 +379,14 @@ function Index() {
           <p className="mt-3 max-w-xl text-sm text-muted-foreground sm:text-base">
             Paste any Markdown and get a polished document in seconds — vivid headings, beautifully formatted JSON, and lint-clean structure.
           </p>
-          <Button type="button" size="lg" onClick={pasteFromClipboard} className="mt-6 h-11 rounded-full bg-primary px-7 text-sm font-medium text-primary-foreground shadow-lg shadow-primary/25 hover:bg-primary/90" title="Paste Markdown from your clipboard and preview it">
-            <ClipboardPaste />Paste Markdown
-          </Button>
+          <div className="mt-6 flex flex-wrap items-center justify-center gap-2.5">
+            <Button type="button" size="lg" onClick={pasteFromClipboard} className="h-11 rounded-full bg-primary px-7 text-sm font-medium text-primary-foreground shadow-lg shadow-primary/25 hover:bg-primary/90" title="Paste Markdown from your clipboard and preview it">
+              <ClipboardPaste />Paste Markdown
+            </Button>
+            <Button type="button" size="lg" variant="outline" onClick={startBlankDocument} className="h-11 rounded-full border-border bg-card px-7 text-sm font-medium hover:bg-muted" title="Start an empty document and paste it in yourself">
+              <PenLine />Write it yourself
+            </Button>
+          </div>
         </header>
 
         <div className="mt-8 grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_16rem]">
