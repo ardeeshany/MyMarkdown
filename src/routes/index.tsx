@@ -365,7 +365,7 @@ function Index() {
 
       <div className="relative mx-auto max-w-6xl">
         <header className="flex flex-col items-center text-center">
-          <img src={heroImage.url} alt="MyMarkdown documents transforming into a polished page" className="mb-4 size-44 object-contain sm:size-56" draggable={false} />
+          <img src={heroImage.url} alt="MyMarkdown documents transforming into a polished page" className="mb-4 size-32 object-contain sm:size-40" draggable={false} />
           <h1 className="font-display text-4xl font-bold tracking-tight leading-tight sm:text-5xl">
             Markdown that reads beautifully
           </h1>
