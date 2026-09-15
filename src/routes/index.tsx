@@ -323,9 +323,9 @@ function Index() {
                   return headings.map((heading) => {
                     if (heading.level === 1) h1Count += 1;
                     return (
-                      <Button key={`${heading.line}-${heading.id}`} type="button" variant="ghost" onClick={() => scrollToHeading(heading.id)} className={`mb-0.5 h-auto w-full justify-start whitespace-normal rounded-md py-2 text-left text-xs leading-5 ${heading.level === 2 ? "pl-5" : heading.level === 3 ? "pl-8" : "pl-2.5"} ${activeHeading === heading.id ? "bg-primary/10 font-semibold text-primary hover:bg-primary/15" : "text-muted-foreground"}`} aria-current={activeHeading === heading.id ? "location" : undefined}>
-                        {heading.level === 1 && <span className="mr-1.5 font-semibold text-primary">{h1Count}.</span>}
-                        <span className="line-clamp-2">{heading.title}</span>
+                      <Button key={`${heading.line}-${heading.id}`} type="button" variant="ghost" onClick={() => scrollToHeading(heading.id)} className={`mb-0.5 h-auto w-full justify-start whitespace-nowrap rounded-md py-2 text-left text-xs leading-5 ${heading.level === 2 ? "pl-5" : heading.level === 3 ? "pl-8" : "pl-2.5"} ${activeHeading === heading.id ? "bg-primary/10 font-semibold text-primary hover:bg-primary/15" : "text-muted-foreground"}`} aria-current={activeHeading === heading.id ? "location" : undefined}>
+                        {heading.level === 1 && <span className="mr-1.5 shrink-0 font-semibold text-primary">{h1Count}.</span>}
+                        <TruncatedLabel text={heading.title} className="block overflow-hidden text-ellipsis whitespace-nowrap" />
                       </Button>
                     );
                   });
