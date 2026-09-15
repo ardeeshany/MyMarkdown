@@ -452,6 +452,13 @@ function Index() {
         </div>
       </div>
 
+        <footer className="mt-8 text-center text-xs text-muted-foreground">
+          Have an idea?{" "}
+          <a href="mailto:ardalan@mylens.ai?subject=MyMarkdown%20suggestion" className="underline underline-offset-4 hover:text-foreground">
+            Contact me
+          </a>
+        </footer>
+
       {showScrollTop && (
         <Button type="button" size="icon" variant="secondary" onClick={scrollToTop} aria-label="Scroll back to top" title="Back to top" className="fixed bottom-6 left-6 z-20 size-10 rounded-full bg-glass shadow-lg ring-1 ring-border/70 backdrop-blur-md hover:bg-glass">
           <ArrowUp />
