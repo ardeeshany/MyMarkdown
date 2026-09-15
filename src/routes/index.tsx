@@ -155,6 +155,7 @@ function Index() {
   const [copied, setCopied] = useState(false);
   const [tocOpen, setTocOpen] = useState(true);
   const headings = useMemo(() => getTocHeadings(markdown), [markdown]);
+  const firstH1Id = useMemo(() => headings.find((heading) => heading.level === 1)?.id, [headings]);
   const [activeHeading, setActiveHeading] = useState(headings[0]?.id ?? "");
   const issues = useMemo(() => lintMarkdown(markdown), [markdown]);
 
