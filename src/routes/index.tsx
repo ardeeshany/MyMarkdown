@@ -78,8 +78,55 @@ function getTocHeadings(source: string): TocHeading[] {
   return headings;
 }
 
+function promoteRawJsonToFences(source: string) {
+  const lines = source.replace(/\r\n/g, "\n").split("\n");
+  const output: string[] = [];
+  let inFence = false;
+  let i = 0;
+
+  while (i < lines.length) {
+    const line = lines[i] ?? "";
+    if (/^\s*```/.test(line)) {
+      inFence = !inFence;
+      output.push(line);
+      i += 1;
+      continue;
+    }
+    if (!inFence && /^\s*[\{\[]/.test(line)) {
+      // Accumulate lines until the JSON candidate parses or we run out.
+      let buffer = "";
+      let matchedEnd = -1;
+      for (let j = i; j < lines.length; j += 1) {
+        const candidate = lines[j] ?? "";
+        if (/^\s*```/.test(candidate)) break;
+        buffer += (buffer ? "\n" : "") + candidate;
+        const trimmed = buffer.trim();
+        if (!/[\}\]]\s*$/.test(trimmed)) continue;
+        try {
+          const parsed = JSON.parse(trimmed);
+          if (parsed && typeof parsed === "object") matchedEnd = j;
+        } catch {
+          /* keep scanning */
+        }
+      }
+      if (matchedEnd >= 0) {
+        const raw = lines.slice(i, matchedEnd + 1).join("\n").trim();
+        const pretty = JSON.stringify(JSON.parse(raw), null, 2);
+        if (output.length && output.at(-1) !== "") output.push("");
+        output.push("```json", ...pretty.split("\n"), "```", "");
+        i = matchedEnd + 1;
+        continue;
+      }
+    }
+    output.push(line);
+    i += 1;
+  }
+
+  return output.join("\n");
+}
+
 function promoteInlineJsonToFences(source: string) {
-  return source.replace(/`([^`\n]+)`/g, (match, content) => {
+  const withInline = source.replace(/`([^`\n]+)`/g, (match, content) => {
     const trimmed = content.trim();
     if (!/^[\{\[]/.test(trimmed) || !/"[^"]+"\s*:/.test(trimmed)) return match;
     try {
@@ -89,7 +136,9 @@ function promoteInlineJsonToFences(source: string) {
       return match;
     }
   });
+  return promoteRawJsonToFences(withInline);
 }
+
 
 function formatMarkdown(source: string) {
   const lines = source.replace(/\r\n/g, "\n").split("\n");
