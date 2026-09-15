@@ -4,10 +4,10 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
-import heroImage from "@/assets/mymarkdown-logo.webp.asset.json";
+import heroImage from "@/assets/mymarkdown-logo-v2.webp.asset.json";
 import { Button } from "@/components/ui/button";
 
-const SHARE_IMAGE_URL = "https://mymarkdown.site/__l5e/assets-v1/41eb60a5-820f-422d-b7f7-cd591bbb79cc/mymarkdown-share.webp";
+const SHARE_IMAGE_URL = "https://mymarkdown.site/__l5e/assets-v1/0b1abd2a-d71b-4761-bbcd-e5504709f41f/mymarkdown-share-v2.webp";
 
 export const Route = createFileRoute("/")({
   head: () => ({
