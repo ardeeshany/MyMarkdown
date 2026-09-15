@@ -308,6 +308,12 @@ function Index() {
     window.scrollTo({ top: 0, behavior: reduceMotion ? "auto" : "smooth" });
   };
 
+  const startBlankDocument = () => {
+    setMarkdown("");
+    setMode("edit");
+    window.setTimeout(() => editorRef.current?.focus(), 0);
+  };
+
   const pasteFromClipboard = async () => {
     try {
       const text = await navigator.clipboard.readText();
