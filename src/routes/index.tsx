@@ -355,11 +355,12 @@ function Index() {
       <div className="pointer-events-none fixed -bottom-40 -left-32 size-[30rem] rounded-full bg-heading-two/12 blur-[130px]" />
 
       <div className="relative mx-auto max-w-6xl">
-        <header className="flex items-center justify-between gap-4">
-          <div className="flex items-center gap-2.5">
-            <span className="grid size-8 place-items-center rounded-lg bg-foreground text-[13px] font-semibold text-background">BM</span>
-            <div><p className="font-display text-[17px] font-semibold leading-none">BeautifyMD</p><p className="mt-1 text-[11px] text-muted-foreground">Markdown, made beautiful</p></div>
-          </div>
+        <header className="flex flex-col items-center text-center">
+          <p className="font-display text-[17px] font-semibold leading-none">BeautifyMD</p>
+          <p className="mt-1.5 text-[11px] text-muted-foreground">Markdown, made beautiful</p>
+          <Button type="button" size="lg" onClick={pasteFromClipboard} className="mt-5 h-11 rounded-full bg-primary px-7 text-sm font-medium text-primary-foreground shadow-lg shadow-primary/25 hover:bg-primary/90" title="Paste Markdown from your clipboard and preview it">
+            <ClipboardPaste />Paste Markdown
+          </Button>
         </header>
 
         <div className="mt-8 grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_16rem]">
@@ -372,7 +373,6 @@ function Index() {
                   </div>
                 </div>
                 <div className="flex items-center gap-1.5">
-                  <Button type="button" size="sm" variant="ghost" onClick={pasteFromClipboard} className="text-muted-foreground" title="Paste Markdown from your clipboard and preview it"><ClipboardPaste /><span className="sr-only sm:not-sr-only">Paste</span></Button>
                   <Button type="button" size="sm" variant="ghost" onClick={copy} className="text-muted-foreground"><span className="sr-only sm:not-sr-only">{copied ? "Copied" : "Copy"}</span>{copied ? <Check /> : <Clipboard />}</Button>
                   <Button type="button" size="sm" onClick={beautify} className="bg-primary text-primary-foreground hover:bg-primary/90"><Sparkles />Beautify</Button>
                 </div>
