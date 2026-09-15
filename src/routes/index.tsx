@@ -9,9 +9,9 @@ import { Button } from "@/components/ui/button";
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
-      { title: "BeautifyMD — Markdown Beautifier & Formatter" },
+      { title: "MyMarkdown — Markdown Beautifier & Formatter" },
       { name: "description", content: "Paste Markdown and turn it into a polished, readable document with colorful headings, formatted JSON, and instant lint suggestions." },
-      { property: "og:title", content: "BeautifyMD — Markdown Beautifier & Formatter" },
+      { property: "og:title", content: "MyMarkdown — Markdown Beautifier & Formatter" },
       { property: "og:description", content: "Beautiful, readable Markdown with colorful headings, formatted JSON, and instant lint suggestions." },
       { property: "og:type", content: "website" },
       { property: "og:url", content: "/" },
