@@ -123,6 +123,7 @@
     if (message.type === "empty") {
       docEl.innerHTML = "<p><em>Open a Markdown file to see it here.</em></p>";
       lintEl.innerHTML = "";
+      statsEl.textContent = "";
       renderToc([]);
     }
   });
