@@ -65,14 +65,16 @@ hr { border: none; border-top: 1px solid var(--mm-border); margin: 2rem 0; }
 pre.code-block {
   margin: 1.2rem 0 0;
   padding: 1.1rem 1.3rem;
-  overflow-x: auto;
+  overflow-x: hidden;
   background: var(--mm-code-bg);
   border: 1px solid var(--mm-border);
   border-radius: 12px;
   font-family: "SF Mono", "Cascadia Code", Menlo, Consolas, monospace;
   font-size: 13px;
   line-height: 1.6;
-  white-space: pre;
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-wrap: anywhere;
 }
 pre.code-block code { background: transparent; padding: 0; }
 
