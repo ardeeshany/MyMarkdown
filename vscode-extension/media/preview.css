@@ -1,5 +1,6 @@
 /* MyMarkdown preview — mirrors the web app's Frosted Editorial palette. */
 :root {
+/* MYMARKDOWN:TOKENS:START */
   --mm-bg: #f3f5fb;
   --mm-fg: #2b2f45;
   --mm-primary: #3b4ee0;
@@ -13,6 +14,7 @@
   --mm-string: #1f9d8a;
   --mm-number: #d96c2f;
   --mm-literal: #d6336c;
+/* MYMARKDOWN:TOKENS:END */
 }
 
 body {
@@ -101,6 +103,7 @@ td { border-bottom: 1px solid var(--mm-border); padding: 0.5rem 0.75rem; color: 
 
 @media (prefers-color-scheme: dark) {
   :root {
+/* MYMARKDOWN:TOKENS-DARK:START */
     --mm-bg: #161a2e;
     --mm-fg: #e8eaf4;
     --mm-primary: #8b96ff;
@@ -114,6 +117,7 @@ td { border-bottom: 1px solid var(--mm-border); padding: 0.5rem 0.75rem; color: 
     --mm-string: #4fd3bd;
     --mm-number: #f0a26b;
     --mm-literal: #ff7ba8;
+/* MYMARKDOWN:TOKENS-DARK:END */
   }
   p, td { color: rgba(232, 234, 244, 0.85); }
   blockquote { color: rgba(232, 234, 244, 0.75); background: rgba(240, 162, 107, 0.08); }
