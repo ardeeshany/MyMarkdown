@@ -50,8 +50,6 @@
           heading.level +
           '" data-id="' +
           MyMarkdownRender.escapeHtml(heading.id) +
-          '" title="' +
-          MyMarkdownRender.escapeHtml(heading.title) +
           '">' +
           MyMarkdownRender.escapeHtml(label) +
           "</button>"
@@ -60,6 +58,9 @@
       .join("");
 
     Array.prototype.forEach.call(tocListEl.querySelectorAll(".mm-toc-item"), (button) => {
+      if (button.scrollWidth > button.clientWidth) {
+        button.title = button.textContent || "";
+      }
       button.addEventListener("click", () => {
         const target = document.getElementById(button.getAttribute("data-id"));
         if (!target) return;
