@@ -50,9 +50,9 @@ blockquote {
   margin: 1.2rem 0 0;
   padding: 0.2rem 1rem;
   border-left: 2px solid var(--mm-h3);
-  background: rgba(217, 108, 47, 0.06);
+  background: var(--mm-quote-bg);
   font-style: italic;
-  color: rgba(43, 47, 69, 0.75);
+  color: var(--mm-muted);
 }
 
 hr { border: none; border-top: 1px solid var(--mm-border); margin: 2rem 0; }
@@ -72,7 +72,7 @@ pre.code-block {
 pre.code-block code { background: transparent; padding: 0; }
 
 code.inline-code {
-  background: rgba(43, 47, 69, 0.06);
+  background: var(--mm-chip);
   padding: 0.1rem 0.4rem;
   border-radius: 5px;
   font-family: "SF Mono", "Cascadia Code", Menlo, Consolas, monospace;
@@ -85,12 +85,12 @@ code.inline-code.json { background: transparent; padding: 0; border-radius: 0; }
 .tok-string { color: var(--mm-string); }
 .tok-number { color: var(--mm-number); }
 .tok-literal { color: var(--mm-literal); }
-.tok-plain { color: rgba(43, 47, 69, 0.6); }
+.tok-plain { color: var(--mm-fg-mute); }
 
 .table-wrap { margin: 1.2rem 0 0; overflow-x: auto; }
 table { width: 100%; border-collapse: collapse; font-size: 14px; }
 th { border-bottom: 1px solid var(--mm-border); padding: 0.5rem 0.75rem; font-weight: 600; color: var(--mm-h2); text-align: left; }
-td { border-bottom: 1px solid var(--mm-border); padding: 0.5rem 0.75rem; color: rgba(43, 47, 69, 0.85); }
+td { border-bottom: 1px solid var(--mm-border); padding: 0.5rem 0.75rem; color: var(--mm-fg-soft); }
 
 #mm-lint {
   max-width: 62ch;
