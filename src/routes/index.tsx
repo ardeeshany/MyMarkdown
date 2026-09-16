@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { ArrowUp, Check, ChevronDown, ChevronUp, Clipboard, ClipboardPaste, Code2, ListTree, PenLine, Sparkles } from "lucide-react";
+import { ArrowUp, Check, ChevronDown, ChevronUp, Clipboard, ClipboardPaste, Code2, Github, ListTree, PenLine, Sparkles } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -376,6 +376,9 @@ function Index() {
           <Link to="/vscode-extension" className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground">
             <Code2 className="size-4" />VS Code extension
           </Link>
+          <a href="https://github.com/ardeeshany/mymarkdown" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground">
+            <Github className="size-4" />GitHub
+          </a>
           <ThemeToggle />
         </nav>
 
@@ -385,7 +388,7 @@ function Index() {
             Markdown that reads beautifully
           </h1>
           <p className="mt-3 max-w-xl text-sm text-muted-foreground sm:text-base">
-            Paste any Markdown and get a polished document in seconds — vivid headings, beautifully formatted JSON, and lint-clean structure.
+            Free and open source. Paste any Markdown and get a polished document in seconds — vivid headings, beautifully formatted JSON, and lint-clean structure.
           </p>
           <div className="mt-6 flex flex-wrap items-center justify-center gap-2.5">
             <Button type="button" size="lg" onClick={pasteFromClipboard} className="h-11 rounded-full bg-primary px-7 text-sm font-medium text-primary-foreground shadow-lg shadow-primary/25 hover:bg-primary/90" title="Paste Markdown from your clipboard and preview it">
@@ -483,9 +486,9 @@ function Index() {
       </div>
 
         <footer className="mt-8 text-center text-xs text-muted-foreground">
-          Suggest new feature?{" "}
-          <a href="mailto:ardalan@mylens.ai?subject=MyMarkdown%20suggestion" className="underline underline-offset-4 hover:text-foreground">
-            Contact me
+          Have an idea or found a bug?{" "}
+          <a href="https://github.com/ardeeshany/mymarkdown/issues/new" target="_blank" rel="noopener noreferrer" className="underline underline-offset-4 hover:text-foreground">
+            Open an issue on GitHub
           </a>
         </footer>
 
