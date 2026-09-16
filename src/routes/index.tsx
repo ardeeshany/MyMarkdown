@@ -5,6 +5,7 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
 import heroImage from "@/assets/mymarkdown-logo-v2.webp.asset.json";
+import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
 
 const SHARE_IMAGE_URL = "https://mymarkdown.site/__l5e/assets-v1/0b1abd2a-d71b-4761-bbcd-e5504709f41f/mymarkdown-share-v2.webp";
