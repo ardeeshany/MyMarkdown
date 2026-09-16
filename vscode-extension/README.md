@@ -22,8 +22,11 @@ Everything runs inside VS Code — no account, no internet, nothing leaves your 
 From the project root, after building (see below):
 
 ```bash
-code --install-extension vscode-extension/mymarkdown-0.1.3.vsix
+code --install-extension vscode-extension/mymarkdown-<version>.vsix
 ```
+
+The exact filename is printed by `npm run extension` (for example
+`mymarkdown-0.1.4.vsix`).
 
 Then restart VS Code (or run `Developer: Reload Window`). Open any `.md` file and press
 `Ctrl+Shift+V` / `Cmd+Shift+V`.
