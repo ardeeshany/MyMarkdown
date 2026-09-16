@@ -108,4 +108,4 @@ Ideas, bugs, or requests: [ardalan@mylens.ai](mailto:ardalan@mylens.ai)
 
 ---
 
-Built with [Lovable](https://lovable.dev).
+Made by [Ardalan](https://mylens.ai). Suggestions welcome: ardalan@mylens.ai
