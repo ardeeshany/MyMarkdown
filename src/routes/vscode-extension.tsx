@@ -95,9 +95,24 @@ function ExtensionPage() {
               </li>
             ))}
           </ol>
-          <p className="mt-6 text-xs text-muted-foreground">
-            Prefer the terminal? Run <code className="rounded bg-muted px-1.5 py-0.5">code --install-extension mymarkdown-0.1.7.vsix</code> from the folder you saved it in.
-          </p>
+          <div className="mt-6">
+            <p className="mb-2 text-xs font-medium text-muted-foreground">Prefer the terminal?</p>
+            <div className="flex items-center gap-3 rounded-xl bg-zinc-900 px-4 py-3.5 ring-1 ring-zinc-800 dark:bg-zinc-950">
+              <Terminal className="size-4 shrink-0 text-zinc-500" />
+              <code className="min-w-0 flex-1 truncate font-mono text-xs text-zinc-100 sm:text-sm">{INSTALL_COMMAND}</code>
+              <button
+                type="button"
+                onClick={copyCommand}
+                aria-label={copied ? "Copied" : "Copy command"}
+                title={copied ? "Copied" : "Copy command"}
+                className="flex h-7 shrink-0 items-center gap-1.5 rounded-full bg-zinc-800 px-3 text-xs font-medium text-zinc-200 transition-colors hover:bg-zinc-700"
+              >
+                {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
+                {copied ? "Copied" : "Copy"}
+              </button>
+            </div>
+            <p className="mt-2 text-xs text-muted-foreground">Run it from the folder where you saved the file.</p>
+          </div>
         </section>
 
         <footer className="mt-14 text-center text-xs text-muted-foreground">
