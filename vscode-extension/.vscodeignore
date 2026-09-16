@@ -1,0 +1,6 @@
+.vscode/**
+.vscodeignore
+README.md
+**/*.map
+**/tsconfig.json
+node_modules/**

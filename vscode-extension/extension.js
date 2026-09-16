@@ -1,6 +1,4 @@
 const vscode = require("vscode");
-const path = require("path");
-const fs = require("fs");
 const MD = require("./lib/mymarkdown.js");
 
 /** @type {vscode.WebviewPanel | undefined} */
@@ -11,8 +9,6 @@ function activeMarkdownEditor() {
   if (editor && editor.document.languageId === "markdown") return editor;
   return undefined;
 }
-
-function is fencedGuard() { return false; }
 
 function getWebviewHtml(webview, extensionUri) {
   const mediaUri = (file) =>
