@@ -158,11 +158,11 @@ function extractRules(source) {
     fail(BLOCK_END + " now appears before " + BLOCK_START + " — the shared rules are no longer one contiguous block.");
   }
 
-  // The block ends at the next top-level declaration (column 0) after BLOCK_END.
-  const tail = source.slice(endStart + BLOCK_END.length);
-  const boundary = tail.match(/^\S.*$/m);
-  if (!boundary) fail("cannot find the end of the shared rules block in src/routes/index.tsx.");
-  const block = source.slice(start, endStart + BLOCK_END.length + boundary.index).trim();
+  // A top-level function in this file ends at the first "}" in column 0.
+  const openBrace = source.indexOf("{", endStart);
+  const closing = openBrace === -1 ? null : source.slice(openBrace).match(/^\}/m);
+  if (!closing) fail("cannot find the end of " + BLOCK_END + " in src/routes/index.tsx.");
+  const block = source.slice(start, openBrace + closing.index + 1).trim();
 
   const missing = EXPECTED.filter((name) => !new RegExp("\\b" + name + "\\b").test(block));
   if (missing.length) {
@@ -191,6 +191,16 @@ function stripTypes(block) {
   }).outputText;
   const js = out.trim();
   if (!js) fail("stripping the type annotations produced nothing.");
+  try {
+    // Compiles without running, so a truncated or broken block is caught here.
+    new Function(js);
+  } catch (e) {
+    fail(
+      "the extracted rules are not complete JavaScript (" +
+        e.message +
+        "). Check BLOCK_START / BLOCK_END in vscode-extension/sync.js."
+    );
+  }
   return js;
 }
 
