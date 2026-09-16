@@ -2,7 +2,7 @@
   "name": "mymarkdown",
   "displayName": "MyMarkdown",
   "description": "Beautiful Markdown preview with colorful headings, formatted JSON, beautify, and a clickable table of contents.",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "publisher": "local",
   "private": true,
   "engines": {
@@ -69,14 +69,21 @@
           "icon": "media/icon.svg",
           "contextualTitle": "MyMarkdown"
         }
-      ],
-      "explorer": [
-        {
-          "id": "mymarkdown.toc",
-          "name": "MyMarkdown Contents",
-          "when": "editorLangId == markdown"
-        }
       ]
-    }
+    },
+    "keybindings": [
+      {
+        "command": "mymarkdown.openPreview",
+        "key": "ctrl+alt+v",
+        "mac": "cmd+alt+v",
+        "when": "editorLangId == markdown"
+      },
+      {
+        "command": "mymarkdown.beautify",
+        "key": "ctrl+alt+b",
+        "mac": "cmd+alt+b",
+        "when": "editorLangId == markdown"
+      }
+    ]
   }
 }

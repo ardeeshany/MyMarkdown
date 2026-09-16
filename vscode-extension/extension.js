@@ -1,3 +1,4 @@
+const path = require("path");
 const vscode = require("vscode");
 const MD = require("./lib/mymarkdown.js");
 
@@ -35,9 +36,14 @@ function getWebviewHtml(webview, extensionUri) {
 </html>`;
 }
 
+function panelTitle(document) {
+  return "MyMarkdown: " + path.basename(document.fileName);
+}
+
 function pushPreviewUpdate() {
   const editor = activeMarkdownEditor();
   if (!previewPanel || !editor) return;
+  previewPanel.title = panelTitle(editor.document);
   previewPanel.webview.postMessage({ type: "update", markdown: editor.document.getText() });
 }
 
@@ -54,7 +60,7 @@ function openPreview(context) {
   }
   previewPanel = vscode.window.createWebviewPanel(
     "mymarkdown.preview",
-    "MyMarkdown Preview",
+    panelTitle(editor.document),
     vscode.ViewColumn.Beside,
     { enableScripts: true, localResourceRoots: [vscode.Uri.joinPath(context.extensionUri, "media"), vscode.Uri.joinPath(context.extensionUri, "lib")] }
   );

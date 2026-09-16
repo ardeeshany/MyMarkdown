@@ -4,7 +4,7 @@ import { ArrowLeft, Download, ListTree, Palette, Sparkles } from "lucide-react";
 import heroImage from "@/assets/mymarkdown-logo-v2.webp.asset.json";
 import { Button } from "@/components/ui/button";
 
-const VSIX = "/mymarkdown-0.1.4.vsix";
+const VSIX = "/mymarkdown-0.1.5.vsix";
 
 export const Route = createFileRoute("/vscode-extension")({
   head: () => ({
@@ -34,7 +34,7 @@ const STEPS = [
   { title: "Download the file", body: "Grab the .vsix file above and save it anywhere on your computer." },
   { title: "Install it in VS Code", body: "Open VS Code, press Cmd/Ctrl + Shift + P, run “Extensions: Install from VSIX…”, and pick the file you just downloaded." },
   { title: "Reload the window", body: "Run “Developer: Reload Window” from the same menu, or just restart VS Code." },
-  { title: "Open any .md file", body: "Press Cmd/Ctrl + Shift + V for the styled preview, use the sparkle button to beautify, and find “Contents” in the sidebar." },
+  { title: "Open any .md file", body: "Press Cmd/Ctrl + Alt + V for the styled preview (the tab reads “MyMarkdown: …”), click the sparkle button to beautify, and open the MyMarkdown icon in the sidebar for Contents. Cmd/Ctrl + Shift + V is VS Code’s own plain preview — not this one." },
 ];
 
 function ExtensionPage() {
@@ -64,7 +64,7 @@ function ExtensionPage() {
               </a>
             </Button>
           </div>
-          <p className="mt-2 text-xs text-muted-foreground">Version 0.1.4 · about 13 KB · works with VS Code 1.85+</p>
+          <p className="mt-2 text-xs text-muted-foreground">Version 0.1.5 · about 13 KB · works with VS Code 1.85+</p>
         </header>
 
         <section className="mt-12 grid gap-4 sm:grid-cols-3">
@@ -91,7 +91,7 @@ function ExtensionPage() {
             ))}
           </ol>
           <p className="mt-6 text-xs text-muted-foreground">
-            Prefer the terminal? Run <code className="rounded bg-muted px-1.5 py-0.5">code --install-extension mymarkdown-0.1.4.vsix</code> from the folder you saved it in.
+            Prefer the terminal? Run <code className="rounded bg-muted px-1.5 py-0.5">code --install-extension mymarkdown-0.1.5.vsix</code> from the folder you saved it in.
           </p>
         </section>
 

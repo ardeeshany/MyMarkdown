@@ -8,9 +8,10 @@ Everything runs inside VS Code — no account, no internet, nothing leaves your 
 
 ## Features
 
-- **MyMarkdown Preview** — a live, styled preview of the Markdown file you are editing
-  (`Ctrl+Shift+V` / `Cmd+Shift+V`, or the button in the editor toolbar). It updates as
-  you type.
+- **MyMarkdown preview** — a live, styled preview of the Markdown file you are editing
+  (`Ctrl+Alt+V` / `Cmd+Alt+V`, or the button in the editor toolbar). It updates as
+  you type. Its tab is labelled `MyMarkdown: <filename>`. Note that `Ctrl+Shift+V` /
+  `Cmd+Shift+V` is VS Code's **built-in** preview, which has none of this styling.
 - **MyMarkdown: Beautify Markdown** — rewrites the open file: normalises whitespace,
   puts every JSON block one field per line, and promotes bare or backtick-wrapped JSON
   into proper fenced blocks. A single `Ctrl+Z` / `Cmd+Z` undoes the whole thing.
@@ -26,10 +27,10 @@ code --install-extension vscode-extension/mymarkdown-<version>.vsix
 ```
 
 The exact filename is printed by `npm run extension` (for example
-`mymarkdown-0.1.4.vsix`).
+`mymarkdown-0.1.5.vsix`).
 
 Then restart VS Code (or run `Developer: Reload Window`). Open any `.md` file and press
-`Ctrl+Shift+V` / `Cmd+Shift+V`.
+`Ctrl+Alt+V` / `Cmd+Alt+V`, or click the sparkle button in the top-right of the editor.
 
 To uninstall: run `Developer: Show Running Extensions`, or remove the folder
 `~/.vscode/extensions/mymarkdown.mymarkdown-vscode-<version>`.
