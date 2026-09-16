@@ -143,10 +143,19 @@
     const out = [];
     let i = 0;
     let paragraph = [];
+    let paragraphStart = 1;
+
+    const withLine = (html, lineNo) => {
+      const match = html.match(/^<([a-zA-Z][\w-]*)/);
+      if (!match) return html;
+      const at = match[0].length;
+      return html.slice(0, at) + ' data-line="' + lineNo + '"' + html.slice(at);
+    };
+    const push = (html, lineNo) => out.push(withLine(html, lineNo));
 
     const flushParagraph = () => {
       if (!paragraph.length) return;
-      out.push("<p>" + paragraph.map(renderInline).join("<br />") + "</p>");
+      push("<p>" + paragraph.map(renderInline).join("<br />") + "</p>", paragraphStart);
       paragraph = [];
     };
 
@@ -165,7 +174,7 @@
           i += 1;
         }
         i += 1; // skip closing fence (or EOF)
-        out.push(renderFencedBlock(language, buffer.join("\n")));
+        push(renderFencedBlock(language, buffer.join("\n")), lineNo);
         continue;
       }
 
@@ -176,7 +185,7 @@
         const info = headingByLine.get(lineNo);
         const idAttr = info ? ' id="' + info.id + '"' : "";
         const cls = level === 1 && info && firstH1 && info.id === firstH1.id ? "h1 first" : "h" + level;
-        out.push("<h" + level + ' class="' + cls + '"' + idAttr + ">" + renderInline(heading[2]) + "</h" + level + ">");
+        push("<h" + level + ' class="' + cls + '"' + idAttr + ">" + renderInline(heading[2]) + "</h" + level + ">", lineNo);
         i += 1;
         continue;
       }
@@ -194,7 +203,7 @@
           quote.push(lines[i].replace(/^\s*>\s?/, ""));
           i += 1;
         }
-        out.push("<blockquote>" + quote.map(renderInline).join("<br />") + "</blockquote>");
+        push("<blockquote>" + quote.map(renderInline).join("<br />") + "</blockquote>", lineNo);
         continue;
       }
 
@@ -206,7 +215,7 @@
           items.push(lines[i]);
           i += 1;
         }
-        out.push(renderList(items, ordered));
+        push(renderList(items, ordered), lineNo);
         continue;
       }
 
@@ -217,17 +226,18 @@
           tableLines.push(lines[i]);
           i += 1;
         }
-        out.push(renderTable(tableLines));
+        push(renderTable(tableLines), lineNo);
         continue;
       }
 
       if (/^\s*(-{3,}|\*{3,}|_{3,})\s*$/.test(line)) {
         flushParagraph();
-        out.push("<hr />");
+        push("<hr />", lineNo);
         i += 1;
         continue;
       }
 
+      if (!paragraph.length) paragraphStart = lineNo;
       paragraph.push(line);
       i += 1;
     }

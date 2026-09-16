@@ -76,6 +76,33 @@ function pushPreviewUpdate() {
   previewPanel.webview.postMessage({ type: "update", markdown: document.getText() });
 }
 
+function matchLine(document, text, fallbackLine) {
+  const needle = (text || "").trim().slice(0, 40);
+  if (needle.length >= 6) {
+    const lines = document.getText().replace(/\r\n/g, "\n").split("\n");
+    const compact = needle.replace(/\s+/g, " ").toLowerCase();
+    for (let index = 0; index < lines.length; index += 1) {
+      if (lines[index].replace(/\s+/g, " ").toLowerCase().includes(compact.slice(0, 24))) {
+        return index + 1;
+      }
+    }
+  }
+  return fallbackLine;
+}
+
+async function revealSourceLine(line, text) {
+  const document = lastMarkdownDocument && !lastMarkdownDocument.isClosed ? lastMarkdownDocument : undefined;
+  if (!document) return;
+  const visible = vscode.window.visibleTextEditors.find((editor) => editor.document === document);
+  const editor = visible || (await vscode.window.showTextDocument(document, { viewColumn: vscode.ViewColumn.One, preserveFocus: false }));
+  const target = Math.max(0, Math.min(document.lineCount - 1, matchLine(document, text, line) - 1));
+  const position = new vscode.Position(target, 0);
+  const range = document.lineAt(target).range;
+  editor.selection = new vscode.Selection(position, position);
+  editor.revealRange(range, vscode.TextEditorRevealType.InCenterIfOutsideViewport);
+}
+
+
 function openPreview(context) {
   rememberActiveMarkdown();
   const document = currentMarkdownDocument();
@@ -98,6 +125,7 @@ function openPreview(context) {
   pushPreviewUpdate();
   previewPanel.webview.onDidReceiveMessage((message) => {
     if (message && message.type === "ready") pushPreviewUpdate();
+    if (message && message.type === "revealLine") revealSourceLine(message.line, message.text);
   });
   previewPanel.onDidDispose(() => {
     previewPanel = undefined;

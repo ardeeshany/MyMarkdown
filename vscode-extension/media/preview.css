@@ -197,3 +197,13 @@ td { border-bottom: 1px solid var(--mm-border); padding: 0.5rem 0.75rem; color: 
   #mm-layout { flex-direction: column; }
   #mm-toc { position: static; width: 100%; max-height: 240px; }
 }
+
+/* Click-to-jump back to the source line */
+#mm-doc [data-line] {
+  cursor: pointer;
+  border-radius: 6px;
+  transition: background-color 120ms ease;
+}
+#mm-doc [data-line]:hover { background: var(--mm-chip); }
+#mm-doc [data-line].mm-jumped { background: var(--mm-primary-soft); }
+#mm-doc [data-line] a { cursor: pointer; }
