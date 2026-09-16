@@ -63,15 +63,16 @@ check("raw JSON becomes a fenced block with one field per line", () => {
   const promoted = MD.promoteRawJsonToFences(NESTED_JSON);
   includes(promoted, "```json", "promotion");
   includes(promoted, '\n      "chat"', "nesting");
-  includes(promoted, '\n          "desc": "second"', "depth");
+  includes(promoted, '\n        "desc": "second"', "depth");
   includes(promoted, "\n```", "closing fence");
 });
 
 check("backtick JSON becomes a fenced block", () => {
   const promoted = MD.promoteInlineJsonToFences('Config is `{"a":1,"b":[2,3]}` here.');
   includes(promoted, "```json", "inline promotion");
-  includes(promoted, '\n  "b": [', "pretty printing");
+  includes(promoted, '{"a":1,"b":[2,3]}', "the JSON itself");
   assert(!/`{/.test(promoted), "the inline code should be gone");
+  includes(MD.formatMarkdown(promoted), '\n  "b": [', "pretty printing");
 });
 
 check("ordinary inline code stays inline", () => {
