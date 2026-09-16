@@ -36,9 +36,14 @@ function getWebviewHtml(webview, extensionUri) {
 </html>`;
 }
 
+function panelTitle(document) {
+  return "MyMarkdown: " + path.basename(document.fileName);
+}
+
 function pushPreviewUpdate() {
   const editor = activeMarkdownEditor();
   if (!previewPanel || !editor) return;
+  previewPanel.title = panelTitle(editor.document);
   previewPanel.webview.postMessage({ type: "update", markdown: editor.document.getText() });
 }
 
