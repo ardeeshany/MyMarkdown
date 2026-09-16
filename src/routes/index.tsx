@@ -387,7 +387,7 @@ function Index() {
           <h1 className="font-display text-4xl font-bold tracking-tight leading-tight sm:text-5xl">
             Markdown that reads beautifully
           </h1>
-          <p className="mt-3 max-w-xl text-sm text-muted-foreground sm:text-base">
+          <p className="mt-3 max-w-2xl text-sm text-muted-foreground sm:text-base">
             Free and open source. Paste any Markdown and get a polished document in seconds — vivid headings, beautifully formatted JSON, and lint-clean structure.
           </p>
           <div className="mt-6 flex flex-wrap items-center justify-center gap-2.5">
