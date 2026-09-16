@@ -4,6 +4,7 @@
   const vscode = acquireVsCodeApi();
   const docEl = document.getElementById("mm-doc");
   const lintEl = document.getElementById("mm-lint");
+  const statsEl = document.getElementById("mm-stats");
   const tocEl = document.getElementById("mm-toc");
   const tocListEl = document.getElementById("mm-toc-list");
   const tocToggleEl = document.getElementById("mm-toc-toggle");
