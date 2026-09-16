@@ -371,10 +371,11 @@ function Index() {
       <div className="pointer-events-none fixed -bottom-40 -left-32 size-[30rem] rounded-full bg-heading-two/12 blur-[130px]" />
 
       <div className="relative mx-auto max-w-6xl">
-        <nav className="mb-6 flex items-center justify-end text-sm">
+        <nav className="mb-6 flex items-center justify-end gap-1 text-sm">
           <Link to="/vscode-extension" className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground">
             <Code2 className="size-4" />VS Code extension
           </Link>
+          <ThemeToggle />
         </nav>
 
         <header className="flex flex-col items-center text-center">
