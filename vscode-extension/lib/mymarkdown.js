@@ -179,6 +179,20 @@
   function expandEscapedNewlines(value) {
       return /\\n/.test(value) ? value.replace(/\\n/g, "\n") : value;
   }
+  function expandEscapedNewlinesInStrings(pretty) {
+      // Turn literal \n inside JSON string values into real line breaks, keeping the
+      // indentation of the line the string started on.
+      return pretty
+          .split("\n")
+          .flatMap((line) => {
+          if (!/\\n/.test(line))
+              return [line];
+          const indent = (line.match(/^\s*/)?.[0] ?? "") + "  ";
+          const [head, ...rest] = line.split(/\\n/);
+          return [head ?? "", ...rest.map((part) => indent + part)];
+      })
+          .join("\n");
+  }
 
   // Extension-only helpers, kept hand-written and inlined verbatim into
   // lib/mymarkdown.js by sync.js. Anything here is NOT taken from the website.
