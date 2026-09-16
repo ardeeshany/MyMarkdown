@@ -98,6 +98,7 @@ function openPreview(context) {
   pushPreviewUpdate();
   previewPanel.webview.onDidReceiveMessage((message) => {
     if (message && message.type === "ready") pushPreviewUpdate();
+    if (message && message.type === "revealLine") revealSourceLine(message.line, message.text);
   });
   previewPanel.onDidDispose(() => {
     previewPanel = undefined;
