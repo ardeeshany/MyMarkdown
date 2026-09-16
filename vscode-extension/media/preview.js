@@ -4,6 +4,7 @@
   const vscode = acquireVsCodeApi();
   const docEl = document.getElementById("mm-doc");
   const lintEl = document.getElementById("mm-lint");
+  const statsEl = document.getElementById("mm-stats");
   const tocEl = document.getElementById("mm-toc");
   const tocListEl = document.getElementById("mm-toc-list");
   const tocToggleEl = document.getElementById("mm-toc-toggle");
@@ -97,6 +98,10 @@
     docEl.innerHTML = MyMarkdownRender.renderMarkdown(promoted) || "<p><em>Your preview will appear here.</em></p>";
     renderToc(MyMarkdown.getTocHeadings(promoted));
 
+    const trimmed = markdown.trim();
+    const words = trimmed ? trimmed.split(/\s+/).length : 0;
+    statsEl.textContent = markdown.length.toLocaleString() + " characters · " + words.toLocaleString() + " words";
+
     const issues = MyMarkdown.lintMarkdown(markdown);
     if (!issues.length) {
       lintEl.innerHTML = '<span class="ok">● Structure looks good</span>';
@@ -118,6 +123,7 @@
     if (message.type === "empty") {
       docEl.innerHTML = "<p><em>Open a Markdown file to see it here.</em></p>";
       lintEl.innerHTML = "";
+      statsEl.textContent = "";
       renderToc([]);
     }
   });

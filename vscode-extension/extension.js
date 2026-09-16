@@ -51,7 +51,10 @@ function getWebviewHtml(webview, extensionUri) {
   </aside>
   <main id="mm-main">
     <article id="mm-doc"></article>
-    <div id="mm-lint"></div>
+    <div id="mm-footer">
+      <div id="mm-lint"></div>
+      <div id="mm-stats"></div>
+    </div>
   </main>
 </div>
 <script src="${libUri}"></script>
