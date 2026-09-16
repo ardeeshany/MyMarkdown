@@ -42,6 +42,16 @@ const STEPS = [
 ];
 
 function ExtensionPage() {
+  const [copied, setCopied] = useState(false);
+  const copyCommand = async () => {
+    try {
+      await navigator.clipboard.writeText(INSTALL_COMMAND);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 2000);
+    } catch {
+      /* clipboard unavailable */
+    }
+  };
   return (
     <main className="relative min-h-screen overflow-x-clip bg-background px-5 pb-20 pt-6 text-foreground sm:px-8">
       <div className="pointer-events-none fixed -right-32 -top-32 size-[34rem] rounded-full bg-primary/15 blur-[130px]" />
