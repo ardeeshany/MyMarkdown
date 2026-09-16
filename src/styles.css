@@ -109,7 +109,7 @@
   --sidebar-ring: oklch(0.704 0.04 256.788);
   --heading-one: oklch(0.58 0.224 264.2);
   --heading-two: oklch(0.61 0.126 177.6);
-  --heading-three: oklch(0.54 0.138 49.1);
+  --heading-three: oklch(0.52 0.19 305);
   --code-key: oklch(0.585 0.195 277.1);
   --code-string: oklch(0.55 0.116 176.7);
   --code-number: oklch(0.54 0.138 49.1);
@@ -153,7 +153,7 @@
   --sidebar-ring: oklch(0.551 0.027 264.364);
   --heading-one: oklch(0.79 0.135 264.2);
   --heading-two: oklch(0.82 0.115 177.6);
-  --heading-three: oklch(0.82 0.115 62);
+  --heading-three: oklch(0.8 0.15 305);
   --code-key: oklch(0.79 0.125 277.1);
   --code-string: oklch(0.83 0.11 176.7);
   --code-number: oklch(0.83 0.115 62);
