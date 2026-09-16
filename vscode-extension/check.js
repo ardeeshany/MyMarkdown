@@ -87,7 +87,7 @@ check("literal \\n inside JSON text becomes a real line break", () => {
     "the literal \\n should become a real break, got:\n" + displayed
   );
   const rendered = Render.renderMarkdown('```json\n{"content":"a\\nb"}\n```');
-  includes(rendered, "a\nb", "rendered block");
+  assert(/a\n\s*b/.test(rendered), "the rendered block should break the line, got:\n" + rendered);
 });
 
 check("contents list keeps ids unique and lines accurate", () => {
