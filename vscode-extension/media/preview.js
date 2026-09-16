@@ -25,7 +25,12 @@
 
   window.addEventListener("message", (event) => {
     const message = event.data;
-    if (message && message.type === "update") update(message.markdown);
+    if (!message) return;
+    if (message.type === "update") update(message.markdown);
+    if (message.type === "empty") {
+      docEl.innerHTML = "<p><em>Open a Markdown file to see it here.</em></p>";
+      lintEl.innerHTML = "";
+    }
   });
 
   vscode.postMessage({ type: "ready" });
