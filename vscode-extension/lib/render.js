@@ -61,7 +61,7 @@
         html = '<code class="inline-code">' + code + "</code>";
       }
       stash.push(html);
-      return "" + (stash.length - 1) + "";
+      return "\u0000" + (stash.length - 1) + "\u0000";
     });
 
     out = out
@@ -72,8 +72,9 @@
       .replace(/(^|[^*])\*([^*\n]+)\*/g, "$1<em>$2</em>")
       .replace(/~~([^~]+)~~/g, "<del>$1</del>");
 
-    out = out.replace(/(\d+)/g, function (_m, i) {
-      return stash[Number(i)];
+    out = out.replace(/\u0000(\d+)\u0000/g, function (_m, i) {
+      const stored = stash[Number(i)];
+      return stored === undefined ? _m : stored;
     });
     return out;
   }
