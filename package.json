@@ -9,7 +9,9 @@
     "build:dev": "vite build --mode development",
     "preview": "vite preview",
     "lint": "eslint .",
-    "format": "prettier --write ."
+    "format": "prettier --write .",
+    "extension": "node vscode-extension/sync.js",
+    "extension:check": "node vscode-extension/check.js"
   },
   "overrides": {
     "rolldown": "1.2.1"
