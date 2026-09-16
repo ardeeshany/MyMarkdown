@@ -5,7 +5,7 @@ import heroImage from "@/assets/mymarkdown-logo-v2.webp.asset.json";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
 
-const VSIX = "/mymarkdown-0.1.6.vsix";
+const VSIX = "/mymarkdown-0.1.7.vsix";
 
 export const Route = createFileRoute("/vscode-extension")({
   head: () => ({
@@ -66,7 +66,7 @@ function ExtensionPage() {
               </a>
             </Button>
           </div>
-          <p className="mt-2 text-xs text-muted-foreground">Version 0.1.6 · about 13 KB · works with VS Code 1.85+</p>
+          <p className="mt-2 text-xs text-muted-foreground">Version 0.1.7 · about 13 KB · works with VS Code 1.85+</p>
         </header>
 
         <section className="mt-12 grid gap-4 sm:grid-cols-3">
@@ -93,7 +93,7 @@ function ExtensionPage() {
             ))}
           </ol>
           <p className="mt-6 text-xs text-muted-foreground">
-            Prefer the terminal? Run <code className="rounded bg-muted px-1.5 py-0.5">code --install-extension mymarkdown-0.1.6.vsix</code> from the folder you saved it in.
+            Prefer the terminal? Run <code className="rounded bg-muted px-1.5 py-0.5">code --install-extension mymarkdown-0.1.7.vsix</code> from the folder you saved it in.
           </p>
         </section>
 
