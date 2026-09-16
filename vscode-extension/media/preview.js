@@ -16,6 +16,22 @@
     tocToggleEl.setAttribute("aria-expanded", String(open));
   });
 
+  // Click any block in the preview to jump to that line in the Markdown editor.
+  docEl.addEventListener("click", (event) => {
+    if (event.target.closest("a")) return;
+    const selection = window.getSelection();
+    if (selection && String(selection).trim().length) return;
+    const block = event.target.closest("[data-line]");
+    if (!block) return;
+    const line = parseInt(block.getAttribute("data-line"), 10);
+    if (!line) return;
+    block.classList.remove("mm-jumped");
+    void block.offsetWidth;
+    block.classList.add("mm-jumped");
+    setTimeout(() => block.classList.remove("mm-jumped"), 700);
+    vscode.postMessage({ type: "revealLine", line, text: (block.textContent || "").trim().slice(0, 60) });
+  });
+
   function renderToc(headings) {
     if (!headings.length) {
       tocEl.classList.add("empty");
