@@ -119,8 +119,4 @@ td { border-bottom: 1px solid var(--mm-border); padding: 0.5rem 0.75rem; color: 
     --mm-code-bg: rgba(248, 250, 252, 0.05);
 /* MYMARKDOWN:TOKENS-DARK:END */
   }
-  p, td { color: rgba(232, 234, 244, 0.85); }
-  blockquote { color: rgba(232, 234, 244, 0.75); background: rgba(240, 162, 107, 0.08); }
-  code.inline-code { background: rgba(232, 234, 244, 0.08); }
-  .tok-plain { color: rgba(232, 234, 244, 0.6); }
 }
