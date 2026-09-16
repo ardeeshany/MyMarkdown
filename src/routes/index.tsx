@@ -5,6 +5,7 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
 import heroImage from "@/assets/mymarkdown-logo-v2.webp.asset.json";
+import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
 
 const SHARE_IMAGE_URL = "https://mymarkdown.site/__l5e/assets-v1/0b1abd2a-d71b-4761-bbcd-e5504709f41f/mymarkdown-share-v2.webp";
@@ -371,10 +372,11 @@ function Index() {
       <div className="pointer-events-none fixed -bottom-40 -left-32 size-[30rem] rounded-full bg-heading-two/12 blur-[130px]" />
 
       <div className="relative mx-auto max-w-6xl">
-        <nav className="mb-6 flex items-center justify-end text-sm">
+        <nav className="mb-6 flex items-center justify-end gap-1 text-sm">
           <Link to="/vscode-extension" className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground">
             <Code2 className="size-4" />VS Code extension
           </Link>
+          <ThemeToggle />
         </nav>
 
         <header className="flex flex-col items-center text-center">
@@ -438,7 +440,7 @@ function Index() {
                       const isFenced = Boolean(className);
                       const looksLikeJson = !isFenced && /"[^"]+"\s*:/.test(value);
                       const isJson = language === "json" || looksLikeJson;
-                      if (!isFenced && !isJson) return <code className="rounded bg-foreground/5 px-1.5 py-0.5 font-mono text-[0.88em] text-heading-three">{children}</code>;
+                      if (!isFenced && !isJson) return <code className="rounded bg-foreground/5 px-1.5 py-0.5 font-mono text-[0.88em] text-code-inline">{children}</code>;
                       if (!isFenced && isJson) return <code className="font-mono text-[0.88em]"><JsonCode value={value} /></code>;
                       return <code className="bg-transparent">{isJson ? <JsonCode value={value} /> : expandEscapedNewlines(value)}</code>;
                     },
@@ -449,7 +451,7 @@ function Index() {
 
             <div className="mt-5 flex flex-wrap items-center justify-between gap-2 rounded-xl bg-glass px-4 py-2.5 text-xs ring-1 ring-card/80 backdrop-blur-md">
               <span className="text-muted-foreground">{markdown.length.toLocaleString()} characters · {markdown.trim() ? markdown.trim().split(/\s+/).length : 0} words</span>
-              <span className={`flex items-center gap-1.5 font-medium ${issues.length ? "text-heading-three" : "text-heading-two"}`}><span className={`size-1.5 rounded-full ${issues.length ? "bg-heading-three" : "bg-heading-two"}`} />{issues.length ? `${issues.length} ${issues.length === 1 ? "suggestion" : "suggestions"}: ${issues[0]?.message}` : "Structure looks good"}</span>
+              <span className={`flex items-center gap-1.5 font-medium ${issues.length ? "text-code-inline" : "text-heading-two"}`}><span className={`size-1.5 rounded-full ${issues.length ? "bg-code-inline" : "bg-heading-two"}`} />{issues.length ? `${issues.length} ${issues.length === 1 ? "suggestion" : "suggestions"}: ${issues[0]?.message}` : "Structure looks good"}</span>
             </div>
           </div>
 

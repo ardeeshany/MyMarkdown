@@ -2,6 +2,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { ArrowLeft, Download, ListTree, Palette, Sparkles } from "lucide-react";
 
 import heroImage from "@/assets/mymarkdown-logo-v2.webp.asset.json";
+import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
 
 const VSIX = "/mymarkdown-0.1.6.vsix";
@@ -47,6 +48,7 @@ function ExtensionPage() {
           <Link to="/" className="inline-flex items-center gap-1.5 text-muted-foreground transition-colors hover:text-foreground">
             <ArrowLeft className="size-4" />Back to MyMarkdown
           </Link>
+          <ThemeToggle />
         </nav>
 
         <header className="mt-10 flex flex-col items-center text-center">
