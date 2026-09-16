@@ -1,3 +1,4 @@
+const path = require("path");
 const vscode = require("vscode");
 const MD = require("./lib/mymarkdown.js");
 
