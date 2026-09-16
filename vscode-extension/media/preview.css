@@ -108,8 +108,8 @@ td { border-bottom: 1px solid var(--mm-border); padding: 0.5rem 0.75rem; color: 
 #mm-lint .ok { color: var(--mm-h2); }
 #mm-lint .warn { color: var(--mm-h3); }
 
-@media (prefers-color-scheme: dark) {
-  :root {
+body.vscode-dark,
+body.vscode-high-contrast {
 /* MYMARKDOWN:TOKENS-DARK:START */
     --mm-bg: #020618;
     --mm-fg: #f8fafc;
