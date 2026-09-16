@@ -328,9 +328,12 @@ function main() {
   step("rules", names.length + " functions copied from src/routes/index.tsx");
 
   const styles = read(STYLES_FILE, "The website stylesheet");
+  const light = tokensFor(":root", styles);
+  // The website's dark block only redefines some tokens; the rest carry over.
+  const dark = new Map([...light, ...tokensFor(".dark", styles)]);
   let css = read(CSS_FILE, "The preview stylesheet");
-  css = replaceRegion(css, "TOKENS", tokenLines(tokensFor(":root", styles), "  ", 0.045));
-  css = replaceRegion(css, "TOKENS-DARK", tokenLines(tokensFor(".dark", styles), "    ", 0.05));
+  css = replaceRegion(css, "TOKENS", tokenLines(light, "  ", 0.045));
+  css = replaceRegion(css, "TOKENS-DARK", tokenLines(dark, "    ", 0.05));
   fs.writeFileSync(CSS_FILE, css);
   step("colours", TOKENS.length + " tokens copied from src/styles.css (light + dark)");
 
