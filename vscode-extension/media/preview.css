@@ -1,0 +1,122 @@
+/* MyMarkdown preview — mirrors the web app's Frosted Editorial palette. */
+:root {
+  --mm-bg: #f3f5fb;
+  --mm-fg: #2b2f45;
+  --mm-primary: #3b4ee0;
+  --mm-h1: #3b4ee0;
+  --mm-h2: #1f9d8a;
+  --mm-h3: #d96c2f;
+  --mm-muted: #6b7086;
+  --mm-border: rgba(43, 47, 69, 0.14);
+  --mm-code-bg: rgba(43, 47, 69, 0.045);
+  --mm-key: #6a4fd8;
+  --mm-string: #1f9d8a;
+  --mm-number: #d96c2f;
+  --mm-literal: #d6336c;
+}
+
+body {
+  margin: 0;
+  padding: 28px 34px 64px;
+  background: var(--mm-bg);
+  color: var(--mm-fg);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  font-size: 15px;
+  line-height: 1.7;
+}
+
+#mm-doc { max-width: 62ch; margin: 0 auto; }
+
+h1, h2, h3, h4 { line-height: 1.25; letter-spacing: -0.01em; scroll-margin-top: 16px; }
+h1 { font-size: 2.4rem; font-weight: 700; color: var(--mm-h1); margin: 2.6rem 0 0; }
+h1.first { margin-top: 0; }
+h2 { font-size: 1.55rem; font-weight: 600; color: var(--mm-h2); margin: 2.2rem 0 0; }
+h3 { font-size: 1.25rem; font-weight: 600; color: var(--mm-h3); margin: 2rem 0 0; }
+h4 { font-size: 1.1rem; font-weight: 600; margin: 1.8rem 0 0; }
+
+p { margin: 1rem 0 0; color: rgba(43, 47, 69, 0.85); }
+a { color: var(--mm-primary); font-weight: 500; text-decoration: underline; text-underline-offset: 4px; text-decoration-color: rgba(59, 78, 224, 0.3); }
+
+ul, ol { margin: 1rem 0 0; padding-left: 1.4rem; }
+li { margin: 0.4rem 0; }
+ul > li::marker { color: var(--mm-h2); }
+ol > li::marker { color: var(--mm-h1); font-weight: 500; }
+li.task { list-style: none; margin-left: -1.4rem; }
+li.task input { margin-right: 0.4rem; }
+
+blockquote {
+  margin: 1.2rem 0 0;
+  padding: 0.2rem 1rem;
+  border-left: 2px solid var(--mm-h3);
+  background: rgba(217, 108, 47, 0.06);
+  font-style: italic;
+  color: rgba(43, 47, 69, 0.75);
+}
+
+hr { border: none; border-top: 1px solid var(--mm-border); margin: 2rem 0; }
+
+pre.code-block {
+  margin: 1.2rem 0 0;
+  padding: 1.1rem 1.3rem;
+  overflow-x: auto;
+  background: var(--mm-code-bg);
+  border: 1px solid var(--mm-border);
+  border-radius: 12px;
+  font-family: "SF Mono", "Cascadia Code", Menlo, Consolas, monospace;
+  font-size: 13px;
+  line-height: 1.6;
+  white-space: pre;
+}
+pre.code-block code { background: transparent; padding: 0; }
+
+code.inline-code {
+  background: rgba(43, 47, 69, 0.06);
+  padding: 0.1rem 0.4rem;
+  border-radius: 5px;
+  font-family: "SF Mono", "Cascadia Code", Menlo, Consolas, monospace;
+  font-size: 0.88em;
+  color: var(--mm-h3);
+}
+code.inline-code.json { background: transparent; padding: 0; border-radius: 0; }
+
+.tok-key { color: var(--mm-key); font-weight: 500; }
+.tok-string { color: var(--mm-string); }
+.tok-number { color: var(--mm-number); }
+.tok-literal { color: var(--mm-literal); }
+.tok-plain { color: rgba(43, 47, 69, 0.6); }
+
+.table-wrap { margin: 1.2rem 0 0; overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; font-size: 14px; }
+th { border-bottom: 1px solid var(--mm-border); padding: 0.5rem 0.75rem; font-weight: 600; color: var(--mm-h2); text-align: left; }
+td { border-bottom: 1px solid var(--mm-border); padding: 0.5rem 0.75rem; color: rgba(43, 47, 69, 0.85); }
+
+#mm-lint {
+  max-width: 62ch;
+  margin: 1.6rem auto 0;
+  font-size: 12px;
+  color: var(--mm-muted);
+}
+#mm-lint .ok { color: var(--mm-h2); }
+#mm-lint .warn { color: var(--mm-h3); }
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --mm-bg: #161a2e;
+    --mm-fg: #e8eaf4;
+    --mm-primary: #8b96ff;
+    --mm-h1: #8b96ff;
+    --mm-h2: #4fd3bd;
+    --mm-h3: #f0a26b;
+    --mm-muted: #9aa0bd;
+    --mm-border: rgba(232, 234, 244, 0.16);
+    --mm-code-bg: rgba(232, 234, 244, 0.05);
+    --mm-key: #b39dff;
+    --mm-string: #4fd3bd;
+    --mm-number: #f0a26b;
+    --mm-literal: #ff7ba8;
+  }
+  p, td { color: rgba(232, 234, 244, 0.85); }
+  blockquote { color: rgba(232, 234, 244, 0.75); background: rgba(240, 162, 107, 0.08); }
+  code.inline-code { background: rgba(232, 234, 244, 0.08); }
+  .tok-plain { color: rgba(232, 234, 244, 0.6); }
+}

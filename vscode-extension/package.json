@@ -1,0 +1,62 @@
+{
+  "name": "mymarkdown",
+  "displayName": "MyMarkdown",
+  "description": "Beautiful Markdown preview with colorful headings, formatted JSON, beautify, and a clickable table of contents.",
+  "version": "0.1.0",
+  "publisher": "local",
+  "private": true,
+  "engines": { "vscode": "^1.85.0" },
+  "categories": ["Other"],
+  "activationEvents": ["onLanguage:markdown"],
+  "main": "./extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "mymarkdown.openPreview",
+        "title": "MyMarkdown: Open Styled Preview",
+        "icon": "$(open-preview)"
+      },
+      {
+        "command": "mymarkdown.beautify",
+        "title": "MyMarkdown: Beautify Markdown",
+        "icon": "$(sparkle)"
+      }
+    ],
+    "menus": {
+      "editor/title": [
+        { "command": "mymarkdown.openPreview", "when": "editorLangId == markdown", "group": "navigation" },
+        { "command": "mymarkdown.beautify", "when": "editorLangId == markdown", "group": "navigation" }
+      ],
+      "commandPalette": [
+        { "command": "mymarkdown.openPreview", "when": "editorLangId == markdown" },
+        { "command": "mymarkdown.beautify", "when": "editorLangId == markdown" }
+      ]
+    },
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "mymarkdown",
+          "title": "MyMarkdown",
+          "icon": "media/icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "mymarkdown": [
+        {
+          "id": "mymarkdown.toc",
+          "name": "Contents",
+          "icon": "media/icon.svg",
+          "contextualTitle": "MyMarkdown"
+        }
+      ],
+      "explorer": [
+        {
+          "id": "mymarkdown.toc",
+          "name": "MyMarkdown Contents",
+          "when": "editorLangId == markdown"
+        }
+      ]
+    }
+  }
+}
