@@ -1,9 +1,12 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { ArrowLeft, Download, ListTree, Palette, Sparkles } from "lucide-react";
+import { ArrowLeft, Check, Copy, Download, ListTree, Palette, Sparkles, Terminal } from "lucide-react";
+import { useState } from "react";
 
 import heroImage from "@/assets/mymarkdown-logo-v2.webp.asset.json";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
+
+const INSTALL_COMMAND = "code --install-extension mymarkdown-0.1.7.vsix";
 
 const VSIX = "/mymarkdown-0.1.7.vsix";
 
