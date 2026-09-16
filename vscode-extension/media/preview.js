@@ -98,6 +98,10 @@
     docEl.innerHTML = MyMarkdownRender.renderMarkdown(promoted) || "<p><em>Your preview will appear here.</em></p>";
     renderToc(MyMarkdown.getTocHeadings(promoted));
 
+    const trimmed = markdown.trim();
+    const words = trimmed ? trimmed.split(/\s+/).length : 0;
+    statsEl.textContent = markdown.length.toLocaleString() + " characters · " + words.toLocaleString() + " words";
+
     const issues = MyMarkdown.lintMarkdown(markdown);
     if (!issues.length) {
       lintEl.innerHTML = '<span class="ok">● Structure looks good</span>';
