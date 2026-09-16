@@ -4,10 +4,82 @@
   const vscode = acquireVsCodeApi();
   const docEl = document.getElementById("mm-doc");
   const lintEl = document.getElementById("mm-lint");
+  const tocEl = document.getElementById("mm-toc");
+  const tocListEl = document.getElementById("mm-toc-list");
+  const tocToggleEl = document.getElementById("mm-toc-toggle");
+
+  let headingEls = [];
+  let activeId = "";
+
+  tocToggleEl.addEventListener("click", () => {
+    const open = tocEl.classList.toggle("collapsed") === false;
+    tocToggleEl.setAttribute("aria-expanded", String(open));
+  });
+
+  function renderToc(headings) {
+    if (!headings.length) {
+      tocEl.classList.add("empty");
+      tocListEl.innerHTML = "";
+      return;
+    }
+    tocEl.classList.remove("empty");
+    let h1 = 0;
+    tocListEl.innerHTML = headings
+      .map((heading) => {
+        if (heading.level === 1) h1 += 1;
+        const label = heading.level === 1 ? h1 + ". " + heading.title : heading.title;
+        return (
+          '<button type="button" class="mm-toc-item level-' +
+          heading.level +
+          '" data-id="' +
+          MyMarkdownRender.escapeHtml(heading.id) +
+          '" title="' +
+          MyMarkdownRender.escapeHtml(heading.title) +
+          '">' +
+          MyMarkdownRender.escapeHtml(label) +
+          "</button>"
+        );
+      })
+      .join("");
+
+    Array.prototype.forEach.call(tocListEl.querySelectorAll(".mm-toc-item"), (button) => {
+      button.addEventListener("click", () => {
+        const target = document.getElementById(button.getAttribute("data-id"));
+        if (!target) return;
+        target.scrollIntoView({ behavior: "smooth", block: "start" });
+        setActive(button.getAttribute("data-id"));
+      });
+    });
+
+    headingEls = headings
+      .map((heading) => document.getElementById(heading.id))
+      .filter(Boolean);
+    updateActive();
+  }
+
+  function setActive(id) {
+    if (id === activeId) return;
+    activeId = id;
+    Array.prototype.forEach.call(tocListEl.querySelectorAll(".mm-toc-item"), (button) => {
+      button.classList.toggle("active", button.getAttribute("data-id") === id);
+    });
+  }
+
+  function updateActive() {
+    if (!headingEls.length) return;
+    let current = headingEls[0];
+    for (const el of headingEls) {
+      if (el.getBoundingClientRect().top <= 96) current = el;
+    }
+    setActive(current.id);
+  }
+
+  window.addEventListener("scroll", updateActive, { passive: true });
 
   function update(markdown) {
     const promoted = MyMarkdown.promoteInlineJsonToFences(markdown);
     docEl.innerHTML = MyMarkdownRender.renderMarkdown(promoted) || "<p><em>Your preview will appear here.</em></p>";
+    renderToc(MyMarkdown.getTocHeadings(promoted));
 
     const issues = MyMarkdown.lintMarkdown(markdown);
     if (!issues.length) {
@@ -30,6 +102,7 @@
     if (message.type === "empty") {
       docEl.innerHTML = "<p><em>Open a Markdown file to see it here.</em></p>";
       lintEl.innerHTML = "";
+      renderToc([]);
     }
   });
 

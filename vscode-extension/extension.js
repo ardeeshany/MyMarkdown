@@ -44,8 +44,16 @@ function getWebviewHtml(webview, extensionUri) {
 <title>MyMarkdown Preview</title>
 </head>
 <body>
-<article id="mm-doc"></article>
-<div id="mm-lint"></div>
+<div id="mm-layout">
+  <aside id="mm-toc" aria-label="Table of contents">
+    <button id="mm-toc-toggle" type="button" aria-expanded="true">Contents</button>
+    <nav id="mm-toc-list"></nav>
+  </aside>
+  <main id="mm-main">
+    <article id="mm-doc"></article>
+    <div id="mm-lint"></div>
+  </main>
+</div>
 <script src="${libUri}"></script>
 <script src="${renderUri}"></script>
 <script src="${mediaUri("preview.js")}"></script>
