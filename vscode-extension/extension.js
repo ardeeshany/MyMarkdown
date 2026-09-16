@@ -4,10 +4,27 @@ const MD = require("./lib/mymarkdown.js");
 
 /** @type {vscode.WebviewPanel | undefined} */
 let previewPanel;
+/** @type {vscode.TextDocument | undefined} */
+let lastMarkdownDocument;
 
 function activeMarkdownEditor() {
   const editor = vscode.window.activeTextEditor;
   if (editor && editor.document.languageId === "markdown") return editor;
+  return undefined;
+}
+
+function rememberActiveMarkdown() {
+  const editor = activeMarkdownEditor();
+  if (editor) lastMarkdownDocument = editor.document;
+}
+
+function currentMarkdownDocument() {
+  const editor = activeMarkdownEditor();
+  if (editor) {
+    lastMarkdownDocument = editor.document;
+    return editor.document;
+  }
+  if (lastMarkdownDocument && !lastMarkdownDocument.isClosed) return lastMarkdownDocument;
   return undefined;
 }
 
@@ -41,30 +58,36 @@ function panelTitle(document) {
 }
 
 function pushPreviewUpdate() {
-  const editor = activeMarkdownEditor();
-  if (!previewPanel || !editor) return;
-  previewPanel.title = panelTitle(editor.document);
-  previewPanel.webview.postMessage({ type: "update", markdown: editor.document.getText() });
+  if (!previewPanel) return;
+  const document = currentMarkdownDocument();
+  if (!document) {
+    previewPanel.webview.postMessage({ type: "empty" });
+    return;
+  }
+  previewPanel.title = panelTitle(document);
+  previewPanel.webview.postMessage({ type: "update", markdown: document.getText() });
 }
 
 function openPreview(context) {
-  const editor = activeMarkdownEditor();
-  if (!editor) {
+  rememberActiveMarkdown();
+  const document = currentMarkdownDocument();
+  if (!document) {
     vscode.window.showInformationMessage("Open a Markdown file first.");
     return;
   }
   if (previewPanel) {
-    previewPanel.reveal(vscode.ViewColumn.Beside);
+    previewPanel.reveal(vscode.ViewColumn.Beside, true);
     pushPreviewUpdate();
     return;
   }
   previewPanel = vscode.window.createWebviewPanel(
     "mymarkdown.preview",
-    panelTitle(editor.document),
-    vscode.ViewColumn.Beside,
-    { enableScripts: true, localResourceRoots: [vscode.Uri.joinPath(context.extensionUri, "media"), vscode.Uri.joinPath(context.extensionUri, "lib")] }
+    panelTitle(document),
+    { viewColumn: vscode.ViewColumn.Beside, preserveFocus: true },
+    { enableScripts: true, retainContextWhenHidden: true, localResourceRoots: [vscode.Uri.joinPath(context.extensionUri, "media"), vscode.Uri.joinPath(context.extensionUri, "lib")] }
   );
   previewPanel.webview.html = getWebviewHtml(previewPanel.webview, context.extensionUri);
+  pushPreviewUpdate();
   previewPanel.webview.onDidReceiveMessage((message) => {
     if (message && message.type === "ready") pushPreviewUpdate();
   });
@@ -80,6 +103,7 @@ async function beautify() {
     return;
   }
   const document = editor.document;
+  lastMarkdownDocument = document;
   const formatted = MD.formatMarkdown(document.getText());
   const fullRange = new vscode.Range(document.positionAt(0), document.positionAt(document.getText().length));
   const edit = new vscode.WorkspaceEdit();
@@ -123,9 +147,9 @@ class TocProvider {
     return element;
   }
   getChildren() {
-    const editor = activeMarkdownEditor();
-    if (!editor) return [];
-    const promoted = MD.promoteInlineJsonToFences(editor.document.getText());
+    const document = currentMarkdownDocument();
+    if (!document) return [];
+    const promoted = MD.promoteInlineJsonToFences(document.getText());
     const headings = MD.getTocHeadings(promoted);
     let h1 = 0;
     return headings.map((heading) => {
@@ -150,13 +174,13 @@ function activate(context) {
       editor.revealRange(new vscode.Range(position, position), vscode.TextEditorRevealType.AtTop);
     }),
     vscode.workspace.onDidChangeTextDocument((event) => {
-      const editor = activeMarkdownEditor();
-      if (editor && event.document === editor.document) {
+      if (event.document === currentMarkdownDocument()) {
         pushPreviewUpdate();
         tocProvider.refresh();
       }
     }),
     vscode.window.onDidChangeActiveTextEditor(() => {
+      rememberActiveMarkdown();
       pushPreviewUpdate();
       tocProvider.refresh();
     })
