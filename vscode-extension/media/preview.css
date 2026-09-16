@@ -99,9 +99,24 @@ table { width: 100%; border-collapse: collapse; font-size: 14px; }
 th { border-bottom: 1px solid var(--mm-border); padding: 0.5rem 0.75rem; font-weight: 600; color: var(--mm-h2); text-align: left; }
 td { border-bottom: 1px solid var(--mm-border); padding: 0.5rem 0.75rem; color: var(--mm-fg-soft); }
 
-#mm-lint {
+#mm-footer {
   max-width: 62ch;
   margin: 1.6rem auto 0;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--mm-border);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+#mm-lint {
+  font-size: 12px;
+  color: var(--mm-muted);
+}
+
+#mm-stats {
   font-size: 12px;
   color: var(--mm-muted);
 }
