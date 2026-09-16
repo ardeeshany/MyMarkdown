@@ -60,7 +60,7 @@ function openPreview(context) {
   }
   previewPanel = vscode.window.createWebviewPanel(
     "mymarkdown.preview",
-    "MyMarkdown Preview",
+    panelTitle(editor.document),
     vscode.ViewColumn.Beside,
     { enableScripts: true, localResourceRoots: [vscode.Uri.joinPath(context.extensionUri, "media"), vscode.Uri.joinPath(context.extensionUri, "lib")] }
   );

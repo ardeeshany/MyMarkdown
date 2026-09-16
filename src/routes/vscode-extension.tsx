@@ -34,7 +34,7 @@ const STEPS = [
   { title: "Download the file", body: "Grab the .vsix file above and save it anywhere on your computer." },
   { title: "Install it in VS Code", body: "Open VS Code, press Cmd/Ctrl + Shift + P, run “Extensions: Install from VSIX…”, and pick the file you just downloaded." },
   { title: "Reload the window", body: "Run “Developer: Reload Window” from the same menu, or just restart VS Code." },
-  { title: "Open any .md file", body: "Press Cmd/Ctrl + Shift + V for the styled preview, use the sparkle button to beautify, and find “Contents” in the sidebar." },
+  { title: "Open any .md file", body: "Press Cmd/Ctrl + Alt + V for the styled preview (the tab reads “MyMarkdown: …”), click the sparkle button to beautify, and open the MyMarkdown icon in the sidebar for Contents. Cmd/Ctrl + Shift + V is VS Code’s own plain preview — not this one." },
 ];
 
 function ExtensionPage() {
