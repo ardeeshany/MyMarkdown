@@ -130,7 +130,7 @@ check("preview renders headings, colours, tables and tasks", () => {
     "# Alpha\n\n## Beta\n\n- [x] done\n- [ ] open\n\n| k | v |\n| - | - |\n| a | 1 |\n\n" +
       "```json\n{\"key\":\"value\",\"n\":3,\"ok\":true}\n```"
   );
-  includes(html, '<h1 class="h1 first" id="alpha">', "first heading");
+  includes(html, '<h1 data-line="1" class="h1 first" id="alpha">', "first heading");
   includes(html, '<h2 class="h2" id="beta">', "second heading");
   includes(html, '<span class="tok-key">', "JSON field colour");
   includes(html, '<span class="tok-number">', "JSON number colour");
