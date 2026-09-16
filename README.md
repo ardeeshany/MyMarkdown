@@ -100,7 +100,7 @@ Issues and pull requests are welcome. A few things worth knowing:
 
 ## Contact
 
-Ideas, bugs, or requests: [ardalan@mylens.ai](mailto:ardalan@mylens.ai)
+Ideas, bugs, or requests: [Ardalan](mailto:ardalan@mylens.ai)
 
 ## License
 
