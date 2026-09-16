@@ -10,33 +10,43 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as VscodeExtensionRouteImport } from './routes/vscode-extension'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const VscodeExtensionRoute = VscodeExtensionRouteImport.update({
+  id: '/vscode-extension',
+  path: '/vscode-extension',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/vscode-extension': typeof VscodeExtensionRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/vscode-extension': typeof VscodeExtensionRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/vscode-extension': typeof VscodeExtensionRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/'
+  fullPaths: '/' | '/vscode-extension'
   fileRoutesByTo: FileRoutesByTo
-  to: '/'
-  id: '__root__' | '/'
+  to: '/' | '/vscode-extension'
+  id: '__root__' | '/' | '/vscode-extension'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  VscodeExtensionRoute: typeof VscodeExtensionRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -48,11 +58,19 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/vscode-extension': {
+      id: '/vscode-extension'
+      path: '/vscode-extension'
+      fullPath: '/vscode-extension'
+      preLoaderRoute: typeof VscodeExtensionRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  VscodeExtensionRoute: VscodeExtensionRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
