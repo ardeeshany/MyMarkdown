@@ -105,7 +105,3 @@ Ideas, bugs, or requests: [ardalan@mylens.ai](mailto:ardalan@mylens.ai)
 ## License
 
 [MIT](LICENSE)
-
----
-
-Made by [Ardalan](https://mylens.ai). Suggestions welcome: ardalan@mylens.ai
