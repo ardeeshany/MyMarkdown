@@ -59,7 +59,7 @@ function ExtensionPage() {
           </p>
           <div className="mt-6">
             <Button asChild size="lg" className="h-11 rounded-full bg-primary px-7 text-sm font-medium text-primary-foreground shadow-lg shadow-primary/25 hover:bg-primary/90">
-              <a href={VSIX} download>
+              <a href={VSIX} download target="_blank" rel="noopener noreferrer">
                 <Download />Download for VS Code
               </a>
             </Button>
