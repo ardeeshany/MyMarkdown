@@ -3,10 +3,15 @@
 /* MYMARKDOWN:TOKENS:START */
   --mm-bg: #e8f0fc;
   --mm-fg: #212533;
+  --mm-fg-soft: rgba(33, 37, 51, 0.85);
+  --mm-fg-mute: rgba(33, 37, 51, 0.6);
+  --mm-chip: rgba(33, 37, 51, 0.07);
   --mm-primary: #336bfc;
+  --mm-primary-soft: rgba(51, 107, 252, 0.35);
   --mm-h1: #336bfc;
   --mm-h2: #009b83;
   --mm-h3: #ac5110;
+  --mm-quote-bg: rgba(172, 81, 16, 0.06);
   --mm-muted: #596575;
   --mm-border: #dae2ec;
   --mm-key: #6368ec;
@@ -106,10 +111,15 @@ td { border-bottom: 1px solid var(--mm-border); padding: 0.5rem 0.75rem; color: 
 /* MYMARKDOWN:TOKENS-DARK:START */
     --mm-bg: #020618;
     --mm-fg: #f8fafc;
+    --mm-fg-soft: rgba(248, 250, 252, 0.85);
+    --mm-fg-mute: rgba(248, 250, 252, 0.6);
+    --mm-chip: rgba(248, 250, 252, 0.07);
     --mm-primary: #e2e8f0;
+    --mm-primary-soft: rgba(226, 232, 240, 0.35);
     --mm-h1: #336bfc;
     --mm-h2: #009b83;
     --mm-h3: #ac5110;
+    --mm-quote-bg: rgba(172, 81, 16, 0.06);
     --mm-muted: #90a1b9;
     --mm-border: rgba(255, 255, 255, 0.1);
     --mm-key: #6368ec;
