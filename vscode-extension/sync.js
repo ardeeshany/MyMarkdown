@@ -47,10 +47,15 @@ const EXPECTED = [
 const TOKENS = [
   ["--background", "--mm-bg"],
   ["--foreground", "--mm-fg"],
+  ["--foreground", "--mm-fg-soft", 0.85],
+  ["--foreground", "--mm-fg-mute", 0.6],
+  ["--foreground", "--mm-chip", 0.07],
   ["--primary", "--mm-primary"],
+  ["--primary", "--mm-primary-soft", 0.35],
   ["--heading-one", "--mm-h1"],
   ["--heading-two", "--mm-h2"],
   ["--heading-three", "--mm-h3"],
+  ["--heading-three", "--mm-quote-bg", 0.06],
   ["--muted-foreground", "--mm-muted"],
   ["--border", "--mm-border"],
   ["--code-key", "--mm-key"],
@@ -261,10 +266,11 @@ function tokensFor(selector, styles) {
 }
 
 function tokenLines(tokens, indentText, codeBgAlpha) {
-  const lines = TOKENS.map(([from, to]) => {
+  const lines = TOKENS.map(([from, to, alpha]) => {
     const raw = tokens.get(from);
     if (raw === undefined) fail(from + " is missing from src/styles.css but the preview still needs it.");
-    return indentText + to + ": " + toCssColor(raw) + ";";
+    const color = toCssColor(raw);
+    return indentText + to + ": " + (alpha === undefined ? color : withAlpha(color, alpha)) + ";";
   });
   const fg = toCssColor(tokens.get("--foreground"));
   if (fg === undefined) fail("--foreground is missing from src/styles.css.");

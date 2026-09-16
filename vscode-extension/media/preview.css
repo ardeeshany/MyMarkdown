@@ -36,8 +36,8 @@ h2 { font-size: 1.55rem; font-weight: 600; color: var(--mm-h2); margin: 2.2rem 0
 h3 { font-size: 1.25rem; font-weight: 600; color: var(--mm-h3); margin: 2rem 0 0; }
 h4 { font-size: 1.1rem; font-weight: 600; margin: 1.8rem 0 0; }
 
-p { margin: 1rem 0 0; color: rgba(43, 47, 69, 0.85); }
-a { color: var(--mm-primary); font-weight: 500; text-decoration: underline; text-underline-offset: 4px; text-decoration-color: rgba(59, 78, 224, 0.3); }
+p { margin: 1rem 0 0; color: var(--mm-fg-soft); }
+a { color: var(--mm-primary); font-weight: 500; text-decoration: underline; text-underline-offset: 4px; text-decoration-color: var(--mm-primary-soft); }
 
 ul, ol { margin: 1rem 0 0; padding-left: 1.4rem; }
 li { margin: 0.4rem 0; }
