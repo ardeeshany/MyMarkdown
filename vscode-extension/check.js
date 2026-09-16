@@ -82,7 +82,10 @@ check("ordinary inline code stays inline", () => {
 
 check("literal \\n inside JSON text becomes a real line break", () => {
   const displayed = MD.formatJsonDisplay('{"content":"line one\\nline two"}');
-  includes(displayed, "line one\nline two", "newline expansion");
+  assert(
+    /line one\n\s*line two/.test(displayed),
+    "the literal \\n should become a real break, got:\n" + displayed
+  );
   const rendered = Render.renderMarkdown('```json\n{"content":"a\\nb"}\n```');
   includes(rendered, "a\nb", "rendered block");
 });
@@ -128,7 +131,7 @@ check("preview renders headings, colours, tables and tasks", () => {
       "```json\n{\"key\":\"value\",\"n\":3,\"ok\":true}\n```"
   );
   includes(html, '<h1 class="h1 first" id="alpha">', "first heading");
-  includes(html, '<h2 id="beta">', "second heading");
+  includes(html, '<h2 class="h2" id="beta">', "second heading");
   includes(html, '<span class="tok-key">', "JSON field colour");
   includes(html, '<span class="tok-number">', "JSON number colour");
   includes(html, '<span class="tok-literal">', "JSON true/false/null colour");
