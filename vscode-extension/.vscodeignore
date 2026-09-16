@@ -1,6 +1,9 @@
 .vscode/**
 .vscodeignore
 README.md
+sync.js
+check.js
+lib/manual-helpers.js
 **/*.map
 **/tsconfig.json
 node_modules/**

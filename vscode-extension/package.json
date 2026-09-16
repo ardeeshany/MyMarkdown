@@ -2,12 +2,18 @@
   "name": "mymarkdown",
   "displayName": "MyMarkdown",
   "description": "Beautiful Markdown preview with colorful headings, formatted JSON, beautify, and a clickable table of contents.",
-  "version": "0.1.0",
+  "version": "0.1.4",
   "publisher": "local",
   "private": true,
-  "engines": { "vscode": "^1.85.0" },
-  "categories": ["Other"],
-  "activationEvents": ["onLanguage:markdown"],
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onLanguage:markdown"
+  ],
   "main": "./extension.js",
   "contributes": {
     "commands": [
@@ -24,12 +30,26 @@
     ],
     "menus": {
       "editor/title": [
-        { "command": "mymarkdown.openPreview", "when": "editorLangId == markdown", "group": "navigation" },
-        { "command": "mymarkdown.beautify", "when": "editorLangId == markdown", "group": "navigation" }
+        {
+          "command": "mymarkdown.openPreview",
+          "when": "editorLangId == markdown",
+          "group": "navigation"
+        },
+        {
+          "command": "mymarkdown.beautify",
+          "when": "editorLangId == markdown",
+          "group": "navigation"
+        }
       ],
       "commandPalette": [
-        { "command": "mymarkdown.openPreview", "when": "editorLangId == markdown" },
-        { "command": "mymarkdown.beautify", "when": "editorLangId == markdown" }
+        {
+          "command": "mymarkdown.openPreview",
+          "when": "editorLangId == markdown"
+        },
+        {
+          "command": "mymarkdown.beautify",
+          "when": "editorLangId == markdown"
+        }
       ]
     },
     "viewsContainers": {

@@ -1,18 +1,25 @@
 /* MyMarkdown preview — mirrors the web app's Frosted Editorial palette. */
 :root {
-  --mm-bg: #f3f5fb;
-  --mm-fg: #2b2f45;
-  --mm-primary: #3b4ee0;
-  --mm-h1: #3b4ee0;
-  --mm-h2: #1f9d8a;
-  --mm-h3: #d96c2f;
-  --mm-muted: #6b7086;
-  --mm-border: rgba(43, 47, 69, 0.14);
-  --mm-code-bg: rgba(43, 47, 69, 0.045);
-  --mm-key: #6a4fd8;
-  --mm-string: #1f9d8a;
-  --mm-number: #d96c2f;
-  --mm-literal: #d6336c;
+/* MYMARKDOWN:TOKENS:START */
+  --mm-bg: #e8f0fc;
+  --mm-fg: #212533;
+  --mm-fg-soft: rgba(33, 37, 51, 0.85);
+  --mm-fg-mute: rgba(33, 37, 51, 0.6);
+  --mm-chip: rgba(33, 37, 51, 0.07);
+  --mm-primary: #336bfc;
+  --mm-primary-soft: rgba(51, 107, 252, 0.35);
+  --mm-h1: #336bfc;
+  --mm-h2: #009b83;
+  --mm-h3: #ac5110;
+  --mm-quote-bg: rgba(172, 81, 16, 0.06);
+  --mm-muted: #596575;
+  --mm-border: #dae2ec;
+  --mm-key: #6368ec;
+  --mm-string: #008770;
+  --mm-number: #ac5110;
+  --mm-literal: #9f4a76;
+  --mm-code-bg: rgba(33, 37, 51, 0.045);
+/* MYMARKDOWN:TOKENS:END */
 }
 
 body {
@@ -34,8 +41,8 @@ h2 { font-size: 1.55rem; font-weight: 600; color: var(--mm-h2); margin: 2.2rem 0
 h3 { font-size: 1.25rem; font-weight: 600; color: var(--mm-h3); margin: 2rem 0 0; }
 h4 { font-size: 1.1rem; font-weight: 600; margin: 1.8rem 0 0; }
 
-p { margin: 1rem 0 0; color: rgba(43, 47, 69, 0.85); }
-a { color: var(--mm-primary); font-weight: 500; text-decoration: underline; text-underline-offset: 4px; text-decoration-color: rgba(59, 78, 224, 0.3); }
+p { margin: 1rem 0 0; color: var(--mm-fg-soft); }
+a { color: var(--mm-primary); font-weight: 500; text-decoration: underline; text-underline-offset: 4px; text-decoration-color: var(--mm-primary-soft); }
 
 ul, ol { margin: 1rem 0 0; padding-left: 1.4rem; }
 li { margin: 0.4rem 0; }
@@ -48,9 +55,9 @@ blockquote {
   margin: 1.2rem 0 0;
   padding: 0.2rem 1rem;
   border-left: 2px solid var(--mm-h3);
-  background: rgba(217, 108, 47, 0.06);
+  background: var(--mm-quote-bg);
   font-style: italic;
-  color: rgba(43, 47, 69, 0.75);
+  color: var(--mm-muted);
 }
 
 hr { border: none; border-top: 1px solid var(--mm-border); margin: 2rem 0; }
@@ -70,7 +77,7 @@ pre.code-block {
 pre.code-block code { background: transparent; padding: 0; }
 
 code.inline-code {
-  background: rgba(43, 47, 69, 0.06);
+  background: var(--mm-chip);
   padding: 0.1rem 0.4rem;
   border-radius: 5px;
   font-family: "SF Mono", "Cascadia Code", Menlo, Consolas, monospace;
@@ -83,12 +90,12 @@ code.inline-code.json { background: transparent; padding: 0; border-radius: 0; }
 .tok-string { color: var(--mm-string); }
 .tok-number { color: var(--mm-number); }
 .tok-literal { color: var(--mm-literal); }
-.tok-plain { color: rgba(43, 47, 69, 0.6); }
+.tok-plain { color: var(--mm-fg-mute); }
 
 .table-wrap { margin: 1.2rem 0 0; overflow-x: auto; }
 table { width: 100%; border-collapse: collapse; font-size: 14px; }
 th { border-bottom: 1px solid var(--mm-border); padding: 0.5rem 0.75rem; font-weight: 600; color: var(--mm-h2); text-align: left; }
-td { border-bottom: 1px solid var(--mm-border); padding: 0.5rem 0.75rem; color: rgba(43, 47, 69, 0.85); }
+td { border-bottom: 1px solid var(--mm-border); padding: 0.5rem 0.75rem; color: var(--mm-fg-soft); }
 
 #mm-lint {
   max-width: 62ch;
@@ -101,22 +108,25 @@ td { border-bottom: 1px solid var(--mm-border); padding: 0.5rem 0.75rem; color: 
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --mm-bg: #161a2e;
-    --mm-fg: #e8eaf4;
-    --mm-primary: #8b96ff;
-    --mm-h1: #8b96ff;
-    --mm-h2: #4fd3bd;
-    --mm-h3: #f0a26b;
-    --mm-muted: #9aa0bd;
-    --mm-border: rgba(232, 234, 244, 0.16);
-    --mm-code-bg: rgba(232, 234, 244, 0.05);
-    --mm-key: #b39dff;
-    --mm-string: #4fd3bd;
-    --mm-number: #f0a26b;
-    --mm-literal: #ff7ba8;
+/* MYMARKDOWN:TOKENS-DARK:START */
+    --mm-bg: #020618;
+    --mm-fg: #f8fafc;
+    --mm-fg-soft: rgba(248, 250, 252, 0.85);
+    --mm-fg-mute: rgba(248, 250, 252, 0.6);
+    --mm-chip: rgba(248, 250, 252, 0.07);
+    --mm-primary: #e2e8f0;
+    --mm-primary-soft: rgba(226, 232, 240, 0.35);
+    --mm-h1: #336bfc;
+    --mm-h2: #009b83;
+    --mm-h3: #ac5110;
+    --mm-quote-bg: rgba(172, 81, 16, 0.06);
+    --mm-muted: #90a1b9;
+    --mm-border: rgba(255, 255, 255, 0.1);
+    --mm-key: #6368ec;
+    --mm-string: #008770;
+    --mm-number: #ac5110;
+    --mm-literal: #9f4a76;
+    --mm-code-bg: rgba(248, 250, 252, 0.05);
+/* MYMARKDOWN:TOKENS-DARK:END */
   }
-  p, td { color: rgba(232, 234, 244, 0.85); }
-  blockquote { color: rgba(232, 234, 244, 0.75); background: rgba(240, 162, 107, 0.08); }
-  code.inline-code { background: rgba(232, 234, 244, 0.08); }
-  .tok-plain { color: rgba(232, 234, 244, 0.6); }
 }
