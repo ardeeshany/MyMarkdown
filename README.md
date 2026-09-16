@@ -1,26 +1,111 @@
 # MyMarkdown
 
-I want to create a minimal project that when I add a markdown text (including headlines, bullets, sample of JSONs, etc), it makes it beautiful nand easy to understand, like lint it better and also make the headlines colorful (each with an easy to detect colors, makes the JSON with format color) etc
+**Markdown that reads beautifully.** Paste messy Markdown — the kind AI tools and agents
+produce all day — and get a polished, readable document: colourful headings, JSON laid
+out one field per line with coloured field names, a clickable table of contents, and
+lint hints for the rough edges.
 
-This project was built with [Lovable](https://lovable.dev).
+**Live app:** https://mymarkdown.site
 
-**Live app**: https://mymarkdown.lovable.app
+Everything runs in your browser. No account, no upload, nothing leaves your machine.
 
-## Build with Lovable
+## Features
 
-Continue developing this project in the [Lovable editor](https://lovable.dev/projects/7b3ca48a-1ea4-443f-a120-f4c81324d079).
+- **Colourful headings** — H1, H2, and H3 each get their own colour, so structure is
+  visible at a glance.
+- **Readable JSON** — valid JSON is re-indented one field per line and syntax-coloured,
+  including field names. Bare or backtick-wrapped JSON is promoted into proper code
+  blocks automatically, and literal `\n` inside strings becomes a real line break.
+- **Beautify** — one click normalises spacing, list markers, and JSON formatting.
+- **Table of contents** — collapsible, click to jump, highlights the section you are
+  reading, truncates long titles with a tooltip.
+- **Paste & go** — a single button reads your clipboard and shows the rendered result.
+- **VS Code extension** — the same preview, beautify command, and contents list inside
+  your editor. See [`vscode-extension/`](vscode-extension/README.md) or the
+  [extension page](https://mymarkdown.site/vscode-extension).
 
-- **Ship faster**: describe what you want to build and Lovable handles the code.
-- **Stay in sync**: every change made in Lovable is committed straight to this repository.
-- **Full ownership**: this code is yours. Push to `main` on GitHub and your changes sync back into Lovable, ready for your next prompt.
+## Tech stack
 
-## Development
+- [TanStack Start](https://tanstack.com/start) (React 19, file-based routing, SSR)
+- [Vite 7](https://vite.dev/)
+- [Tailwind CSS v4](https://tailwindcss.com/) with semantic design tokens in
+  `src/styles.css`
+- [shadcn/ui](https://ui.shadcn.com/) components
+- `react-markdown` + `remark-gfm` for parsing
 
-Prefer working locally? You need Node.js and npm — [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating).
+There is no backend and no database — the whole app is static.
+
+## Getting started
+
+Requires Node.js 20+ (or [Bun](https://bun.sh/)).
 
 ```sh
-git clone <this-repository-url>
-cd <repository-name>
-npm i
+git clone https://github.com/ardeeshany/mymarkdown.git
+cd mymarkdown
+npm install
 npm run dev
 ```
+
+The dev server runs on http://localhost:8080.
+
+| Command | What it does |
+| --- | --- |
+| `npm run dev` | start the dev server |
+| `npm run build` | production build |
+| `npm run extension` | rebuild and package the VS Code extension |
+| `npm run extension:check` | run the extension's checks only |
+
+## Project layout
+
+```text
+src/
+  routes/
+    __root.tsx             root layout, global head metadata
+    index.tsx              the editor, preview, TOC, and all formatting rules
+    vscode-extension.tsx   landing page for the VS Code extension
+  components/ui/           shadcn/ui components
+  styles.css               Tailwind v4 theme and design tokens
+public/                    favicon, robots.txt, the downloadable .vsix
+vscode-extension/          the VS Code extension and its one-command build
+```
+
+The formatting rules (`promoteRawJsonToFences`, `formatMarkdown`, `lintMarkdown`,
+`getTocHeadings`, …) live at the top of `src/routes/index.tsx` and are the single source
+of truth — `npm run extension` copies them into the extension.
+
+## VS Code extension
+
+The extension keeps its own copy of the rules and colours, so it does not update on its
+own. From the project root:
+
+```sh
+npm run extension
+code --install-extension vscode-extension/mymarkdown-<version>.vsix
+```
+
+`npm run extension` copies the rules from `src/routes/index.tsx`, copies the light and
+dark colour values from `src/styles.css`, runs the checks, bumps the patch version, and
+packages a new `.vsix`. If a check fails nothing is packaged and the reason is printed.
+Full details in [`vscode-extension/README.md`](vscode-extension/README.md).
+
+## Contributing
+
+Issues and pull requests are welcome. A few things worth knowing:
+
+- Never hardcode colours in components — use the semantic tokens in `src/styles.css`.
+- Formatting rules belong in `src/routes/index.tsx`; extension-only helpers go in
+  `vscode-extension/lib/manual-helpers.js`. `vscode-extension/lib/mymarkdown.js` is
+  generated — do not edit it.
+- Run `npm run extension:check` after touching any formatting rule.
+
+## Contact
+
+Ideas, bugs, or requests: [ardalan@mylens.ai](mailto:ardalan@mylens.ai)
+
+## License
+
+[MIT](LICENSE)
+
+---
+
+Built with [Lovable](https://lovable.dev).
