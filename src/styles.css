@@ -151,6 +151,15 @@
   --sidebar-accent-foreground: oklch(0.984 0.003 247.858);
   --sidebar-border: oklch(1 0 0 / 10%);
   --sidebar-ring: oklch(0.551 0.027 264.364);
+  --heading-one: oklch(0.79 0.135 264.2);
+  --heading-two: oklch(0.82 0.115 177.6);
+  --heading-three: oklch(0.82 0.115 62);
+  --code-key: oklch(0.79 0.125 277.1);
+  --code-string: oklch(0.83 0.11 176.7);
+  --code-number: oklch(0.83 0.115 62);
+  --code-literal: oklch(0.8 0.115 349.9);
+  --glass: oklch(0.208 0.042 265.755 / 55%);
+  --glass-strong: oklch(0.208 0.042 265.755 / 80%);
 }
 
 @layer base {
