@@ -15,11 +15,16 @@ const { mymarkdownPlugin } = require("./lib/preview-plugin.js");
 
 // The preview is VS Code's own, so the checks below drive the real markdown-it the way
 // VS Code does: our plugin first, then the source-map rule VS Code appends afterwards.
-let MarkdownIt = null;
+// Required, not optional: skipping these would report a full green while leaving the
+// whole preview untested, and sync.js packages whatever check.js approves.
+let MarkdownIt;
 try {
   MarkdownIt = require("markdown-it");
 } catch {
-  /* not installed: the preview checks below are skipped rather than failing the build */
+  console.error(
+    "\n  MyMarkdown checks: markdown-it is not installed - run `npm install` (or `bun install`) in the project root first.\n",
+  );
+  process.exit(1);
 }
 
 function preview() {
@@ -120,7 +125,6 @@ check("literal \\n inside JSON text becomes a real line break", () => {
     /line one\n\s*line two/.test(displayed),
     "the literal \\n should become a real break, got:\n" + displayed,
   );
-  if (!MarkdownIt) return;
   const rendered = preview().render('```json\n{"content":"a\\nb"}\n```');
   assert(/a\n\s*b/.test(rendered), "the rendered block should break the line, got:\n" + rendered);
 });
@@ -166,7 +170,6 @@ check("lint notices an unclosed code fence", () => {
 });
 
 check("the preview colours JSON fences and leaves other languages alone", () => {
-  if (!MarkdownIt) return;
   const md = preview();
   const html = md.render('# A\n\n```json\n{"key":"value","n":3,"ok":true}\n```\n');
   includes(html, '<pre class="mymd-json">', "the JSON block");
@@ -178,13 +181,24 @@ check("the preview colours JSON fences and leaves other languages alone", () => 
 });
 
 check("a JSON block only claims source lines it really covers", () => {
-  if (!MarkdownIt) return;
   const md = preview();
-  // Already one field per line: the display matches the source, so mapping is exact.
-  const exact = codeSpan(md.render('T\n\n```json\n{\n  "a": 1\n}\n```\n'));
+  // Already one field per line: the display matches the source, so the range must be
+  // exactly what VS Code works out for the same block when we are not involved.
+  const document = 'T\n\n```json\n{\n  "a": 1\n}\n```\n';
+  const plain = new MarkdownIt({ html: true, highlight: (code) => code });
+  plain.core.ruler.push("source_map_data_attribute", (state) => {
+    for (const token of state.tokens) {
+      if (!token.map || token.type === "inline") continue;
+      token.attrSet("data-line", String(token.map[0]));
+      token.attrJoin("class", "code-line");
+      token.attrSet("dir", "auto");
+    }
+  });
+  const baseline = codeSpan(plain.render(document));
+  const exact = codeSpan(md.render(document));
   assert(
-    exact && exact.line === 2 && exact.endLine === 4,
-    "expected lines 2-4, got " + JSON.stringify(exact),
+    exact && baseline && exact.line === baseline.line && exact.endLine === baseline.endLine,
+    "expected " + JSON.stringify(baseline) + ", got " + JSON.stringify(exact),
   );
   // Laying it out adds lines, so the block must not claim to be mapped at all.
   const expanded = md.render('T\n\n```json\n{"a":1,"b":2,"c":3}\n```\n\nAfter.\n');
@@ -193,7 +207,6 @@ check("a JSON block only claims source lines it really covers", () => {
 });
 
 check("loose JSON in prose is promoted, without shifting later lines", () => {
-  if (!MarkdownIt) return;
   const md = preview();
   const html = md.render('Response:\n\n{"ok":true,"n":3}\n\nDone.\n');
   includes(html, '<pre class="mymd-json">', "a bare JSON paragraph becomes a block");
@@ -203,7 +216,6 @@ check("loose JSON in prose is promoted, without shifting later lines", () => {
 });
 
 check("the preview renders task lists", () => {
-  if (!MarkdownIt) return;
   const html = preview().render("- [ ] todo\n- [x] done\n");
   includes(html, 'type="checkbox" disabled>', "an unchecked box");
   includes(html, "checked>", "a checked box");
@@ -211,7 +223,6 @@ check("the preview renders task lists", () => {
 });
 
 check("the preview never lets the document inject markup", () => {
-  if (!MarkdownIt) return;
   const html = preview().render('```json\n{"x":"<script>alert(1)</script>"}\n```\n');
   assert(html.indexOf("<script>") === -1, "a script tag was rendered as markup");
   includes(html, "&lt;script&gt;", "escaped script");
@@ -300,11 +311,26 @@ check("beautify does not make a tight list loose", () => {
 });
 
 check("JSON that would not survive reformatting is left as written", () => {
-  for (const body of ['{"id": 9007199254740993}', '{"v": -0}', '{"v": 1e400}']) {
+  for (const body of [
+    '{"id": 9007199254740993}',
+    '{"v": -0}',
+    '{"v": 1e400}',
+    '{"v": 1e-400}',
+    '{"v": 900719925474099.3}',
+    '{"v": 1.2345678901234567890}',
+  ]) {
     const fence = "```json\n" + body + "\n```";
     assert(MD.formatMarkdown(fence) === fence, "reformatting changed the value in " + body);
   }
   includes(MD.formatMarkdown('```json\n{"a":1,"b":2}\n```'), '\n  "a": 1', "ordinary JSON");
+  includes(MD.formatMarkdown('```json\n{"pi":3.14159}\n```'), "3.14159", "an ordinary decimal");
+  // The preview must not show a number the file does not contain either.
+  includes(MD.formatJsonDisplay('{"id": 9007199254740993}'), "9007199254740993", "preview display");
+  includes(
+    MD.formatJsonDisplay('{"v": 900719925474099.3}'),
+    "900719925474099.3",
+    "preview decimal",
+  );
   // Still JSON, so it is still fenced: as prose, Markdown would eat its punctuation.
   const promoted = MD.promoteInlineJsonToFences(
     'Payload:\n\n{"id": 1088174639906766899, "note": "use *bold*"}\n',
@@ -365,7 +391,17 @@ check("minimalEdit reproduces the new text with the smallest span", () => {
         JSON.stringify(to) +
         ") did not reproduce the text",
     );
+    if (edit) {
+      assert(
+        from.slice(0, edit.start) === to.slice(0, edit.start),
+        "the replaced span starts inside text the two strings share",
+      );
+    }
   }
+  // A whole-document replacement would satisfy the round trip above, so pin the span too.
+  const settled = "# Title\n\n- one\n- two\n";
+  const stray = MD.minimalEdit(settled + "   ", settled);
+  assert(stray && stray.end - stray.start <= 3, "one stray space should not rewrite the document");
 });
 
 check("the manifest and the extension host agree", () => {
@@ -389,7 +425,73 @@ check("the manifest and the extension host agree", () => {
     contributes["markdown.markdownItPlugins"] === true,
     "markdown.markdownItPlugins must be true",
   );
-  assert(/extendMarkdownIt/.test(host), "extension.js must export extendMarkdownIt");
+  // Regex-matching the source would pass on a host that does not parse, or whose
+  // extendMarkdownIt hands back an untouched engine - both of which have happened here.
+  const Module = require("module");
+  const load = Module._load;
+  const off = { dispose() {} };
+  const stub = {
+    Range: class {},
+    Position: class {},
+    Selection: class {},
+    TextEdit: { replace: () => ({}) },
+    Diagnostic: class {},
+    WorkspaceEdit: class {},
+    EndOfLine: { LF: 1, CRLF: 2 },
+    DiagnosticSeverity: { Warning: 1, Information: 2 },
+    ThemeIcon: class {},
+    ThemeColor: class {},
+    TreeItem: class {},
+    TreeItemCollapsibleState: { None: 0 },
+    TextEditorRevealType: { AtTop: 3 },
+    EventEmitter: class {
+      constructor() {
+        this.event = () => off;
+      }
+      fire() {}
+    },
+    languages: {
+      createDiagnosticCollection: () => ({ set() {}, delete() {}, clear() {}, dispose() {} }),
+      registerDocumentFormattingEditProvider: () => off,
+    },
+    window: {
+      activeTextEditor: undefined,
+      registerTreeDataProvider: () => off,
+      onDidChangeActiveTextEditor: () => off,
+      showInformationMessage() {},
+      setStatusBarMessage() {},
+    },
+    workspace: {
+      getConfiguration: () => ({ get: (_key, fallback) => fallback }),
+      onDidChangeTextDocument: () => off,
+      onDidOpenTextDocument: () => off,
+      onDidCloseTextDocument: () => off,
+      onDidChangeConfiguration: () => off,
+      textDocuments: [],
+      applyEdit: async () => true,
+    },
+    commands: { registerCommand: () => off },
+  };
+  Module._load = (request, ...rest) => (request === "vscode" ? stub : load(request, ...rest));
+  let api;
+  try {
+    const entry = path.join(__dirname, manifest.main);
+    delete require.cache[require.resolve(entry)];
+    api = require(entry).activate({ subscriptions: [] });
+  } finally {
+    Module._load = load;
+  }
+  assert(
+    api && typeof api.extendMarkdownIt === "function",
+    "activate must return extendMarkdownIt",
+  );
+  const engine = api.extendMarkdownIt(new MarkdownIt({ html: true, highlight: (code) => code }));
+  assert(engine && typeof engine.render === "function", "extendMarkdownIt must return the engine");
+  includes(
+    engine.render('```json\n{"a":1}\n```\n'),
+    "mymd-json",
+    "the returned engine colours JSON",
+  );
 
   // A command in the manifest that nothing registers shows up as "command not found".
   const declared = (contributes.commands || []).map((entry) => entry.command);

@@ -29,7 +29,7 @@
 }
 
 body.vscode-dark,
-body.vscode-high-contrast {
+body.vscode-high-contrast:not(.vscode-high-contrast-light) {
 /* MYMARKDOWN:TOKENS-DARK:START */
     --mm-bg: #020618;
     --mm-fg: #f8fafc;
@@ -55,8 +55,6 @@ body.vscode-high-contrast {
 body {
   background: var(--mm-bg);
   color: var(--mm-fg);
-  font-size: 15px;
-  line-height: 1.7;
 }
 
 .markdown-body {
@@ -106,10 +104,15 @@ body {
 .markdown-body a {
   color: var(--mm-primary);
   font-weight: 500;
+  text-decoration: underline;
   text-underline-offset: 4px;
   text-decoration-color: var(--mm-primary-soft);
 }
 
+.markdown-body ul,
+.markdown-body ol {
+  padding-left: 1.4rem;
+}
 .markdown-body li::marker {
   color: var(--mm-h2);
 }
@@ -127,6 +130,10 @@ body {
 }
 
 .markdown-body table {
+  display: block;
+  width: fit-content;
+  max-width: 100%;
+  overflow-x: auto;
   border-collapse: collapse;
 }
 .markdown-body th,
@@ -155,6 +162,9 @@ body {
   background: var(--mm-code-bg);
   border-radius: 10px;
   padding: 0.9rem 1.1rem;
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-wrap: anywhere;
 }
 .markdown-body pre > code {
   background: none;
@@ -162,9 +172,6 @@ body {
 }
 
 /* JSON, laid out one field per line and coloured by what each piece is. */
-.markdown-body pre.mymd-json {
-  background: var(--mm-code-bg);
-}
 .tok-key {
   color: var(--mm-key);
   font-weight: 600;
@@ -180,9 +187,6 @@ body {
 }
 .tok-plain {
   color: var(--mm-fg-mute);
-}
-code.mymd-json-inline {
-  background: var(--mm-code-bg);
 }
 
 /* Task lists */

@@ -266,10 +266,28 @@ function scanMarkdownRegions(lines: string[]) {
 // Matches a string (so its contents are skipped) or captures a number literal.
 const JSON_NUMBER_RE = /"(?:\\.|[^"\\])*"|(-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)/g;
 
+/** A double reliably round-trips a decimal literal of at most this many significant digits. */
+const JSON_SAFE_SIGNIFICANT_DIGITS = 15;
+
+/** True when one JSON number literal means the same thing after a parse/stringify round trip. */
+function jsonNumberRoundTrips(literal: string) {
+  const value = Number(literal);
+  if (!Number.isFinite(value) || Object.is(value, -0)) return false;
+
+  const mantissa = literal.replace(/^[+-]/, "").split(/[eE]/)[0] ?? "";
+  // An integer is exact up to 2^53, and Number.isSafeInteger says so precisely.
+  if (!/[.eE]/.test(literal)) return Number.isSafeInteger(value);
+  // Anything else that has collapsed to zero has underflowed, e.g. 1e-400.
+  if (value === 0) return !/[1-9]/.test(mantissa);
+  const digits = mantissa.replace(".", "").replace(/^0+/, "").replace(/0+$/, "");
+  return digits.length <= JSON_SAFE_SIGNIFICANT_DIGITS;
+}
+
 /**
  * True when every number in the text survives JSON.parse -> JSON.stringify unchanged.
- * Reformatting goes through a double, so without this guard an id past 2^53 is
- * silently rounded, `-0` loses its sign and `1e400` becomes `null`.
+ * Reformatting goes through a double, so without this guard an id past 2^53 is silently
+ * rounded, `-0` loses its sign, `1e400` becomes `null`, `1e-400` becomes `0` and a
+ * decimal carrying more digits than a double can hold comes back a different number.
  */
 function jsonNumbersRoundTrip(text: string) {
   const pattern = new RegExp(JSON_NUMBER_RE.source, "g");
@@ -277,9 +295,7 @@ function jsonNumbersRoundTrip(text: string) {
   while ((match = pattern.exec(text)) !== null) {
     const literal = match[1];
     if (literal === undefined) continue;
-    const value = Number(literal);
-    if (!Number.isFinite(value) || Object.is(value, -0)) return false;
-    if (!/[.eE]/.test(literal) && !Number.isSafeInteger(value)) return false;
+    if (!jsonNumberRoundTrips(literal)) return false;
   }
   return true;
 }

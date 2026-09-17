@@ -22,15 +22,23 @@ Everything runs inside VS Code — no account, no internet, nothing leaves your 
   `Ctrl+Z` / `Cmd+Z` undoes it, and it is applied as the smallest possible edit, so the
   cursor, the selection and the scroll position stay where they were.
 
-  Beautify leaves fenced code, YAML front matter, HTML blocks and indented code exactly
-  as they are, keeps the indentation that nests a list, preserves two-space hard line
-  breaks, and declines to reformat a JSON block whose numbers would not survive the round
-  trip (an id past 2^53, `-0`, `1e400`).
+  Beautify never touches the inside of YAML front matter, HTML blocks or indented code,
+  and the only things it changes inside a fence are the two it is for: the language in the
+  info string is lower-cased, and a `json` body is laid out one field per line. It keeps
+  the indentation that nests a list and preserves two-space hard line breaks.
+
+  It declines to lay out a JSON block whose numbers a double cannot hold — an id past
+  2^53, `-0`, `1e400`, `1e-400`, or a decimal carrying more than 15 significant digits —
+  and leaves that block exactly as written rather than showing you a different number.
+  The preview does the same.
 - **Structure problems.** Heading level jumps, unclosed fences, invalid JSON blocks and
   mixed bullets appear in the Problems panel, each pointing at the line and column it is
   about. Code inside fences, front matter and HTML blocks is never reported.
 - **Contents** — the MyMarkdown activity bar lists every H1, H2 and H3 in the open file.
   Click one to jump to it. It works whether or not the preview is open.
+- **Your preview settings still apply.** MyMarkdown restyles the built-in preview rather
+  than replacing it, so `markdown.preview.fontSize`, `markdown.preview.lineHeight`,
+  `markdown.styles` and the preview security levels all keep working.
 
 ## Settings
 
@@ -38,6 +46,8 @@ Everything runs inside VS Code — no account, no internet, nothing leaves your 
 | --- | --- | --- |
 | `mymarkdown.lint` | `true` | Report structure problems in the Problems panel. |
 | `mymarkdown.registerFormatter` | `false` | Register Beautify as the Markdown formatter, so **Format Document** (`Shift+Alt+F`) and `editor.formatOnSave` run it. |
+
+Both settings take effect as soon as you change them; neither needs a window reload.
 
 `mymarkdown.registerFormatter` is off by default on purpose. VS Code will not choose
 between two formatters for the same language on its own, so turning this on while you
@@ -65,7 +75,7 @@ Then restart VS Code (or run `Developer: Reload Window`). Open any `.md` file an
 `Ctrl+Shift+V` / `Cmd+Shift+V`.
 
 To uninstall: run `Developer: Show Running Extensions`, or remove the folder
-`~/.vscode/extensions/mymarkdown.mymarkdown-vscode-<version>`.
+`~/.vscode/extensions/local.mymarkdown-<version>`.
 
 ## Refreshing it after the website changes
 

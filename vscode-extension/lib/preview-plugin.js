@@ -97,11 +97,14 @@ function renderJsonFence(token, escapeHtml) {
   const content = token.content || "";
   const display = MD.formatJsonDisplay(content);
   const attrs = codeAttributes(token, escapeHtml, countLines(display) === countLines(content));
+  // The trailing newline matters: markdown-it's own fence renderer emits one, and the
+  // preview works out a block's last line by counting the newlines in this text.
+  const body = display.endsWith("\n") ? display : display + "\n";
   return (
     '<pre class="mymd-json"><code' +
     attrs +
     ">" +
-    tokenizeJson(display, escapeHtml) +
+    tokenizeJson(body, escapeHtml) +
     "</code></pre>\n"
   );
 }
@@ -130,10 +133,19 @@ function promoteJsonParagraphs(state) {
     if (JSON_LOOKS_LIKE_RE.test(raw) && isJson(raw)) {
       content = raw;
     } else {
-      // A paragraph that is nothing but one inline code span holding JSON.
+      // A paragraph that is nothing but one inline code span holding JSON. The site asks
+      // for a "key": pair here, as promoteInlineJsonToFences does; a bare paragraph, which
+      // promoteRawJsonToFences handles, needs no such guard.
       const span = /^`+[ \t]*([\s\S]+?)[ \t]*`+$/.exec(raw);
       const candidate = span ? span[1].trim() : "";
-      if (candidate && JSON_LOOKS_LIKE_RE.test(candidate) && isJson(candidate)) content = candidate;
+      if (
+        candidate &&
+        JSON_LOOKS_LIKE_RE.test(candidate) &&
+        JSON_HAS_KEY_RE.test(candidate) &&
+        isJson(candidate)
+      ) {
+        content = candidate;
+      }
     }
     if (content === null) continue;
 

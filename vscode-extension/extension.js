@@ -71,9 +71,18 @@ let diagnostics;
 /** One timer per document: switching files must not cancel the pending lint of the other. */
 const lintTimers = new Map();
 
+/** Source-control diffs, output channels and other read-only views are not the user's file. */
+function isEditableMarkdown(document) {
+  if (!document || document.isClosed || document.languageId !== "markdown") return false;
+  const scheme = document.uri && document.uri.scheme;
+  return (
+    scheme === undefined || scheme === "file" || scheme === "untitled" || scheme === "vscode-vfs"
+  );
+}
+
 function refreshDiagnostics(document) {
   if (!diagnostics) return;
-  if (!document || document.isClosed || document.languageId !== "markdown") return;
+  if (!isEditableMarkdown(document)) return;
   if (!config().get("lint", true)) {
     diagnostics.delete(document.uri);
     return;
@@ -208,16 +217,42 @@ function activate(context) {
 
   // Off by default: a second Markdown formatter would stop VS Code choosing one at all,
   // silently breaking format on save for anyone already using Prettier or markdownlint.
-  if (config().get("registerFormatter", false)) {
-    context.subscriptions.push(
-      vscode.languages.registerDocumentFormattingEditProvider("markdown", {
+  // Registered and disposed as the setting changes, so it needs no window reload.
+  /** @type {vscode.Disposable | undefined} */
+  let formatterRegistration;
+  const syncFormatter = () => {
+    const wanted = config().get("registerFormatter", false);
+    if (wanted && !formatterRegistration) {
+      formatterRegistration = vscode.languages.registerDocumentFormattingEditProvider("markdown", {
         provideDocumentFormattingEdits(document) {
           const edit = beautifyEdit(document);
           return edit ? [edit] : [];
         },
-      }),
-    );
-  }
+      });
+    } else if (!wanted && formatterRegistration) {
+      formatterRegistration.dispose();
+      formatterRegistration = undefined;
+    }
+  };
+  syncFormatter();
+
+  context.subscriptions.push(
+    {
+      dispose: () => {
+        if (formatterRegistration) formatterRegistration.dispose();
+        formatterRegistration = undefined;
+      },
+    },
+    vscode.workspace.onDidChangeConfiguration((event) => {
+      if (event.affectsConfiguration("mymarkdown.registerFormatter")) syncFormatter();
+      if (event.affectsConfiguration("mymarkdown.lint")) {
+        // The setting is only read while publishing, so every open document has to be
+        // revisited: otherwise turning it off leaves stale problems everywhere but here.
+        if (diagnostics) diagnostics.clear();
+        for (const document of vscode.workspace.textDocuments) refreshDiagnostics(document);
+      }
+    }),
+  );
 
   refreshDiagnostics(currentMarkdownDocument());
 
