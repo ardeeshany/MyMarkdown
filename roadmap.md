@@ -9,3 +9,6 @@
 - [x] Add `npm run extension` to refresh the extension from the website rules and colours, run checks, and repackage
 - [x] Document the one-command refresh in the extension README
 - [x] Fix VS Code/Cursor confusion: Cmd+Shift+V opens the built-in preview, not MyMarkdown's. Added Cmd/Ctrl+Alt+V keybinding, named the panel after the file, removed the duplicate Contents view, and corrected the docs
+- [x] Adopt the merged region-aware Markdown rules and VS Code built-in preview integration
+- [x] Add Mermaid diagrams to the website and the VS Code/Cursor preview
+- [x] Fix Mermaid preview loading by packaging its engine and renderer in one ordered script

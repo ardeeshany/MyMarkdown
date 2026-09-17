@@ -4,6 +4,8 @@ README.md
 sync.js
 check.js
 lib/manual-helpers.js
+media/mermaid.min.js
+media/mermaid-preview.js
 **/*.map
 **/tsconfig.json
 node_modules/**

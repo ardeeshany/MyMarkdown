@@ -85,8 +85,7 @@
       }
     },
     "markdown.previewScripts": [
-      "./media/mermaid.min.js",
-      "./media/mermaid-preview.js"
+      "./media/mermaid-preview.bundle.js"
     ]
   }
 }

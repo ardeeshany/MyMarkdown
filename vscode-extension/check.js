@@ -222,6 +222,20 @@ check("the preview renders task lists", () => {
   assert(html.indexOf("[ ]") === -1, "the marker text should be gone");
 });
 
+check("Mermaid preview is packaged as one ordered script", () => {
+  const pkg = require("./package.json");
+  const scripts = pkg.contributes && pkg.contributes["markdown.previewScripts"];
+  assert(Array.isArray(scripts) && scripts.length === 1, "expected one preview script");
+  assert(
+    scripts[0] === "./media/mermaid-preview.bundle.js",
+    "the ordered Mermaid bundle is not registered",
+  );
+  const bundle = fs.readFileSync(path.join(__dirname, "media", "mermaid-preview.bundle.js"), "utf8");
+  const engine = bundle.indexOf("globalThis");
+  const renderer = bundle.indexOf("Renders ```mermaid blocks");
+  assert(engine !== -1 && renderer > engine, "Mermaid must be bundled before its renderer");
+});
+
 check("the preview never lets the document inject markup", () => {
   const html = preview().render('```json\n{"x":"<script>alert(1)</script>"}\n```\n');
   assert(html.indexOf("<script>") === -1, "a script tag was rendered as markup");
