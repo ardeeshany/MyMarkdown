@@ -6,9 +6,9 @@ import heroImage from "@/assets/mymarkdown-logo-v2.webp.asset.json";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
 
-const INSTALL_COMMAND = "code --install-extension mymarkdown-0.1.18.vsix";
+const INSTALL_COMMAND = "code --install-extension mymarkdown-0.1.19.vsix";
 
-const VSIX = "/mymarkdown-0.1.18.vsix";
+const VSIX = "/mymarkdown-0.1.19.vsix";
 
 export const Route = createFileRoute("/vscode-extension")({
   head: () => ({
@@ -79,7 +79,7 @@ function ExtensionPage() {
               </a>
             </Button>
           </div>
-          <p className="mt-2 text-xs text-muted-foreground">Version 0.1.18 · about 1 MB · works with VS Code 1.85+</p>
+          <p className="mt-2 text-xs text-muted-foreground">Version 0.1.19 · about 1 MB · works with VS Code 1.85+</p>
         </header>
 
         <section className="mt-12 grid gap-4 sm:grid-cols-3">
