@@ -6,9 +6,9 @@ import heroImage from "@/assets/mymarkdown-logo-v2.webp.asset.json";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
 
-const INSTALL_COMMAND = "code --install-extension mymarkdown-0.1.15.vsix";
+const INSTALL_COMMAND = "code --install-extension mymarkdown-0.1.16.vsix";
 
-const VSIX = "/mymarkdown-0.1.15.vsix";
+const VSIX = "/mymarkdown-0.1.16.vsix";
 
 export const Route = createFileRoute("/vscode-extension")({
   head: () => ({
@@ -29,7 +29,7 @@ export const Route = createFileRoute("/vscode-extension")({
 });
 
 const FEATURES = [
-  { icon: Palette, title: "Styled preview", body: "VS Code's own preview (Cmd/Ctrl + Shift + V) gets the MyMarkdown look: vivid H1–H3 headings, JSON one field per line with coloured field names, task lists, and calm code blocks — with scroll sync and click-to-source built in." },
+  { icon: Palette, title: "Styled preview", body: "VS Code's own preview (Cmd/Ctrl + Shift + V) gets the MyMarkdown look: vivid H1–H3 headings, JSON one field per line with coloured field names, task lists, Mermaid diagrams drawn in your theme's colours, and calm code blocks — with scroll sync and click-to-source built in." },
   { icon: Sparkles, title: "Beautify command", body: "Cmd/Ctrl + Alt + B tidies the open file with the smallest possible edit, so your cursor and scroll stay put. Bare or backtick-wrapped JSON is promoted into proper code blocks. One undo reverses it all." },
   { icon: ListTree, title: "Contents + lint", body: "Every H1, H2, and H3 in a clickable sidebar tree. Structure problems — heading jumps, unclosed fences, invalid JSON — show up in the Problems panel as you type." },
 ];
@@ -79,7 +79,7 @@ function ExtensionPage() {
               </a>
             </Button>
           </div>
-          <p className="mt-2 text-xs text-muted-foreground">Version 0.1.15 · about 21 KB · works with VS Code 1.85+</p>
+          <p className="mt-2 text-xs text-muted-foreground">Version 0.1.16 · about 1 MB · works with VS Code 1.85+</p>
         </header>
 
         <section className="mt-12 grid gap-4 sm:grid-cols-3">

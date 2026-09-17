@@ -93,6 +93,22 @@ function codeAttributes(token, escapeHtml, keepsSourceMapping) {
   return attrs.map((pair) => " " + pair[0] + '="' + escapeHtml(String(pair[1])) + '"').join("");
 }
 
+/**
+ * A ```mermaid block becomes a placeholder holding its own source; media/mermaid-preview.js
+ * turns it into SVG in the preview. A drawn diagram occupies a different number of lines
+ * than its source, so like a reflowed JSON block it does not claim source mapping.
+ */
+function renderMermaidFence(token, escapeHtml) {
+  const source = token.content || "";
+  return (
+    '<div class="mymd-mermaid" data-mermaid="' +
+    escapeHtml(source) +
+    '"><pre class="mymd-mermaid-src">' +
+    escapeHtml(source) +
+    "</pre></div>\n"
+  );
+}
+
 function renderJsonFence(token, escapeHtml) {
   const content = token.content || "";
   const display = MD.formatJsonDisplay(content);
@@ -200,6 +216,13 @@ function mymarkdownPlugin(md) {
   md.renderer.rules.fence = function (tokens, idx, options, env, slf) {
     const token = tokens[idx];
     const info = (token.info || "").trim().split(/\s+/)[0].toLowerCase();
+    if (info === "mermaid") {
+      try {
+        return renderMermaidFence(token, escapeHtml);
+      } catch {
+        return originalFence(tokens, idx, options, env, slf);
+      }
+    }
     if (!qualifiesAsJson(info, token.content || "")) {
       return originalFence(tokens, idx, options, env, slf);
     }

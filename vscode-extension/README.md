@@ -13,7 +13,10 @@ Everything runs inside VS Code — no account, no internet, nothing leaves your 
   MyMarkdown preview. There is no second preview to learn, and everything the built-in
   one does keeps working: scroll stays in step with the editor, double-click jumps back
   to the source, images and links resolve against your workspace, find works, and any
-  other Markdown extension you have — Mermaid, maths — still renders.
+  other Markdown extension you have — maths and the like — still renders.
+- **Mermaid diagrams, built in.** A ` ```mermaid ` block is drawn as a diagram in the
+  preview, in a light or dark palette to match your theme, with no second extension to
+  install. If a diagram has a syntax error, its source is shown with the error instead.
 - **JSON that reads.** A ` ```json ` block is laid out one field per line and coloured by
   what each piece is: field names, strings, numbers, and `true` / `false` / `null`. JSON
   sitting bare in prose, or inside a backtick span, is picked up too.
@@ -69,7 +72,7 @@ code --install-extension vscode-extension/mymarkdown-<version>.vsix
 ```
 
 The exact filename is printed by `npm run extension` (for example
-`mymarkdown-0.1.15.vsix`).
+`mymarkdown-0.1.16.vsix`).
 
 Then restart VS Code (or run `Developer: Reload Window`). Open any `.md` file and press
 `Ctrl+Shift+V` / `Cmd+Shift+V`.

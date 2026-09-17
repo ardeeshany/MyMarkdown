@@ -198,3 +198,27 @@ body {
   margin-right: 0.45rem;
   vertical-align: middle;
 }
+
+/* Mermaid diagrams. The source shows until the drawing replaces it, so a
+   diagram never flashes as an empty gap while the preview loads. */
+.markdown-body .mymd-mermaid {
+  margin: 1.1rem 0;
+  text-align: center;
+  overflow-x: auto;
+}
+.markdown-body .mymd-mermaid svg {
+  max-width: 100%;
+  height: auto;
+}
+.markdown-body .mymd-mermaid[data-mymd-state="done"] {
+  background: none;
+}
+.markdown-body pre.mymd-mermaid-src {
+  text-align: left;
+  color: var(--mm-fg-mute);
+}
+.markdown-body pre.mymd-mermaid-error {
+  text-align: left;
+  color: var(--mm-h3);
+  background: var(--mm-code-bg);
+}
