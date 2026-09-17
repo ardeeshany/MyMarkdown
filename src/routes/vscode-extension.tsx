@@ -75,13 +75,16 @@ function ExtensionPage() {
             The same beautiful reading experience while you edit. Everything runs on your machine — no account, no internet, nothing leaves your computer.
           </p>
           <div className="mt-6">
-            <Button asChild size="lg" className="h-11 rounded-full bg-primary px-7 text-sm font-medium text-primary-foreground shadow-lg shadow-primary/25 hover:bg-primary/90">
+            <Button asChild size="lg" className="h-12 gap-2.5 rounded-full bg-primary py-0 pl-6 pr-2 text-sm font-medium text-primary-foreground shadow-lg shadow-primary/25 hover:bg-primary/90">
               <a href={VSIX} download target="_blank" rel="noopener noreferrer">
                 <Download />Download for VS Code
+                <span className="ml-1 inline-flex h-7 items-center rounded-full bg-primary-foreground/15 px-2.5 text-xs font-semibold tabular-nums tracking-wide ring-1 ring-inset ring-primary-foreground/25">
+                  v{VERSION}
+                </span>
               </a>
             </Button>
           </div>
-          <p className="mt-2 text-xs text-muted-foreground">Version 0.1.22 · about 1 MB · works with VS Code 1.85+</p>
+          <p className="mt-2.5 text-xs text-muted-foreground">about 1 MB · works with VS Code 1.85+</p>
         </header>
 
         <section className="mt-12 grid gap-4 sm:grid-cols-3">
