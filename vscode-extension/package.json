@@ -16,12 +16,11 @@
   ],
   "main": "./extension.js",
   "contributes": {
+    "markdown.previewStyles": [
+      "./media/preview.css"
+    ],
+    "markdown.markdownItPlugins": true,
     "commands": [
-      {
-        "command": "mymarkdown.openPreview",
-        "title": "MyMarkdown: Open Styled Preview",
-        "icon": "$(open-preview)"
-      },
       {
         "command": "mymarkdown.beautify",
         "title": "MyMarkdown: Beautify Markdown",
@@ -31,21 +30,12 @@
     "menus": {
       "editor/title": [
         {
-          "command": "mymarkdown.openPreview",
-          "when": "editorLangId == markdown",
-          "group": "navigation"
-        },
-        {
           "command": "mymarkdown.beautify",
           "when": "editorLangId == markdown",
           "group": "navigation"
         }
       ],
       "commandPalette": [
-        {
-          "command": "mymarkdown.openPreview",
-          "when": "editorLangId == markdown"
-        },
         {
           "command": "mymarkdown.beautify",
           "when": "editorLangId == markdown"
@@ -73,17 +63,26 @@
     },
     "keybindings": [
       {
-        "command": "mymarkdown.openPreview",
-        "key": "ctrl+alt+v",
-        "mac": "cmd+alt+v",
-        "when": "editorLangId == markdown"
-      },
-      {
         "command": "mymarkdown.beautify",
         "key": "ctrl+alt+b",
         "mac": "cmd+alt+b",
         "when": "editorLangId == markdown"
       }
-    ]
+    ],
+    "configuration": {
+      "title": "MyMarkdown",
+      "properties": {
+        "mymarkdown.lint": {
+          "type": "boolean",
+          "default": true,
+          "description": "Report structure problems (heading level jumps, unclosed fences, invalid JSON blocks, mixed bullets) in the Problems panel."
+        },
+        "mymarkdown.registerFormatter": {
+          "type": "boolean",
+          "default": false,
+          "description": "Register Beautify as the Markdown formatter, so Format Document and editor.formatOnSave run it. Off by default: a second Markdown formatter stops VS Code choosing one on its own, which would break format on save for anyone already using Prettier or markdownlint."
+        }
+      }
+    }
   }
 }

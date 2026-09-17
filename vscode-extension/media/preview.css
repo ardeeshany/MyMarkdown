@@ -1,4 +1,10 @@
-/* MyMarkdown preview — mirrors the web app's Frosted Editorial palette. */
+/* MyMarkdown for VS Code's built-in Markdown preview.
+ *
+ * VS Code renders the preview itself and lets an extension contribute a stylesheet, so
+ * this file only restyles what the built-in preview already emits. The colour values
+ * between the MYMARKDOWN:TOKENS markers are generated from src/styles.css by sync.js —
+ * edit the website, not these lines. */
+
 :root {
 /* MYMARKDOWN:TOKENS:START */
   --mm-bg: #ffffff;
@@ -22,109 +28,8 @@
 /* MYMARKDOWN:TOKENS:END */
 }
 
-body {
-  margin: 0;
-  padding: 28px 34px 64px;
-  background: var(--mm-bg);
-  color: var(--mm-fg);
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-  font-size: 15px;
-  line-height: 1.7;
-}
-
-#mm-doc { max-width: 62ch; margin: 0 auto; }
-
-h1, h2, h3, h4 { line-height: 1.25; letter-spacing: -0.01em; scroll-margin-top: 16px; }
-h1 { font-size: 2.4rem; font-weight: 700; color: var(--mm-h1); margin: 2.6rem 0 0; }
-h1.first { margin-top: 0; }
-h2 { font-size: 1.55rem; font-weight: 600; color: var(--mm-h2); margin: 2.2rem 0 0; }
-h3 { font-size: 1.25rem; font-weight: 600; color: var(--mm-h3); margin: 2rem 0 0; }
-h4 { font-size: 1.1rem; font-weight: 600; margin: 1.8rem 0 0; }
-
-p { margin: 1rem 0 0; color: var(--mm-fg-soft); }
-a { color: var(--mm-primary); font-weight: 500; text-decoration: underline; text-underline-offset: 4px; text-decoration-color: var(--mm-primary-soft); }
-
-ul, ol { margin: 1rem 0 0; padding-left: 1.4rem; }
-li { margin: 0.4rem 0; }
-ul > li::marker { color: var(--mm-h2); }
-ol > li::marker { color: var(--mm-h1); font-weight: 500; }
-li.task { list-style: none; margin-left: -1.4rem; }
-li.task input { margin-right: 0.4rem; }
-
-blockquote {
-  margin: 1.2rem 0 0;
-  padding: 0.2rem 1rem;
-  border-left: 2px solid var(--mm-h3);
-  background: var(--mm-quote-bg);
-  font-style: italic;
-  color: var(--mm-muted);
-}
-
-hr { border: none; border-top: 1px solid var(--mm-border); margin: 2rem 0; }
-
-pre.code-block {
-  margin: 1.2rem 0 0;
-  padding: 1.1rem 1.3rem;
-  overflow-x: hidden;
-  background: var(--mm-code-bg);
-  border: 1px solid var(--mm-border);
-  border-radius: 12px;
-  font-family: "SF Mono", "Cascadia Code", Menlo, Consolas, monospace;
-  font-size: 13px;
-  line-height: 1.6;
-  white-space: pre-wrap;
-  word-break: break-word;
-  overflow-wrap: anywhere;
-}
-pre.code-block code { background: transparent; padding: 0; }
-
-code.inline-code {
-  background: var(--mm-chip);
-  padding: 0.1rem 0.4rem;
-  border-radius: 5px;
-  font-family: "SF Mono", "Cascadia Code", Menlo, Consolas, monospace;
-  font-size: 0.88em;
-  color: var(--mm-h3);
-}
-code.inline-code.json { background: transparent; padding: 0; border-radius: 0; }
-
-.tok-key { color: var(--mm-key); font-weight: 500; }
-.tok-string { color: var(--mm-string); }
-.tok-number { color: var(--mm-number); }
-.tok-literal { color: var(--mm-literal); }
-.tok-plain { color: var(--mm-fg-mute); }
-
-.table-wrap { margin: 1.2rem 0 0; overflow-x: auto; }
-table { width: 100%; border-collapse: collapse; font-size: 14px; }
-th { border-bottom: 1px solid var(--mm-border); padding: 0.5rem 0.75rem; font-weight: 600; color: var(--mm-h2); text-align: left; }
-td { border-bottom: 1px solid var(--mm-border); padding: 0.5rem 0.75rem; color: var(--mm-fg-soft); }
-
-#mm-footer {
-  max-width: 62ch;
-  margin: 1.6rem auto 0;
-  padding-top: 0.75rem;
-  border-top: 1px solid var(--mm-border);
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-}
-
-#mm-lint {
-  font-size: 12px;
-  color: var(--mm-muted);
-}
-
-#mm-stats {
-  font-size: 12px;
-  color: var(--mm-muted);
-}
-#mm-lint .ok { color: var(--mm-h2); }
-#mm-lint .warn { color: var(--mm-h3); }
-
 body.vscode-dark,
-body.vscode-high-contrast {
+body.vscode-high-contrast:not(.vscode-high-contrast-light) {
 /* MYMARKDOWN:TOKENS-DARK:START */
     --mm-bg: #020618;
     --mm-fg: #f8fafc;
@@ -147,101 +52,149 @@ body.vscode-high-contrast {
 /* MYMARKDOWN:TOKENS-DARK:END */
 }
 
-/* Table of contents */
-#mm-layout { display: flex; align-items: flex-start; gap: 32px; }
-#mm-main { flex: 1; min-width: 0; }
-
-#mm-toc {
-  position: sticky;
-  top: 12px;
-  width: clamp(220px, 24vw, 280px);
-  flex: 0 0 auto;
-  max-height: calc(100vh - 40px);
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-  border: 1px solid var(--mm-border);
-  border-radius: 10px;
-  background: var(--mm-chip);
-  padding: 10px;
-  box-sizing: border-box;
-}
-#mm-toc.empty { display: none; }
-
-#mm-toc-toggle {
-  background: transparent;
-  border: 0;
-  color: var(--mm-muted);
-  font: inherit;
-  font-size: 11px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  text-align: left;
-  padding: 3px 6px 9px;
-  cursor: pointer;
-}
-#mm-toc-toggle::before { content: "▾ "; }
-#mm-toc.collapsed #mm-toc-toggle::before { content: "▸ "; }
-#mm-toc.collapsed #mm-toc-list { display: none; }
-
-#mm-toc-list {
-  min-height: 0;
-  overflow-x: hidden;
-  overflow-y: auto;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  scrollbar-width: thin;
+body {
+  background: var(--mm-bg);
+  color: var(--mm-fg);
 }
 
-.mm-toc-item {
-  display: flex;
-  align-items: center;
-  flex: 0 0 28px;
-  width: 100%;
-  min-width: 0;
-  height: 28px;
-  text-align: left;
-  background: transparent;
-  border: 0;
-  border-radius: 6px;
-  color: var(--mm-fg-mute);
-  font: inherit;
-  font-size: 12.5px;
-  line-height: 1;
-  padding: 0 8px;
-  cursor: pointer;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+.markdown-body {
+  max-width: 62ch;
+  margin: 0 auto;
+  padding-bottom: 4rem;
 }
-.mm-toc-item.level-1 {
-  color: var(--mm-fg-soft);
+
+/* Headings — the colour hierarchy is the whole point of MyMarkdown. */
+.markdown-body h1,
+.markdown-body h2,
+.markdown-body h3,
+.markdown-body h4 {
+  line-height: 1.25;
+  letter-spacing: -0.01em;
   font-weight: 600;
-  margin-top: 5px;
+  border-bottom: none;
 }
-.mm-toc-item.level-1:first-child { margin-top: 0; }
-.mm-toc-item.level-2 { padding-left: 20px; }
-.mm-toc-item.level-3 { padding-left: 34px; font-size: 12px; color: var(--mm-muted); }
-.mm-toc-item:hover { background: var(--mm-chip); color: var(--mm-fg); }
-.mm-toc-item.active { color: var(--mm-primary); background: var(--mm-chip); }
+.markdown-body h1 {
+  font-size: 2.4rem;
+  font-weight: 700;
+  color: var(--mm-h1);
+  margin: 2.6rem 0 1rem;
+}
+.markdown-body h2 {
+  font-size: 1.55rem;
+  color: var(--mm-h2);
+  margin: 2.2rem 0 0.9rem;
+}
+.markdown-body h3 {
+  font-size: 1.25rem;
+  color: var(--mm-h3);
+  margin: 2rem 0 0.8rem;
+}
+.markdown-body h4 {
+  font-size: 1.1rem;
+  margin: 1.8rem 0 0.7rem;
+}
+.markdown-body > h1:first-child,
+.markdown-body > h2:first-child {
+  margin-top: 0;
+}
 
-@media (max-width: 760px) {
-  body { padding-inline: 24px; }
-  #mm-layout { flex-direction: column; gap: 28px; }
-  #mm-toc {
-    position: static;
-    width: 100%;
-    max-height: min(42vh, 360px);
-  }
+.markdown-body p {
+  color: var(--mm-fg-soft);
+}
+.markdown-body a {
+  color: var(--mm-primary);
+  font-weight: 500;
+  text-decoration: underline;
+  text-underline-offset: 4px;
+  text-decoration-color: var(--mm-primary-soft);
 }
 
-/* Click-to-jump back to the source line */
-#mm-doc [data-line] {
-  cursor: pointer;
-  border-radius: 6px;
-  transition: background-color 120ms ease;
+.markdown-body ul,
+.markdown-body ol {
+  padding-left: 1.4rem;
 }
-#mm-doc [data-line]:hover { background: var(--mm-chip); }
-#mm-doc [data-line].mm-jumped { background: var(--mm-primary-soft); }
-#mm-doc [data-line] a { cursor: pointer; }
+.markdown-body li::marker {
+  color: var(--mm-h2);
+}
+.markdown-body ol > li::marker {
+  color: var(--mm-h1);
+  font-weight: 500;
+}
+
+.markdown-body blockquote {
+  padding: 0.2rem 1rem;
+  border-left: 2px solid var(--mm-h3);
+  background: var(--mm-quote-bg);
+  font-style: italic;
+  color: var(--mm-muted);
+}
+
+.markdown-body table {
+  display: block;
+  width: fit-content;
+  max-width: 100%;
+  overflow-x: auto;
+  border-collapse: collapse;
+}
+.markdown-body th,
+.markdown-body td {
+  border: 1px solid var(--mm-border);
+  padding: 0.45rem 0.75rem;
+}
+.markdown-body th {
+  background: var(--mm-chip);
+  font-weight: 600;
+}
+
+.markdown-body hr {
+  border: 0;
+  border-top: 1px solid var(--mm-border);
+  margin: 2rem 0;
+}
+
+.markdown-body code {
+  background: var(--mm-code-bg);
+  border-radius: 4px;
+  padding: 0.15em 0.35em;
+  font-size: 0.9em;
+}
+.markdown-body pre {
+  background: var(--mm-code-bg);
+  border-radius: 10px;
+  padding: 0.9rem 1.1rem;
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+.markdown-body pre > code {
+  background: none;
+  padding: 0;
+}
+
+/* JSON, laid out one field per line and coloured by what each piece is. */
+.tok-key {
+  color: var(--mm-key);
+  font-weight: 600;
+}
+.tok-string {
+  color: var(--mm-string);
+}
+.tok-number {
+  color: var(--mm-number);
+}
+.tok-literal {
+  color: var(--mm-literal);
+}
+.tok-plain {
+  color: var(--mm-fg-mute);
+}
+
+/* Task lists */
+.markdown-body li.mymd-task-item {
+  list-style: none;
+  margin-left: -1.4rem;
+}
+.markdown-body input.mymd-task {
+  margin-right: 0.45rem;
+  vertical-align: middle;
+}
