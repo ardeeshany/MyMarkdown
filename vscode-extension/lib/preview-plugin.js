@@ -13,6 +13,7 @@
 "use strict";
 
 const MD = require("./mymarkdown.js");
+const footnotePlugin = require("./markdown-it-footnote.js");
 
 const JSON_LOOKS_LIKE_RE = /^\s*[{[]/;
 const JSON_HAS_KEY_RE = /"[^"]+"\s*:/;
