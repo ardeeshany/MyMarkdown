@@ -55,6 +55,21 @@ The dev server runs on http://localhost:8080.
 | `npm run extension` | rebuild and package the VS Code extension |
 | `npm run extension:check` | run the extension's checks only |
 
+## Manual Markdown fixture
+
+When you change the renderer, beautify rules, lint, or TOC, open
+[`samples/markdown-feature-test.md`](samples/markdown-feature-test.md) and compare
+output on the website and in the VS Code extension.
+
+- **Website:** copy the file contents, paste into the editor, and switch to Preview.
+- **VS Code:** open the file and use the MyMarkdown preview (`Ctrl+Shift+V` /
+  `Cmd+Shift+V`).
+
+The fixture covers math, tables, footnotes, task lists, highlights, strikethrough,
+definition lists, alerts, emoji shortcodes, chart/ABC/GeoJSON fences, Mermaid, plus
+common regression cases (headings, lists, JSON fences, HTML, lint edge cases). It does
+not change the app’s default sample.
+
 ## Project layout
 
 ```text
@@ -66,6 +81,7 @@ src/
   components/ui/           shadcn/ui components
   styles.css               Tailwind v4 theme and design tokens
 public/                    favicon, robots.txt, the downloadable .vsix
+samples/                   manual Markdown fixtures for renderer checks
 vscode-extension/          the VS Code extension and its one-command build
 ```
 
