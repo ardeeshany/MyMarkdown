@@ -228,6 +228,14 @@ check("Marketplace artwork and preview-state styles are included", () => {
   for (const file of ["icon.png", "preview-dark.png", "json-light.png"]) {
     assert(fs.existsSync(path.join(__dirname, "media", file)), file + " is missing");
   }
+  // The Marketplace only accepts a square icon of at least 128px.
+  const icon = fs.readFileSync(path.join(__dirname, "media", "icon.png"));
+  const iconWidth = icon.readUInt32BE(16);
+  const iconHeight = icon.readUInt32BE(20);
+  assert(
+    iconWidth === iconHeight && iconWidth >= 128,
+    "the Marketplace icon must be a square of at least 128px",
+  );
   const css = fs.readFileSync(path.join(__dirname, "media", "preview.css"), "utf8");
   includes(css, "input.mymd-task:checked", "checked task styling");
   includes(css, "blockquote.mymd-alert + blockquote.mymd-alert", "alert spacing");

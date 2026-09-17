@@ -78,7 +78,7 @@ Install from the VS Code Marketplace, reload the window, open a Markdown file, a
 For a local package:
 
 ```bash
-code --install-extension vscode-extension/mymarkdown-0.1.21.vsix
+code --install-extension vscode-extension/mymarkdown-0.1.22.vsix
 ```
 
 ## Open source
