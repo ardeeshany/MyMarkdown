@@ -32,6 +32,7 @@
     "onLanguage:markdown"
   ],
   "main": "./extension.js",
+  "icon": "media/icon.png",
   "contributes": {
     "markdown.previewStyles": [
       "./media/preview.css"

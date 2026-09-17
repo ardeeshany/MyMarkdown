@@ -1,6 +1,5 @@
 .vscode/**
 .vscodeignore
-README.md
 sync.js
 check.js
 lib/manual-helpers.js

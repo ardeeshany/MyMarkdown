@@ -195,8 +195,31 @@ body {
   margin-left: -1.4rem;
 }
 .markdown-body input.mymd-task {
+  appearance: none;
+  width: 1rem;
+  height: 1rem;
   margin-right: 0.45rem;
   vertical-align: middle;
+  border: 1.5px solid var(--mm-muted);
+  border-radius: 3px;
+  background: var(--mm-bg);
+  opacity: 1;
+  position: relative;
+}
+.markdown-body input.mymd-task:checked {
+  border-color: var(--mm-h2);
+  background: var(--mm-h2);
+}
+.markdown-body input.mymd-task:checked::after {
+  content: "";
+  position: absolute;
+  left: 0.26rem;
+  top: 0.06rem;
+  width: 0.28rem;
+  height: 0.55rem;
+  border: solid var(--mm-bg);
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
 }
 
 /* Mermaid diagrams. The source shows until the drawing replaces it, so a
@@ -243,9 +266,13 @@ body {
 
 /* GitHub alerts */
 .markdown-body blockquote.mymd-alert {
+  margin: 1rem 0;
   border-left-width: 4px;
   border-radius: 6px;
   padding: 0.6rem 1rem;
+}
+.markdown-body blockquote.mymd-alert + blockquote.mymd-alert {
+  margin-top: 0.75rem;
 }
 .markdown-body .mymd-alert-title {
   margin: 0 0 0.35rem;

@@ -222,6 +222,17 @@ check("the preview renders task lists", () => {
   assert(html.indexOf("[ ]") === -1, "the marker text should be gone");
 });
 
+check("Marketplace artwork and preview-state styles are included", () => {
+  const pkg = require("./package.json");
+  assert(pkg.icon === "media/icon.png", "the Marketplace icon is not registered");
+  for (const file of ["icon.png", "preview-dark.png", "json-light.png"]) {
+    assert(fs.existsSync(path.join(__dirname, "media", file)), file + " is missing");
+  }
+  const css = fs.readFileSync(path.join(__dirname, "media", "preview.css"), "utf8");
+  includes(css, "input.mymd-task:checked", "checked task styling");
+  includes(css, "blockquote.mymd-alert + blockquote.mymd-alert", "alert spacing");
+});
+
 check("Mermaid preview is packaged as one ordered script", () => {
   const pkg = require("./package.json");
   const scripts = pkg.contributes && pkg.contributes["markdown.previewScripts"];
