@@ -83,6 +83,10 @@
           "description": "Register Beautify as the Markdown formatter, so Format Document and editor.formatOnSave run it. Off by default: a second Markdown formatter stops VS Code choosing one on its own, which would break format on save for anyone already using Prettier or markdownlint."
         }
       }
-    }
+    },
+    "markdown.previewScripts": [
+      "./media/mermaid.min.js",
+      "./media/mermaid-preview.js"
+    ]
   }
 }
