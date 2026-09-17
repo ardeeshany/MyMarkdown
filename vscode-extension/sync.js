@@ -345,6 +345,8 @@ function main() {
 
   const styles = read(STYLES_FILE, "The website stylesheet");
   const light = tokensFor(":root", styles);
+  // Keep the extension's light preview neutral even though the website uses a tinted canvas.
+  light.set("--background", "oklch(1 0 0)");
   // The website's dark block only redefines some tokens; the rest carry over.
   const dark = new Map([...light, ...tokensFor(".dark", styles)]);
   let css = read(CSS_FILE, "The preview stylesheet");
