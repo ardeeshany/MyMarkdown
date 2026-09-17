@@ -75,7 +75,7 @@ function ExtensionPage() {
             The same beautiful reading experience while you edit. Everything runs on your machine — no account, no internet, nothing leaves your computer.
           </p>
           <div className="mt-6">
-            <Button asChild size="lg" className="h-12 gap-2.5 rounded-full bg-primary py-0 pl-5 pr-3 text-sm font-medium text-primary-foreground shadow-lg shadow-primary/25 hover:bg-primary/90">
+            <Button asChild size="lg" className="h-12 gap-2.5 rounded-full bg-primary py-0 pl-5 pr-3.5 text-sm font-medium text-primary-foreground shadow-lg shadow-primary/25 hover:bg-primary/90">
               <a href={VSIX} download target="_blank" rel="noopener noreferrer">
                 <Download />Download for VS Code
                 <span className="inline-flex h-7 items-center rounded-full bg-primary-foreground px-2.5 text-xs font-semibold tabular-nums tracking-wide text-primary">
