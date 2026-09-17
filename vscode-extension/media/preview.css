@@ -240,3 +240,39 @@ body {
 .markdown-body .footnote-backref {
   text-decoration: none;
 }
+
+/* GitHub alerts */
+.markdown-body blockquote.mymd-alert {
+  border-left-width: 4px;
+  border-radius: 6px;
+  padding: 0.6rem 1rem;
+}
+.markdown-body .mymd-alert-title {
+  margin: 0 0 0.35rem;
+  font-size: 0.78em;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  opacity: 0.85;
+}
+.markdown-body blockquote.mymd-alert p:not(.mymd-alert-title) {
+  margin: 0.25rem 0 0;
+}
+.markdown-body blockquote.mymd-alert-note { border-left-color: #3b82f6; }
+.markdown-body blockquote.mymd-alert-tip { border-left-color: #10b981; }
+.markdown-body blockquote.mymd-alert-important { border-left-color: #a855f7; }
+.markdown-body blockquote.mymd-alert-warning { border-left-color: #f59e0b; }
+.markdown-body blockquote.mymd-alert-caution { border-left-color: #ef4444; }
+
+/* Highlight */
+.markdown-body mark.mymd-mark {
+  background: rgba(252, 211, 77, 0.45);
+  color: inherit;
+  border-radius: 3px;
+  padding: 0.05em 0.25em;
+}
+body.vscode-dark .markdown-body mark.mymd-mark,
+body.vscode-high-contrast .markdown-body mark.mymd-mark {
+  background: rgba(251, 191, 36, 0.3);
+  color: inherit;
+}
