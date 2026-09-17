@@ -210,6 +210,13 @@ function renderTaskLists(state) {
 function mymarkdownPlugin(md) {
   const escapeHtml = (md.utils && md.utils.escapeHtml) || String;
 
+  try {
+    // Footnotes ([^1]) are not part of markdown-it core or VS Code's preview.
+    md.use(footnotePlugin);
+  } catch {
+    // A missing footnote plugin must never take the whole preview down.
+  }
+
   md.core.ruler.after("block", "mymarkdown_promote_json", promoteJsonParagraphs);
   md.core.ruler.after("inline", "mymarkdown_task_lists", renderTaskLists);
 
