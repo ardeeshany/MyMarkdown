@@ -6,9 +6,9 @@ import heroImage from "@/assets/mymarkdown-logo-v2.webp.asset.json";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
 
-const INSTALL_COMMAND = "code --install-extension mymarkdown-0.1.14.vsix";
+const INSTALL_COMMAND = "code --install-extension mymarkdown-0.1.15.vsix";
 
-const VSIX = "/mymarkdown-0.1.14.vsix";
+const VSIX = "/mymarkdown-0.1.15.vsix";
 
 export const Route = createFileRoute("/vscode-extension")({
   head: () => ({
@@ -29,16 +29,16 @@ export const Route = createFileRoute("/vscode-extension")({
 });
 
 const FEATURES = [
-  { icon: Palette, title: "Styled live preview", body: "The same look as the website: vivid H1–H3 headings, JSON one field per line with coloured field names, and calm code blocks. Updates as you type." },
-  { icon: Sparkles, title: "Beautify command", body: "Rewrites the open file — tidy spacing, indented JSON, and bare or backtick-wrapped JSON promoted into proper code blocks. One undo reverses it all." },
-  { icon: ListTree, title: "Clickable contents", body: "Every H1, H2, and H3 in a sidebar. Click to jump, collapse a section you are done with." },
+  { icon: Palette, title: "Styled preview", body: "VS Code's own preview (Cmd/Ctrl + Shift + V) gets the MyMarkdown look: vivid H1–H3 headings, JSON one field per line with coloured field names, task lists, and calm code blocks — with scroll sync and click-to-source built in." },
+  { icon: Sparkles, title: "Beautify command", body: "Cmd/Ctrl + Alt + B tidies the open file with the smallest possible edit, so your cursor and scroll stay put. Bare or backtick-wrapped JSON is promoted into proper code blocks. One undo reverses it all." },
+  { icon: ListTree, title: "Contents + lint", body: "Every H1, H2, and H3 in a clickable sidebar tree. Structure problems — heading jumps, unclosed fences, invalid JSON — show up in the Problems panel as you type." },
 ];
 
 const STEPS = [
   { title: "Download the file", body: "Grab the .vsix file above and save it anywhere on your computer." },
   { title: "Install it in VS Code", body: "Open VS Code, press Cmd/Ctrl + Shift + P, run “Extensions: Install from VSIX…”, and pick the file you just downloaded." },
   { title: "Reload the window", body: "Run “Developer: Reload Window” from the same menu, or just restart VS Code." },
-  { title: "Open any .md file", body: "Press Cmd/Ctrl + Alt + V for the styled preview (the tab reads “MyMarkdown: …”), click the sparkle button to beautify, and open the MyMarkdown icon in the sidebar for Contents. Cmd/Ctrl + Shift + V is VS Code’s own plain preview — not this one." },
+  { title: "Open any .md file", body: "Press Cmd/Ctrl + Shift + V — VS Code’s own preview now shows the MyMarkdown styling. Click the sparkle button (or Cmd/Ctrl + Alt + B) to beautify, and open the MyMarkdown icon in the sidebar for the clickable Contents tree." },
 ];
 
 function ExtensionPage() {
@@ -79,7 +79,7 @@ function ExtensionPage() {
               </a>
             </Button>
           </div>
-          <p className="mt-2 text-xs text-muted-foreground">Version 0.1.14 · about 16 KB · works with VS Code 1.85+</p>
+          <p className="mt-2 text-xs text-muted-foreground">Version 0.1.15 · about 21 KB · works with VS Code 1.85+</p>
         </header>
 
         <section className="mt-12 grid gap-4 sm:grid-cols-3">
