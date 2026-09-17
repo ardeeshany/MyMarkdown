@@ -203,6 +203,94 @@ function renderTaskLists(state) {
   }
 }
 
+const ALERT_RE = /^\[!(note|tip|important|warning|caution)\]\s*\n?/i;
+const ALERT_LABELS = {
+  note: "Note",
+  tip: "Tip",
+  important: "Important",
+  warning: "Warning",
+  caution: "Caution",
+};
+
+/** GitHub alerts: > [!NOTE] ... rendered as a callout. */
+function renderAlerts(state) {
+  const tokens = state.tokens;
+  for (let i = 2; i < tokens.length; i += 1) {
+    const inline = tokens[i];
+    if (inline.type !== "inline") continue;
+    if (tokens[i - 1].type !== "paragraph_open" || tokens[i - 2].type !== "blockquote_open")
+      continue;
+    const match = ALERT_RE.exec(inline.content);
+    if (!match) continue;
+
+    const kind = match[1].toLowerCase();
+    const children = inline.children || [];
+    const first = children[0];
+    if (!first || first.type !== "text" || !ALERT_RE.test(first.content)) continue;
+
+    first.content = first.content.replace(ALERT_RE, "");
+    inline.content = inline.content.replace(ALERT_RE, "");
+    if (!first.content) {
+      children.shift();
+      if (children[0] && children[0].type === "softbreak") children.shift();
+    }
+
+    const quote = tokens[i - 2];
+    quote.attrJoin("class", "mymd-alert mymd-alert-" + kind);
+    const title = new state.Token("html_block", "", 0);
+    title.content =
+      '<p class="mymd-alert-title">' + (ALERT_LABELS[kind] || kind) + "</p>\n";
+    tokens.splice(i - 1, 0, title);
+    i += 1;
+  }
+}
+
+/** ==highlight== , which markdown-it does not implement. */
+function renderHighlights(state) {
+  for (const token of state.tokens) {
+    if (token.type !== "inline" || !token.children) continue;
+    if (token.content.indexOf("==") === -1) continue;
+
+    const next = [];
+    for (const child of token.children) {
+      if (child.type !== "text" || child.content.indexOf("==") === -1) {
+        next.push(child);
+        continue;
+      }
+      const pattern = /==([^=]+)==/g;
+      let last = 0;
+      let match;
+      let changed = false;
+      while ((match = pattern.exec(child.content)) !== null) {
+        changed = true;
+        if (match.index > last) {
+          const before = new state.Token("text", "", 0);
+          before.content = child.content.slice(last, match.index);
+          next.push(before);
+        }
+        const open = new state.Token("html_inline", "", 0);
+        open.content = '<mark class="mymd-mark">';
+        const text = new state.Token("text", "", 0);
+        text.content = match[1];
+        const close = new state.Token("html_inline", "", 0);
+        close.content = "</mark>";
+        next.push(open, text, close);
+        last = match.index + match[0].length;
+      }
+      if (!changed) {
+        next.push(child);
+        continue;
+      }
+      if (last < child.content.length) {
+        const rest = new state.Token("text", "", 0);
+        rest.content = child.content.slice(last);
+        next.push(rest);
+      }
+    }
+    token.children = next;
+  }
+}
+
 /**
  * @param {import("markdown-it")} md
  * @returns {import("markdown-it")} the same instance, so VS Code can chain plugins
