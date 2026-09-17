@@ -2,7 +2,7 @@
   "name": "mymarkdown",
   "displayName": "MyMarkdown",
   "description": "Beautiful Markdown preview with colorful headings, formatted JSON, beautify, and a clickable table of contents.",
-  "version": "0.1.16",
+  "version": "0.1.17",
   "publisher": "local",
   "private": true,
   "engines": {
@@ -85,8 +85,7 @@
       }
     },
     "markdown.previewScripts": [
-      "./media/mermaid.min.js",
-      "./media/mermaid-preview.js"
+      "./media/mermaid-preview.bundle.js"
     ]
   }
 }
