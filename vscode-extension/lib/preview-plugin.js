@@ -216,6 +216,13 @@ function mymarkdownPlugin(md) {
   md.renderer.rules.fence = function (tokens, idx, options, env, slf) {
     const token = tokens[idx];
     const info = (token.info || "").trim().split(/\s+/)[0].toLowerCase();
+    if (info === "mermaid") {
+      try {
+        return renderMermaidFence(token, escapeHtml);
+      } catch {
+        return originalFence(tokens, idx, options, env, slf);
+      }
+    }
     if (!qualifiesAsJson(info, token.content || "")) {
       return originalFence(tokens, idx, options, env, slf);
     }
