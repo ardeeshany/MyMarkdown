@@ -29,7 +29,7 @@ export const Route = createFileRoute("/vscode-extension")({
 });
 
 const FEATURES = [
-  { icon: Palette, title: "Styled live preview", body: "The same look as the website: vivid H1–H3 headings, JSON one field per line with coloured field names, and calm code blocks. Updates as you type." },
+  { icon: Palette, title: "Styled live preview", body: "The same look as the website, inside the Markdown preview you already use: vivid H1–H3 headings, JSON one field per line with coloured field names, and calm code blocks. Scroll sync, click-to-source and your other Markdown extensions keep working." },
   { icon: Sparkles, title: "Beautify command", body: "Rewrites the open file — tidy spacing, indented JSON, and bare or backtick-wrapped JSON promoted into proper code blocks. One undo reverses it all." },
   { icon: ListTree, title: "Clickable contents", body: "Every H1, H2, and H3 in a sidebar. Click to jump, collapse a section you are done with." },
 ];
@@ -38,7 +38,7 @@ const STEPS = [
   { title: "Download the file", body: "Grab the .vsix file above and save it anywhere on your computer." },
   { title: "Install it in VS Code", body: "Open VS Code, press Cmd/Ctrl + Shift + P, run “Extensions: Install from VSIX…”, and pick the file you just downloaded." },
   { title: "Reload the window", body: "Run “Developer: Reload Window” from the same menu, or just restart VS Code." },
-  { title: "Open any .md file", body: "Press Cmd/Ctrl + Alt + V for the styled preview (the tab reads “MyMarkdown: …”), click the sparkle button to beautify, and open the MyMarkdown icon in the sidebar for Contents. Cmd/Ctrl + Shift + V is VS Code’s own plain preview — not this one." },
+  { title: "Open any .md file", body: "Press Cmd/Ctrl + Shift + V — VS Code’s own preview, now with MyMarkdown’s colours and JSON formatting. Click the sparkle button to beautify, and open the MyMarkdown icon in the sidebar for Contents." },
 ];
 
 function ExtensionPage() {

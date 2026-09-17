@@ -1,9 +1,7 @@
-const path = require("path");
 const vscode = require("vscode");
 const MD = require("./lib/mymarkdown.js");
+const { mymarkdownPlugin } = require("./lib/preview-plugin.js");
 
-/** @type {vscode.WebviewPanel | undefined} */
-let previewPanel;
 /** @type {vscode.TextDocument | undefined} */
 let lastMarkdownDocument;
 
@@ -28,111 +26,25 @@ function currentMarkdownDocument() {
   return undefined;
 }
 
-function getWebviewHtml(webview, extensionUri) {
-  const mediaUri = (file) =>
-    webview.asWebviewUri(vscode.Uri.joinPath(extensionUri, "media", file)).toString();
-  const libUri = webview.asWebviewUri(vscode.Uri.joinPath(extensionUri, "lib", "mymarkdown.js")).toString();
-  const renderUri = webview.asWebviewUri(vscode.Uri.joinPath(extensionUri, "lib", "render.js")).toString();
-
-  return `<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8" />
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource}; script-src ${webview.cspSource}; img-src ${webview.cspSource} https: data:;" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<link rel="stylesheet" href="${mediaUri("preview.css")}" />
-<title>MyMarkdown Preview</title>
-</head>
-<body>
-<div id="mm-layout">
-  <aside id="mm-toc" aria-label="Table of contents">
-    <button id="mm-toc-toggle" type="button" aria-expanded="true">Contents</button>
-    <nav id="mm-toc-list"></nav>
-  </aside>
-  <main id="mm-main">
-    <article id="mm-doc"></article>
-    <div id="mm-footer">
-      <div id="mm-lint"></div>
-      <div id="mm-stats"></div>
-    </div>
-  </main>
-</div>
-<script src="${libUri}"></script>
-<script src="${renderUri}"></script>
-<script src="${mediaUri("preview.js")}"></script>
-</body>
-</html>`;
+function config() {
+  return vscode.workspace.getConfiguration("mymarkdown");
 }
 
-function panelTitle(document) {
-  return "MyMarkdown: " + path.basename(document.fileName);
-}
-
-function pushPreviewUpdate() {
-  if (!previewPanel) return;
-  const document = currentMarkdownDocument();
-  if (!document) {
-    previewPanel.webview.postMessage({ type: "empty" });
-    return;
-  }
-  previewPanel.title = panelTitle(document);
-  previewPanel.webview.postMessage({ type: "update", markdown: document.getText() });
-}
-
-function matchLine(document, text, fallbackLine) {
-  const needle = (text || "").trim().slice(0, 40);
-  if (needle.length >= 6) {
-    const lines = document.getText().replace(/\r\n/g, "\n").split("\n");
-    const compact = needle.replace(/\s+/g, " ").toLowerCase();
-    for (let index = 0; index < lines.length; index += 1) {
-      if (lines[index].replace(/\s+/g, " ").toLowerCase().includes(compact.slice(0, 24))) {
-        return index + 1;
-      }
-    }
-  }
-  return fallbackLine;
-}
-
-async function revealSourceLine(line, text) {
-  const document = lastMarkdownDocument && !lastMarkdownDocument.isClosed ? lastMarkdownDocument : undefined;
-  if (!document) return;
-  const visible = vscode.window.visibleTextEditors.find((editor) => editor.document === document);
-  const editor = visible || (await vscode.window.showTextDocument(document, { viewColumn: vscode.ViewColumn.One, preserveFocus: false }));
-  const target = Math.max(0, Math.min(document.lineCount - 1, matchLine(document, text, line) - 1));
-  const position = new vscode.Position(target, 0);
-  const range = document.lineAt(target).range;
-  editor.selection = new vscode.Selection(position, position);
-  editor.revealRange(range, vscode.TextEditorRevealType.InCenterIfOutsideViewport);
-}
-
-
-function openPreview(context) {
-  rememberActiveMarkdown();
-  const document = currentMarkdownDocument();
-  if (!document) {
-    vscode.window.showInformationMessage("Open a Markdown file first.");
-    return;
-  }
-  if (previewPanel) {
-    previewPanel.reveal(vscode.ViewColumn.Beside, true);
-    pushPreviewUpdate();
-    return;
-  }
-  previewPanel = vscode.window.createWebviewPanel(
-    "mymarkdown.preview",
-    panelTitle(document),
-    { viewColumn: vscode.ViewColumn.Beside, preserveFocus: true },
-    { enableScripts: true, retainContextWhenHidden: true, localResourceRoots: [vscode.Uri.joinPath(context.extensionUri, "media"), vscode.Uri.joinPath(context.extensionUri, "lib")] }
-  );
-  previewPanel.webview.html = getWebviewHtml(previewPanel.webview, context.extensionUri);
-  pushPreviewUpdate();
-  previewPanel.webview.onDidReceiveMessage((message) => {
-    if (message && message.type === "ready") pushPreviewUpdate();
-    if (message && message.type === "revealLine") revealSourceLine(message.line, message.text);
-  });
-  previewPanel.onDidDispose(() => {
-    previewPanel = undefined;
-  });
+/**
+ * The single smallest edit that beautifies the document, or null when it is already tidy.
+ * The buffer's own line ending and trailing newline are preserved, so formatting on save
+ * never produces a diff on a file that had nothing to fix.
+ */
+function beautifyEdit(document) {
+  const text = document.getText();
+  const eol = document.eol === vscode.EndOfLine.CRLF ? "\r\n" : "\n";
+  let formatted = MD.formatMarkdown(text);
+  if (formatted && /\r?\n$/.test(text)) formatted += "\n";
+  if (eol !== "\n") formatted = formatted.replace(/\n/g, eol);
+  const edit = MD.minimalEdit(text, formatted);
+  if (!edit) return null;
+  const range = new vscode.Range(document.positionAt(edit.start), document.positionAt(edit.end));
+  return vscode.TextEdit.replace(range, edit.text);
 }
 
 async function beautify() {
@@ -143,28 +55,82 @@ async function beautify() {
   }
   const document = editor.document;
   lastMarkdownDocument = document;
-  const formatted = MD.formatMarkdown(document.getText());
-  const fullRange = new vscode.Range(document.positionAt(0), document.positionAt(document.getText().length));
+  const textEdit = beautifyEdit(document);
+  if (!textEdit) {
+    vscode.window.setStatusBarMessage("MyMarkdown: already beautified", 2500);
+    return;
+  }
   const edit = new vscode.WorkspaceEdit();
-  edit.replace(document.uri, fullRange, formatted);
+  edit.set(document.uri, [textEdit]);
   await vscode.workspace.applyEdit(edit);
   vscode.window.setStatusBarMessage("MyMarkdown: document beautified", 2500);
-  pushPreviewUpdate();
+}
+
+/** @type {vscode.DiagnosticCollection | undefined} */
+let diagnostics;
+/** One timer per document: switching files must not cancel the pending lint of the other. */
+const lintTimers = new Map();
+
+function refreshDiagnostics(document) {
+  if (!diagnostics) return;
+  if (!document || document.isClosed || document.languageId !== "markdown") return;
+  if (!config().get("lint", true)) {
+    diagnostics.delete(document.uri);
+    return;
+  }
+  const zeroBased = (value) => Math.max(0, value - 1);
+  diagnostics.set(
+    document.uri,
+    MD.lintMarkdown(document.getText()).map((issue) => {
+      const range = new vscode.Range(
+        zeroBased(issue.line),
+        zeroBased(issue.column),
+        zeroBased(issue.endLine),
+        zeroBased(issue.endColumn),
+      );
+      const diagnostic = new vscode.Diagnostic(
+        range,
+        issue.message,
+        issue.kind === "fix"
+          ? vscode.DiagnosticSeverity.Information
+          : vscode.DiagnosticSeverity.Warning,
+      );
+      diagnostic.source = "MyMarkdown";
+      return diagnostic;
+    }),
+  );
+}
+
+/** Linting every keystroke is wasted work on a large file; let it settle first. */
+function scheduleDiagnostics(document) {
+  const key = document.uri.toString();
+  clearTimeout(lintTimers.get(key));
+  lintTimers.set(
+    key,
+    setTimeout(() => {
+      lintTimers.delete(key);
+      refreshDiagnostics(document);
+    }, 300),
+  );
 }
 
 class HeadingItem extends vscode.TreeItem {
   constructor(heading, number) {
     super(
       heading.level === 1 ? `${number}. ${heading.title}` : heading.title,
-      vscode.TreeItemCollapsibleState.None
+      vscode.TreeItemCollapsibleState.None,
     );
     this.description = `H${heading.level}`;
     this.tooltip = `${heading.title} (line ${heading.line})`;
     this.iconPath = new vscode.ThemeIcon(
       heading.level === 1 ? "symbol-class" : heading.level === 2 ? "symbol-method" : "symbol-field",
       new vscode.ThemeColor(
-        heading.level === 1 ? "symbolIcon.classForeground" : heading.level === 2 ? "symbolIcon.methodForeground" : "symbolIcon.fieldForeground"
-      )
+        heading.level === 1
+          ? "symbolIcon.classForeground"
+          : heading.level === 2
+            ? "symbolIcon.methodForeground"
+            : "symbolIcon.fieldForeground",
+      ),
     );
     this.command = {
       command: "mymarkdown.revealLine",
@@ -201,9 +167,11 @@ class TocProvider {
 /** @param {vscode.ExtensionContext} context */
 function activate(context) {
   const tocProvider = new TocProvider();
+  diagnostics = vscode.languages.createDiagnosticCollection("mymarkdown");
+
   context.subscriptions.push(
+    diagnostics,
     vscode.window.registerTreeDataProvider("mymarkdown.toc", tocProvider),
-    vscode.commands.registerCommand("mymarkdown.openPreview", () => openPreview(context)),
     vscode.commands.registerCommand("mymarkdown.beautify", () => beautify()),
     vscode.commands.registerCommand("mymarkdown.revealLine", (line) => {
       const editor = activeMarkdownEditor();
@@ -214,16 +182,48 @@ function activate(context) {
     }),
     vscode.workspace.onDidChangeTextDocument((event) => {
       if (event.document === currentMarkdownDocument()) {
-        pushPreviewUpdate();
         tocProvider.refresh();
+        scheduleDiagnostics(event.document);
       }
     }),
     vscode.window.onDidChangeActiveTextEditor(() => {
       rememberActiveMarkdown();
-      pushPreviewUpdate();
       tocProvider.refresh();
-    })
+      refreshDiagnostics(currentMarkdownDocument());
+    }),
+    vscode.workspace.onDidOpenTextDocument((document) => refreshDiagnostics(document)),
+    vscode.workspace.onDidCloseTextDocument((document) => {
+      clearTimeout(lintTimers.get(document.uri.toString()));
+      lintTimers.delete(document.uri.toString());
+      diagnostics?.delete(document.uri);
+    }),
+    {
+      dispose: () => {
+        for (const timer of lintTimers.values()) clearTimeout(timer);
+        lintTimers.clear();
+        diagnostics = undefined;
+      },
+    },
   );
+
+  // Off by default: a second Markdown formatter would stop VS Code choosing one at all,
+  // silently breaking format on save for anyone already using Prettier or markdownlint.
+  if (config().get("registerFormatter", false)) {
+    context.subscriptions.push(
+      vscode.languages.registerDocumentFormattingEditProvider("markdown", {
+        provideDocumentFormattingEdits(document) {
+          const edit = beautifyEdit(document);
+          return edit ? [edit] : [];
+        },
+      }),
+    );
+  }
+
+  refreshDiagnostics(currentMarkdownDocument());
+
+  // VS Code renders the preview with its own markdown-it; this is where MyMarkdown's
+  // JSON colouring, loose-JSON promotion and task lists are added to it.
+  return { extendMarkdownIt: (md) => mymarkdownPlugin(md) };
 }
 
 function deactivate() {}
