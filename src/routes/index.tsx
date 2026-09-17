@@ -811,7 +811,8 @@ function Index() {
                 <article className="min-h-[590px] px-6 py-8 sm:px-9 sm:py-10">
                   <ReactMarkdown remarkPlugins={[remarkGfm, remarkMath, remarkAlerts, remarkMark]} rehypePlugins={[rehypeKatex]} components={{
                     div: ({ children, ...props }) => {
-                      const alert = (props as Record<string, unknown>)["data-alert"] as string | undefined;
+                      const bag = props as Record<string, unknown> & { node?: { properties?: Record<string, unknown> } };
+                      const alert = (bag["data-alert"] ?? bag["dataAlert"] ?? bag.node?.properties?.["dataAlert"] ?? bag.node?.properties?.["data-alert"]) as string | undefined;
                       if (!alert) return <div>{children}</div>;
                       const tone: Record<string, string> = {
                         note: "border-primary/60 bg-primary/5",
