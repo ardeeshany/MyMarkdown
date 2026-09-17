@@ -2,7 +2,14 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { ArrowUp, Check, ChevronDown, ChevronUp, Clipboard, ClipboardPaste, Code2, Github, ListTree, PenLine, Sparkles } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
+import rehypeKatex from "rehype-katex";
 import remarkGfm from "remark-gfm";
+import remarkMath from "remark-math";
+
+import "katex/dist/katex.min.css";
+import { remarkAlerts } from "@/lib/remark-alerts";
+import { remarkMark } from "@/lib/remark-mark";
+
 
 import heroImage from "@/assets/mymarkdown-logo-v2.webp.asset.json";
 import { MermaidDiagram } from "@/components/mermaid-diagram";
