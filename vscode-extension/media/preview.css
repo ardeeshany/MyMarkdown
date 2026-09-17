@@ -1,7 +1,7 @@
 /* MyMarkdown preview — mirrors the web app's Frosted Editorial palette. */
 :root {
 /* MYMARKDOWN:TOKENS:START */
-  --mm-bg: #e8f0fc;
+  --mm-bg: #ffffff;
   --mm-fg: #212533;
   --mm-fg-soft: rgba(33, 37, 51, 0.85);
   --mm-fg-mute: rgba(33, 37, 51, 0.6);
