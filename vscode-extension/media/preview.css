@@ -222,3 +222,21 @@ body {
   color: var(--mm-h3);
   background: var(--mm-code-bg);
 }
+
+/* Footnotes */
+.markdown-body .footnotes {
+  margin-top: 2.5rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--mymd-border, rgba(127, 127, 127, 0.3));
+  font-size: 0.9em;
+}
+.markdown-body .footnotes-sep {
+  display: none;
+}
+.markdown-body .footnote-ref a {
+  text-decoration: none;
+  font-weight: 600;
+}
+.markdown-body .footnote-backref {
+  text-decoration: none;
+}
