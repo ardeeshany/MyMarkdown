@@ -5,6 +5,7 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
 import heroImage from "@/assets/mymarkdown-logo-v2.webp.asset.json";
+import { MermaidDiagram } from "@/components/mermaid-diagram";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
 
