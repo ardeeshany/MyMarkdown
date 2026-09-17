@@ -2,7 +2,7 @@
   "name": "mymarkdown",
   "displayName": "MyMarkdown",
   "description": "Beautiful Markdown preview with colorful headings, formatted JSON, beautify, and a clickable table of contents.",
-  "version": "0.1.20",
+  "version": "0.1.21",
   "publisher": "mymarkdown",
   "license": "MIT",
   "homepage": "https://mymarkdown.site",
@@ -32,6 +32,7 @@
     "onLanguage:markdown"
   ],
   "main": "./extension.js",
+  "icon": "media/icon.png",
   "contributes": {
     "markdown.previewStyles": [
       "./media/preview.css"

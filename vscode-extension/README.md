@@ -1,121 +1,92 @@
 # MyMarkdown for VS Code
 
-Beautifies Markdown the same way [MyMarkdown](https://mymarkdown.site) does: colourful
-headings, JSON laid out one field per line with each field name coloured, and a
-clickable Contents list.
+Make Markdown easier to scan without leaving the editor. MyMarkdown adds colourful
+headings, readable JSON, Mermaid diagrams, callouts, highlights, footnotes, linting, and
+a clickable Contents view to VS Code's own Markdown preview.
 
-Everything runs inside VS Code — no account, no internet, nothing leaves your machine.
+**Private by design:** no account, no network requests, and nothing leaves your computer.
 
-## Features
+![MyMarkdown showing tables, a Mermaid diagram, and math in VS Code](https://raw.githubusercontent.com/ardeeshany/mymarkdown/main/vscode-extension/media/preview-dark.png)
 
-- **The Markdown preview you already use.** MyMarkdown styles VS Code's own preview, so
-  `Ctrl+Shift+V` / `Cmd+Shift+V` (or **Markdown: Open Preview to the Side**) is the
-  MyMarkdown preview. There is no second preview to learn, and everything the built-in
-  one does keeps working: scroll stays in step with the editor, double-click jumps back
-  to the source, images and links resolve against your workspace, find works, and any
-  other Markdown extension you have — maths and the like — still renders.
-- **Mermaid diagrams, built in.** A ` ```mermaid ` block is drawn as a diagram in the
-  preview, in a light or dark palette to match your theme, with no second extension to
-  install. If a diagram has a syntax error, its source is shown with the error instead.
-- **JSON that reads.** A ` ```json ` block is laid out one field per line and coloured by
-  what each piece is: field names, strings, numbers, and `true` / `false` / `null`. JSON
-  sitting bare in prose, or inside a backtick span, is picked up too.
-- **MyMarkdown: Beautify Markdown** (`Ctrl+Alt+B` / `Cmd+Alt+B`, or the sparkle button)
-  rewrites the open file: tidy spacing, JSON one field per line, bullets unified. One
-  `Ctrl+Z` / `Cmd+Z` undoes it, and it is applied as the smallest possible edit, so the
-  cursor, the selection and the scroll position stay where they were.
+## What you get
 
-  Beautify never touches the inside of YAML front matter, HTML blocks or indented code,
-  and the only things it changes inside a fence are the two it is for: the language in the
-  info string is lower-cased, and a `json` body is laid out one field per line. It keeps
-  the indentation that nests a list and preserves two-space hard line breaks.
+### A clearer preview
 
-  It declines to lay out a JSON block whose numbers a double cannot hold — an id past
-  2^53, `-0`, `1e400`, `1e-400`, or a decimal carrying more than 15 significant digits —
-  and leaves that block exactly as written rather than showing you a different number.
-  The preview does the same.
-- **Structure problems.** Heading level jumps, unclosed fences, invalid JSON blocks and
-  mixed bullets appear in the Problems panel, each pointing at the line and column it is
-  about. Code inside fences, front matter and HTML blocks is never reported.
-- **Contents** — the MyMarkdown activity bar lists every H1, H2 and H3 in the open file.
-  Click one to jump to it. It works whether or not the preview is open.
-- **Your preview settings still apply.** MyMarkdown restyles the built-in preview rather
-  than replacing it, so `markdown.preview.fontSize`, `markdown.preview.lineHeight`,
-  `markdown.styles` and the preview security levels all keep working.
+Open any `.md` file and press `Ctrl+Shift+V` or `Cmd+Shift+V`. MyMarkdown styles the
+preview you already know, so scroll sync, links, images, search, and click-to-source keep
+working.
+
+- Distinct colours for H1, H2, and H3
+- Responsive tables and code blocks
+- Mermaid diagrams that follow your light or dark theme
+- Task lists with clear checked and unchecked states
+- GitHub callouts, highlights, strikethrough, math, and footnotes
+
+### JSON that is easy to read
+
+JSON is formatted one field per line and coloured by type. Long values wrap inside the
+preview, and `\n` inside strings becomes a visible line break. Bare and inline JSON are
+recognized too.
+
+![Formatted JSON wrapping cleanly in the MyMarkdown preview](https://raw.githubusercontent.com/ardeeshany/mymarkdown/main/vscode-extension/media/json-light.png)
+
+### Beautify with one command
+
+Run **MyMarkdown: Beautify Markdown**, click the sparkle button, or press
+`Ctrl+Alt+B` / `Cmd+Alt+B`.
+
+Beautify tidies spacing, normalizes bullets, and formats JSON as one undoable edit. It
+preserves your cursor and scroll position, and leaves YAML front matter, HTML, indented
+code, and precision-sensitive numbers untouched.
+
+### Contents and linting
+
+The MyMarkdown activity-bar view lists H1, H2, and H3 headings. Select one to jump to it.
+Heading jumps, unclosed fences, invalid JSON, and mixed bullet styles appear in the
+Problems panel as you type.
 
 ## Settings
 
-| Setting | Default | What it does |
-| --- | --- | --- |
-| `mymarkdown.lint` | `true` | Report structure problems in the Problems panel. |
-| `mymarkdown.registerFormatter` | `false` | Register Beautify as the Markdown formatter, so **Format Document** (`Shift+Alt+F`) and `editor.formatOnSave` run it. |
+### `mymarkdown.lint`
 
-Both settings take effect as soon as you change them; neither needs a window reload.
+Default: `true`
 
-`mymarkdown.registerFormatter` is off by default on purpose. VS Code will not choose
-between two formatters for the same language on its own, so turning this on while you
-also have Prettier or markdownlint installed means you need to say which one wins:
+Reports Markdown structure problems in the Problems panel.
+
+### `mymarkdown.registerFormatter`
+
+Default: `false`
+
+Lets **Format Document** and `editor.formatOnSave` run Beautify. It stays off by default
+to avoid conflicting with Prettier or markdownlint. If you enable it, choose MyMarkdown
+for Markdown files:
 
 ```jsonc
 "[markdown]": {
-  "editor.defaultFormatter": "local.mymarkdown",
+  "editor.defaultFormatter": "mymarkdown.mymarkdown",
   "editor.formatOnSave": true
 }
 ```
 
-## Install
+Settings apply immediately; no reload is needed.
 
-From the project root, after building (see below):
+## Install and use
 
-```bash
-code --install-extension vscode-extension/mymarkdown-<version>.vsix
-```
-
-The exact filename is printed by `npm run extension` (for example
-`mymarkdown-0.1.20.vsix`).
-
-Then restart VS Code (or run `Developer: Reload Window`). Open any `.md` file and press
+Install from the VS Code Marketplace, reload the window, open a Markdown file, and press
 `Ctrl+Shift+V` / `Cmd+Shift+V`.
 
-To uninstall: run `Developer: Show Running Extensions`, or remove the folder
-`~/.vscode/extensions/local.mymarkdown-<version>`.
-
-## Refreshing it after the website changes
-
-The extension keeps its own copy of the rules, so it does **not** update on its own.
-From the project root, run:
+For a local package:
 
 ```bash
-npm run extension
+code --install-extension vscode-extension/mymarkdown-0.1.21.vsix
 ```
 
-That single command:
+## Open source
 
-1. copies the shared rules out of `src/routes/index.tsx` into
-   `vscode-extension/lib/mymarkdown.js` (a generated file — do not edit it),
-2. copies the colour values from `src/styles.css` into the marked regions of
-   `vscode-extension/media/preview.css`,
-3. runs the checks in `vscode-extension/check.js` and stops if anything broke,
-4. bumps the patch version and packages a new `.vsix`.
+Source, release notes, and contribution instructions are on
+[GitHub](https://github.com/ardeeshany/mymarkdown). Ideas and bug reports are welcome in
+[Issues](https://github.com/ardeeshany/mymarkdown/issues).
 
-Install the new file and reload the window. If the checks fail, nothing is packaged and
-the reason is printed — fix the website rule or the extension and run it again.
+## License
 
-Two rules live only here, because the website does not have them:
-`formatJsonDisplay` and `minimalEdit` in `lib/manual-helpers.js`. Add an extension-only
-helper there and the sync inlines it automatically.
-
-## Layout
-
-```text
-extension.js            VS Code wiring: commands, Contents tree, problems, formatter
-lib/mymarkdown.js       GENERATED — shared rules, copied from the website
-lib/manual-helpers.js   extension-only helpers, inlined into the file above
-lib/preview-plugin.js   what MyMarkdown adds to VS Code's markdown-it: JSON colouring,
-                        loose-JSON promotion, task lists
-media/preview.css       preview styling (colour regions are synced)
-sync.js                 the one-command build (run `npm run extension`)
-check.js                the checks the build runs before packaging
-```
-
-Local only. Nothing is published to a marketplace.
+[MIT](LICENSE)

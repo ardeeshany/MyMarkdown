@@ -9,6 +9,10 @@ lint hints for the rough edges.
 
 Everything runs in your browser. No account, no upload, nothing leaves your machine.
 
+![MyMarkdown showing tables, a Mermaid diagram, and math in VS Code](https://raw.githubusercontent.com/ardeeshany/mymarkdown/main/vscode-extension/media/preview-dark.png)
+
+![Formatted JSON wrapping cleanly in the MyMarkdown preview](https://raw.githubusercontent.com/ardeeshany/mymarkdown/main/vscode-extension/media/json-light.png)
+
 ## Features
 
 - **Colourful headings** — H1, H2, and H3 each get their own colour, so structure is
