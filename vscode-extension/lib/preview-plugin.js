@@ -307,6 +307,8 @@ function mymarkdownPlugin(md) {
 
   md.core.ruler.after("block", "mymarkdown_promote_json", promoteJsonParagraphs);
   md.core.ruler.after("inline", "mymarkdown_task_lists", renderTaskLists);
+  md.core.ruler.after("mymarkdown_task_lists", "mymarkdown_alerts", renderAlerts);
+  md.core.ruler.after("mymarkdown_alerts", "mymarkdown_highlights", renderHighlights);
 
   const originalFence = md.renderer.rules.fence;
   md.renderer.rules.fence = function (tokens, idx, options, env, slf) {
