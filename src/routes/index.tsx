@@ -5,6 +5,7 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
 import heroImage from "@/assets/mymarkdown-logo-v2.webp.asset.json";
+import { MermaidDiagram } from "@/components/mermaid-diagram";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
 
@@ -818,7 +819,13 @@ function Index() {
                     table: ({ children }) => <div className="mt-5 overflow-x-auto"><table className="w-full border-collapse text-left text-sm">{children}</table></div>,
                     th: ({ children }) => <th className="border-b border-border px-3 py-2 font-semibold text-heading-two">{children}</th>,
                     td: ({ children }) => <td className="border-b border-border/70 px-3 py-2 text-foreground/80">{children}</td>,
-                    pre: ({ children }) => <pre className="mt-4 overflow-x-hidden whitespace-pre-wrap break-words rounded-xl bg-foreground/[0.04] p-5 font-mono text-[13px] leading-6 ring-1 ring-border/70">{children}</pre>,
+                    pre: ({ children }) => {
+                      const child = (Array.isArray(children) ? children[0] : children) as { props?: { className?: string; children?: unknown } } | undefined;
+                      if (child?.props?.className?.includes("language-mermaid")) {
+                        return <MermaidDiagram value={String(child.props.children).replace(/\n$/, "")} />;
+                      }
+                      return <pre className="mt-4 overflow-x-hidden whitespace-pre-wrap break-words rounded-xl bg-foreground/[0.04] p-5 font-mono text-[13px] leading-6 ring-1 ring-border/70">{children}</pre>;
+                    },
                     code: ({ className, children }) => {
                       const value = String(children).replace(/\n$/, "");
                       const language = /language-(\w+)/.exec(className ?? "")?.[1];
