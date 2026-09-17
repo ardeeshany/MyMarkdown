@@ -38,7 +38,7 @@ const STEPS = [
   { title: "Download the file", body: "Grab the .vsix file above and save it anywhere on your computer." },
   { title: "Install it in VS Code", body: "Open VS Code, press Cmd/Ctrl + Shift + P, run “Extensions: Install from VSIX…”, and pick the file you just downloaded." },
   { title: "Reload the window", body: "Run “Developer: Reload Window” from the same menu, or just restart VS Code." },
-  { title: "Open any .md file", body: "Press Cmd/Ctrl + Alt + V for the styled preview (the tab reads “MyMarkdown: …”), click the sparkle button to beautify, and open the MyMarkdown icon in the sidebar for Contents. Cmd/Ctrl + Shift + V is VS Code’s own plain preview — not this one." },
+  { title: "Open any .md file", body: "Press Cmd/Ctrl + Shift + V — VS Code’s own preview now shows the MyMarkdown styling. Click the sparkle button (or Cmd/Ctrl + Alt + B) to beautify, and open the MyMarkdown icon in the sidebar for the clickable Contents tree." },
 ];
 
 function ExtensionPage() {
@@ -79,7 +79,7 @@ function ExtensionPage() {
               </a>
             </Button>
           </div>
-          <p className="mt-2 text-xs text-muted-foreground">Version 0.1.14 · about 16 KB · works with VS Code 1.85+</p>
+          <p className="mt-2 text-xs text-muted-foreground">Version 0.1.15 · about 21 KB · works with VS Code 1.85+</p>
         </header>
 
         <section className="mt-12 grid gap-4 sm:grid-cols-3">
