@@ -809,7 +809,26 @@ function Index() {
                 <textarea ref={editorRef} aria-label="Markdown editor" value={markdown} onChange={(event) => setMarkdown(event.target.value)} spellCheck="false" className="min-h-[590px] w-full resize-y bg-transparent px-6 py-8 font-mono text-[13px] leading-7 outline-none placeholder:text-muted-foreground sm:px-9 sm:py-10" placeholder="# Paste your Markdown here…" />
               ) : (
                 <article className="min-h-[590px] px-6 py-8 sm:px-9 sm:py-10">
-                  <ReactMarkdown remarkPlugins={[remarkGfm]} components={{
+                  <ReactMarkdown remarkPlugins={[remarkGfm, remarkMath, remarkAlerts, remarkMark]} rehypePlugins={[rehypeKatex]} components={{
+                    div: ({ children, ...props }) => {
+                      const alert = (props as Record<string, unknown>)["data-alert"] as string | undefined;
+                      if (!alert) return <div>{children}</div>;
+                      const tone: Record<string, string> = {
+                        note: "border-primary/60 bg-primary/5",
+                        tip: "border-heading-two/60 bg-heading-two/5",
+                        important: "border-heading-three/60 bg-heading-three/5",
+                        warning: "border-amber-500/60 bg-amber-500/5",
+                        caution: "border-destructive/60 bg-destructive/5",
+                      };
+                      const label: Record<string, string> = { note: "Note", tip: "Tip", important: "Important", warning: "Warning", caution: "Caution" };
+                      return (
+                        <div className={`mt-5 max-w-[62ch] rounded-xl border-l-4 px-4 py-3 ${tone[alert] ?? tone["note"]}`}>
+                          <p className="text-xs font-semibold uppercase tracking-wide text-foreground/70">{label[alert] ?? alert}</p>
+                          <div className="[&>p]:mt-1.5">{children}</div>
+                        </div>
+                      );
+                    },
+                    mark: ({ children }) => <mark className="rounded bg-amber-300/50 px-1 py-0.5 text-foreground dark:bg-amber-400/30">{children}</mark>,
                     h1: ({ children, node }) => {
                       const id = headings.find((heading) => heading.line === node?.position?.start.line)?.id;
                       const isFirstH1 = id === firstH1Id;
