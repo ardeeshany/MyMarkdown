@@ -21,7 +21,7 @@ export function remarkAlerts() {
       if (!firstText || firstText.type !== "text" || typeof firstText.value !== "string") return;
 
       const match = /^\[!(note|tip|important|warning|caution)\]\s*\n?/i.exec(firstText.value);
-      if (!match) return;
+      if (!match || !match[1]) return;
       const kind = match[1].toLowerCase() as (typeof TYPES)[number];
 
       firstText.value = firstText.value.slice(match[0].length);
