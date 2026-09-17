@@ -72,7 +72,7 @@ code --install-extension vscode-extension/mymarkdown-<version>.vsix
 ```
 
 The exact filename is printed by `npm run extension` (for example
-`mymarkdown-0.1.17.vsix`).
+`mymarkdown-0.1.18.vsix`).
 
 Then restart VS Code (or run `Developer: Reload Window`). Open any `.md` file and press
 `Ctrl+Shift+V` / `Cmd+Shift+V`.
