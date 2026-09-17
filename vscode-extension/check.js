@@ -8,6 +8,8 @@
 */
 "use strict";
 
+const fs = require("fs");
+const path = require("path");
 const MD = require("./lib/mymarkdown.js");
 const { mymarkdownPlugin } = require("./lib/preview-plugin.js");
 
@@ -364,6 +366,58 @@ check("minimalEdit reproduces the new text with the smallest span", () => {
         ") did not reproduce the text",
     );
   }
+});
+
+check("the manifest and the extension host agree", () => {
+  const manifest = JSON.parse(fs.readFileSync(path.join(__dirname, "package.json"), "utf8"));
+  const host = fs.readFileSync(path.join(__dirname, "extension.js"), "utf8");
+  const contributes = manifest.contributes || {};
+
+  // The preview is VS Code's own, so these two are what make the extension do anything at all.
+  assert(
+    Array.isArray(contributes["markdown.previewStyles"]) &&
+      contributes["markdown.previewStyles"].length > 0,
+    "markdown.previewStyles is missing, so the preview would not be styled",
+  );
+  for (const file of contributes["markdown.previewStyles"]) {
+    assert(
+      fs.existsSync(path.join(__dirname, file)),
+      "previewStyles points at a missing file: " + file,
+    );
+  }
+  assert(
+    contributes["markdown.markdownItPlugins"] === true,
+    "markdown.markdownItPlugins must be true",
+  );
+  assert(/extendMarkdownIt/.test(host), "extension.js must export extendMarkdownIt");
+
+  // A command in the manifest that nothing registers shows up as "command not found".
+  const declared = (contributes.commands || []).map((entry) => entry.command);
+  const registered = [...host.matchAll(/registerCommand\("([^"]+)"/g)].map((m) => m[1]);
+  for (const command of declared) {
+    assert(
+      registered.includes(command),
+      command + " is declared in package.json but never registered",
+    );
+  }
+  for (const group of Object.values(contributes.menus || {})) {
+    for (const entry of group) {
+      assert(
+        declared.includes(entry.command),
+        entry.command + " is in a menu but not in contributes.commands",
+      );
+    }
+  }
+  for (const entry of contributes.keybindings || []) {
+    assert(
+      declared.includes(entry.command),
+      entry.command + " has a keybinding but is not a declared command",
+    );
+  }
+  assert(
+    manifest.main && fs.existsSync(path.join(__dirname, manifest.main)),
+    "main points at a missing file",
+  );
 });
 
 if (failures.length) {
