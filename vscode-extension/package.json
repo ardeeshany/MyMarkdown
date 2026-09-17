@@ -3,13 +3,30 @@
   "displayName": "MyMarkdown",
   "description": "Beautiful Markdown preview with colorful headings, formatted JSON, beautify, and a clickable table of contents.",
   "version": "0.1.19",
-  "publisher": "local",
-  "private": true,
+  "publisher": "mymarkdown",
+  "license": "MIT",
+  "homepage": "https://mymarkdown.site",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ardeeshany/mymarkdown.git"
+  },
+  "bugs": {
+    "url": "https://github.com/ardeeshany/mymarkdown/issues"
+  },
   "engines": {
     "vscode": "^1.85.0"
   },
   "categories": [
+    "Programming Languages",
+    "Formatters",
     "Other"
+  ],
+  "keywords": [
+    "markdown",
+    "preview",
+    "mermaid",
+    "json",
+    "beautify"
   ],
   "activationEvents": [
     "onLanguage:markdown"
