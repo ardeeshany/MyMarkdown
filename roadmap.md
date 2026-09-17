@@ -14,3 +14,4 @@
 - [x] Fix Mermaid preview loading by packaging its engine and renderer in one ordered script
 - [x] Add Marketplace artwork and polish the extension README with product screenshots
 - [x] Improve checked task visibility and separate consecutive alert boxes
+- [x] Use the supplied artwork as the VS Code Marketplace icon and keep its size checked
