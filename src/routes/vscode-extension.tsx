@@ -6,9 +6,11 @@ import heroImage from "@/assets/mymarkdown-logo-v2.webp.asset.json";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
 
-const INSTALL_COMMAND = "code --install-extension mymarkdown-0.1.22.vsix";
+const VERSION = "0.1.22";
 
-const VSIX = "/mymarkdown-0.1.22.vsix";
+const INSTALL_COMMAND = `code --install-extension mymarkdown-${VERSION}.vsix`;
+
+const VSIX = `/mymarkdown-${VERSION}.vsix`;
 
 export const Route = createFileRoute("/vscode-extension")({
   head: () => ({
