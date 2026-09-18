@@ -1497,16 +1497,6 @@ function Index() {
               })}
               <Button
                 type="button"
-                size="sm"
-                variant="default"
-                disabled={aiLoading}
-                onClick={() => void suggestLabels()}
-                className="h-8 shrink-0 px-3 text-xs"
-              >
-                Suggest labels
-              </Button>
-              <Button
-                type="button"
                 size="icon"
                 variant="ghost"
                 onClick={clearAnnotations}
