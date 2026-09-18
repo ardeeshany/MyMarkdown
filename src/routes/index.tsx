@@ -1091,6 +1091,7 @@ function Index() {
 
           {aiSuggestions.length > 0 ? (
             <>
+              <span className="shrink-0 text-xs text-muted-foreground">Suggested:</span>
               {aiSuggestions.map((suggestion) => (
                 <Button key={suggestion} type="button" size="sm" variant="secondary" disabled={aiLoading} onClick={() => { setAiPrompt(suggestion); void findSections(suggestion); }} className="h-7 shrink-0 rounded-full px-3 text-xs">
                   {suggestion}
@@ -1107,7 +1108,7 @@ function Index() {
               }, new Map<string, { color: string; count: number }>())).map(([label, meta]) => {
                 const hidden = hiddenLabels.has(label.toLowerCase());
                 return (
-                  <Button key={label} type="button" size="sm" variant="outline" onClick={() => toggleLabel(label)} onDoubleClick={() => scrollToLabel(label)} aria-pressed={!hidden} className={`h-7 shrink-0 rounded-full px-2.5 text-xs font-medium transition-opacity ${hidden ? "opacity-40 grayscale" : ""}`} style={{ borderColor: `${meta.color}66`, color: meta.color, backgroundColor: `${meta.color}12` }}>
+                  <Button key={label} type="button" size="sm" variant="outline" onClick={() => toggleLabel(label)} aria-pressed={!hidden} className={`h-7 shrink-0 rounded-full px-2.5 text-xs font-medium transition-opacity ${hidden ? "opacity-40 grayscale" : ""}`} style={{ borderColor: `${meta.color}66`, color: meta.color, backgroundColor: `${meta.color}12` }}>
                     <span className="size-2 rounded-full" style={{ backgroundColor: meta.color }} />{label} <span className="opacity-60">· {meta.count}</span>
                   </Button>
                 );
