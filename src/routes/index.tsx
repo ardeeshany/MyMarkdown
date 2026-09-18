@@ -1420,23 +1420,17 @@ function Index() {
       <div className="fixed inset-x-0 bottom-3 z-40 flex justify-center px-3 sm:bottom-5">
         <div className="relative w-[min(36rem,calc(100vw-4rem))]">
           <div
-            ref={aiBarRef}
-            data-fade={aiBarFade}
-            onScroll={updateAiBarFade}
-            className={`flex min-w-0 gap-2 rounded-xl border border-border/70 bg-popover/95 px-2.5 shadow-xl backdrop-blur-xl ${aiSuggestions.length > 0 ? "flex-col items-stretch py-2" : "ai-bar-scroll h-12 items-center overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"}`}
+            className={`rounded-xl border border-border/70 bg-popover/95 shadow-xl backdrop-blur-xl ${aiSuggestions.length > 0 ? "px-2.5 py-2" : "flex h-12 items-stretch"}`}
           >
-            <div className="sticky left-0 z-20 flex shrink-0 items-center bg-popover px-0.5 pr-1">
-              <img
-                src={heroImage.url}
-                alt="MyMarkdown"
-                className="size-6 object-contain"
-                draggable={false}
-              />
-            </div>
-
             {aiSuggestions.length > 0 ? (
               <div className="flex flex-col gap-1">
-                <div className="flex items-center justify-between gap-3 px-1">
+                <div className="flex items-center gap-2 px-1">
+                  <img
+                    src={heroImage.url}
+                    alt="MyMarkdown"
+                    className="size-6 shrink-0 object-contain"
+                    draggable={false}
+                  />
                   <span className="text-xs text-muted-foreground">Suggested</span>
                   <Button
                     type="button"
