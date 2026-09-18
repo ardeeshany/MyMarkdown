@@ -1,7 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import {
-  ArrowDown,
   ArrowUp,
   ChevronDown,
   ChevronUp,
@@ -757,7 +756,6 @@ type GutterBar = {
   color: string;
   top: number;
   height: number;
-  hasNext: boolean;
 };
 
 function Index() {
@@ -856,8 +854,6 @@ function Index() {
     const blocks = Array.from(container.querySelectorAll<HTMLElement>("[data-line]"));
     const base = container.getBoundingClientRect().top;
     const next: GutterBar[] = [];
-    const lastIndexByLabel = new Map<string, number>();
-    aiRanges.forEach((range, index) => lastIndexByLabel.set(range.label.toLowerCase(), index));
     aiRanges.forEach((range, index) => {
       if (hiddenLabels.has(range.label.toLowerCase())) return;
       let top = Infinity;
@@ -884,7 +880,6 @@ function Index() {
         color: range.color,
         top,
         height: Math.max(4, bottom - top),
-        hasNext: lastIndexByLabel.get(range.label.toLowerCase()) !== index,
       });
     });
     setBars(next);
@@ -909,10 +904,20 @@ function Index() {
     };
   }, [measureBars, mode, previewMarkdown]);
 
+  const labelCursorRef = useRef(new Map<string, number>());
+
+  /** Each click on a label chip jumps to its next match, looping after the last. */
   const scrollToLabel = (label: string) => {
-    const bar = bars.find((item) => item.label === label);
+    const matches = bars.filter(
+      (item) => item.label.toLowerCase() === label.toLowerCase(),
+    );
     const container = articleRef.current;
-    if (!bar || !container) return;
+    if (!matches.length || !container) return;
+    const cursors = labelCursorRef.current;
+    const current = cursors.get(label.toLowerCase()) ?? -1;
+    const nextIndex = (current + 1) % matches.length;
+    cursors.set(label.toLowerCase(), nextIndex);
+    const bar = matches[nextIndex]!;
     const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     window.scrollTo({
       top: window.scrollY + container.getBoundingClientRect().top + bar.top - 90,
