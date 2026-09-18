@@ -45,4 +45,4 @@
 - [x] Rewrite suggestion instructions as three short structural questions and allow up to 8 words
 - [x] Widen the AI panel, fade horizontally cropped edges, and keep its close button outside on the right
 - [x] Separate suggestion and label close controls, make edge fades scroll-aware, and jump label chips to their first match
-- [ ] Pin the AI logo, default to 3–5 label badges, make empty-result dismissal stable, and strengthen suggestion guidance
+- [x] Pin the AI logo, default to 3–5 label badges, make empty-result dismissal stable, and strengthen suggestion guidance
