@@ -33,3 +33,4 @@
 - [x] Simplify AI suggestions into stacked question prompts and place dismissible feedback inside the ask field
 - [x] Rewrite suggestion instructions around reader questions and a semantic second layer over the document
 - [x] Add a Free and Open Source badge above the hero logo and shorten the subtitle
+- [x] Move the Open Source badge below the subtitle as an outlined, lightly rounded tag
