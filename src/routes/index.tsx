@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
-import { ArrowUp, ChevronDown, ChevronUp, ClipboardPaste, Code2, Github, ListTree, Loader2, PenLine, Wand2, X } from "lucide-react";
+import { ArrowDown, ArrowUp, ChevronDown, ChevronUp, ClipboardPaste, Code2, Github, ListTree, Loader2, PenLine, Wand2, X } from "lucide-react";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
 import { annotateMarkdown, type AnnotationRange } from "@/lib/ai-annotate.functions";
@@ -687,7 +687,7 @@ function lineAttrs(node?: MdNode) {
   return { "data-line": start, "data-end-line": typeof end === "number" ? end : start };
 }
 
-type GutterBar = { key: string; label: string; color: string; top: number; height: number };
+type GutterBar = { key: string; label: string; color: string; top: number; height: number; hasNext: boolean };
 
 
 function Index() {
@@ -718,6 +718,7 @@ function Index() {
 
   const findSections = async () => {
     if (!aiPrompt.trim() || aiLoading) return;
+    setMode("preview");
     setAiLoading(true);
     setAiError("");
     try {
@@ -748,6 +749,8 @@ function Index() {
     const blocks = Array.from(container.querySelectorAll<HTMLElement>("[data-line]"));
     const base = container.getBoundingClientRect().top;
     const next: GutterBar[] = [];
+    const lastIndexByLabel = new Map<string, number>();
+    aiRanges.forEach((range, index) => lastIndexByLabel.set(range.label.toLowerCase(), index));
     aiRanges.forEach((range, index) => {
       let top = Infinity;
       let bottom = -Infinity;
@@ -773,6 +776,7 @@ function Index() {
         color: range.color,
         top,
         height: Math.max(4, bottom - top),
+        hasNext: lastIndexByLabel.get(range.label.toLowerCase()) !== index,
       });
     });
     setBars(next);
@@ -804,6 +808,18 @@ function Index() {
     const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     window.scrollTo({
       top: window.scrollY + container.getBoundingClientRect().top + bar.top - 90,
+      behavior: reduceMotion ? "auto" : "smooth",
+    });
+  };
+
+  const scrollToNextMatch = (barKey: string, label: string) => {
+    const currentIndex = bars.findIndex((item) => item.key === barKey);
+    const next = bars.slice(currentIndex + 1).find((item) => item.label.toLowerCase() === label.toLowerCase());
+    const container = articleRef.current;
+    if (!next || !container) return;
+    const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    window.scrollTo({
+      top: window.scrollY + container.getBoundingClientRect().top + next.top - 90,
       behavior: reduceMotion ? "auto" : "smooth",
     });
   };
@@ -914,7 +930,6 @@ function Index() {
                 <form onSubmit={(event) => { event.preventDefault(); void findSections(); }} className="ml-auto flex w-full max-w-sm min-w-0 items-center rounded-full border border-border/70 bg-background/55 p-1 pl-3 focus-within:ring-2 focus-within:ring-primary/15">
                   <Wand2 className="mr-2 size-3.5 shrink-0 text-muted-foreground" aria-hidden />
                   <input value={aiPrompt} onChange={(event) => setAiPrompt(event.target.value)} aria-label="Ask the AI to label parts of this document" placeholder="Find in document…" className="min-w-0 flex-1 bg-transparent text-xs outline-none placeholder:text-muted-foreground" />
-                  {aiRanges.length > 0 && <Button type="button" size="icon" variant="ghost" onClick={clearAnnotations} className="size-7 rounded-full text-muted-foreground" title="Clear labels" aria-label="Clear labels"><X className="size-3.5" /></Button>}
                   <Button type="submit" size="sm" disabled={aiLoading || !aiPrompt.trim()} className="h-7 rounded-full px-3 text-xs">{aiLoading ? <Loader2 className="size-3.5 animate-spin" /> : null}Find</Button>
                 </form>
               </div>
@@ -925,7 +940,7 @@ function Index() {
               ) : (
                 <article ref={articleRef} className="relative min-h-[590px] px-6 py-8 sm:px-9 sm:py-10">
                   {aiRanges.length > 0 && (
-                    <div className="mb-5 flex flex-wrap items-center justify-end gap-1.5 sm:mr-1">
+                    <div className="mb-5 flex flex-wrap items-center justify-end gap-1.5">
                       {Array.from(aiRanges.reduce((map, range) => {
                         const entry = map.get(range.label);
                         map.set(range.label, { color: range.color, count: (entry?.count ?? 0) + 1 });
@@ -935,12 +950,19 @@ function Index() {
                           {label} <span className="opacity-60">· {meta.count}</span>
                         </Button>
                       ))}
+                      <Button type="button" size="icon" variant="ghost" onClick={clearAnnotations} className="size-6 rounded-full text-muted-foreground" title="Clear labels" aria-label="Clear labels"><X className="size-3.5" /></Button>
                     </div>
                   )}
-                  <div aria-hidden className="pointer-events-none absolute inset-y-0 right-2 hidden w-1 sm:block">
+                  {aiLoading && (
+                    <div className="preview-scan pointer-events-none absolute inset-0 z-20 overflow-hidden" aria-label="Analyzing document">
+                      <div className="preview-scan-line absolute inset-x-0 h-24" />
+                    </div>
+                  )}
+                  <div className="pointer-events-none absolute inset-y-0 right-2 hidden w-1 sm:block">
                     {bars.map((bar) => (
                       <div key={bar.key} className="group absolute right-0 w-1" style={{ top: bar.top, height: bar.height, backgroundColor: bar.color }} title={bar.label}>
                         <span className="absolute bottom-full right-0 z-10 mb-1 whitespace-nowrap rounded bg-popover/90 px-1.5 py-0.5 text-[10px] font-medium leading-none shadow-sm ring-1 ring-border/70 backdrop-blur-sm" style={{ color: bar.color }}>{bar.label}</span>
+                        {bar.hasNext && <Button type="button" size="icon" variant="ghost" onClick={() => scrollToNextMatch(bar.key, bar.label)} className="pointer-events-auto absolute left-1/2 top-full z-10 mt-1 size-5 -translate-x-1/2 rounded-full bg-popover text-muted-foreground shadow-sm ring-1 ring-border/70 hover:text-foreground" title={`Next ${bar.label} match`} aria-label={`Go to next ${bar.label} match`}><ArrowDown className="size-3" /></Button>}
                       </div>
                     ))}
                   </div>
