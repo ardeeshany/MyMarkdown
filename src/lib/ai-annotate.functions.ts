@@ -194,13 +194,11 @@ export const annotateMarkdown = createServerFn({ method: "POST" })
         if (isSuggesting) {
           const seen = new Set<string>();
           const suggestions = (parsed.suggestions ?? [])
-            .map((value) => ({
-              label: String(value.label ?? "").trim().split(/\s+/).slice(0, 10).join(" "),
-            }))
+            .map((value) => ({ label: String(value.label ?? "").trim().replace(/\s+/g, " ") }))
             .filter((value) => {
               const key = value.label.toLowerCase();
-              const wordCount = value.label.split(/\s+/).length;
-              if (!value.label || wordCount < 6 || seen.has(key)) return false;
+              // Never cut a question mid-sentence: an over-long one is dropped whole.
+              if (!value.label || value.label.length > 160 || seen.has(key)) return false;
               seen.add(key);
               return true;
             })
