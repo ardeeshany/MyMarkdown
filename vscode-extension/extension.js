@@ -329,13 +329,19 @@ async function ask(prompt, token) {
   const preference = String(config().get("labels.provider", "auto"));
   const wantsLm = preference === "auto" || preference === "languageModel";
   const wantsCli = preference === "auto" || preference === "cli";
+  // Recorded rather than thrown when auto mode still has the CLI left to try - but if that
+  // also comes up empty, this is the only clue to why the language model attempt failed,
+  // and silently dropping it is what makes "I do have Copilot" reports impossible to debug.
+  let lmReason;
 
   if (wantsLm && vscode.lm && typeof vscode.lm.selectChatModels === "function") {
     try {
       const reply = await askLanguageModel(prompt, token);
       if (reply) return reply;
+      lmReason = "no chat model is installed or authorized in this window";
     } catch (error) {
       if (!wantsCli) throw error;
+      lmReason = error?.message || String(error);
     }
   }
   if (wantsCli) {
@@ -343,7 +349,9 @@ async function ask(prompt, token) {
     if (reply) return reply;
   }
   throw new Error(
-    "No AI provider available. Install a language model extension, or set mymarkdown.labels.cliCommand.",
+    "No AI provider available" +
+      (lmReason ? " (" + lmReason + ")" : "") +
+      ". Install a language model extension, or set mymarkdown.labels.cliCommand.",
   );
 }
 
