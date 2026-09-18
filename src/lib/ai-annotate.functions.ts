@@ -195,12 +195,16 @@ export const annotateMarkdown = createServerFn({ method: "POST" })
           const seen = new Set<string>();
           const suggestions = (parsed.suggestions ?? [])
             .map((value) => ({
-              label: String(value.label ?? "").trim().split(/\s+/).slice(0, 10).join(" "),
+              // Concise questions only; a long answer would break the one-row bar.
+              label: String(value.label ?? "")
+                .trim()
+                .split(/\s+/)
+                .slice(0, 14)
+                .join(" "),
             }))
             .filter((value) => {
               const key = value.label.toLowerCase();
-              const wordCount = value.label.split(/\s+/).length;
-              if (!value.label || wordCount < 6 || seen.has(key)) return false;
+              if (!value.label || seen.has(key)) return false;
               seen.add(key);
               return true;
             })
