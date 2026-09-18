@@ -1027,10 +1027,6 @@ function Index() {
         </nav>
 
         <header className="flex flex-col items-center text-center">
-          <span className="mb-4 inline-flex items-center gap-1.5 rounded-full border border-border/70 bg-card/80 px-3 py-1 text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
-            <span className="size-1.5 rounded-full bg-primary/70" aria-hidden="true" />
-            Free and Open Source
-          </span>
           <img
             src={heroImage.url}
             alt="MyMarkdown documents transforming into a polished page"
@@ -1043,6 +1039,10 @@ function Index() {
           <p className="mt-3 max-w-2xl text-sm text-muted-foreground sm:text-base">
             Make your Markdown easier to read and understand, with a little help from AI.
           </p>
+          <span className="mt-4 inline-flex items-center gap-1.5 rounded-md border border-border/70 px-2.5 py-1 text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
+            <span className="size-1.5 rounded-full bg-primary/70" aria-hidden="true" />
+            Open Source and Free
+          </span>
           <div className="mt-6 flex flex-wrap items-center justify-center gap-2.5">
             <Button
               type="button"
