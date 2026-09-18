@@ -190,6 +190,16 @@
   box-shadow: 0 0 0 4px color-mix(in oklab, var(--primary) 14%, transparent);
 }
 
+.ai-bar-scroll {
+  mask-image: linear-gradient(
+    to right,
+    transparent,
+    black 0.65rem,
+    black calc(100% - 0.65rem),
+    transparent
+  );
+}
+
 .preview-scan {
   background: color-mix(in oklab, var(--background) 18%, transparent);
 }
