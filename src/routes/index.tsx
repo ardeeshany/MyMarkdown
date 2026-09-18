@@ -908,6 +908,51 @@ function Index() {
 
         <div className="mt-8 grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_16rem]">
           <div className="min-w-0">
+            <div className="mb-3">
+              <form
+                onSubmit={(event) => { event.preventDefault(); void findSections(); }}
+                className="flex items-center gap-2 rounded-xl border border-border/70 bg-card/60 px-3 py-2"
+              >
+                <Wand2 className="size-4 shrink-0 text-muted-foreground" aria-hidden />
+                <input
+                  value={aiPrompt}
+                  onChange={(event) => setAiPrompt(event.target.value)}
+                  aria-label="Ask the AI to label parts of this document"
+                  placeholder="Find the parts about… e.g. error handling"
+                  className="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
+                />
+                {aiRanges.length > 0 && (
+                  <Button type="button" size="sm" variant="ghost" onClick={clearAnnotations} className="h-7 px-2 text-xs text-muted-foreground" title="Clear labels">
+                    <X className="size-3.5" />Clear
+                  </Button>
+                )}
+                <Button type="submit" size="sm" disabled={aiLoading || !aiPrompt.trim()} className="h-7 rounded-lg px-3 text-xs">
+                  {aiLoading ? <Loader2 className="size-3.5 animate-spin" /> : null}Find
+                </Button>
+              </form>
+              {aiError && <p className="mt-1.5 px-1 text-xs text-muted-foreground">{aiError}</p>}
+              {aiRanges.length > 0 && (
+                <div className="mt-2 flex flex-wrap items-center gap-1.5 px-1">
+                  {Array.from(
+                    aiRanges.reduce((map, range) => {
+                      const entry = map.get(range.label);
+                      map.set(range.label, { color: range.color, count: (entry?.count ?? 0) + 1 });
+                      return map;
+                    }, new Map<string, { color: string; count: number }>()),
+                  ).map(([label, meta]) => (
+                    <button
+                      key={label}
+                      type="button"
+                      onClick={() => scrollToLabel(label)}
+                      className="rounded-full border px-2.5 py-1 text-xs font-medium transition-opacity hover:opacity-80"
+                      style={{ borderColor: `${meta.color}55`, color: meta.color, backgroundColor: `${meta.color}12` }}
+                    >
+                      {label} <span className="opacity-60">{meta.count}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
             <section className="frosted-surface overflow-hidden rounded-2xl ring-1 ring-card/80">
               <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border/70 bg-glass px-3 py-2.5 sm:px-4">
                 <div className="flex min-w-0 items-center gap-2">
@@ -924,7 +969,15 @@ function Index() {
               {mode === "edit" ? (
                 <textarea ref={editorRef} aria-label="Markdown editor" value={markdown} onChange={(event) => setMarkdown(event.target.value)} spellCheck="false" className="min-h-[590px] w-full resize-y bg-transparent px-6 py-8 font-mono text-[13px] leading-7 outline-none placeholder:text-muted-foreground sm:px-9 sm:py-10" placeholder="# Paste your Markdown here…" />
               ) : (
-                <article className="min-h-[590px] px-6 py-8 sm:px-9 sm:py-10">
+                <article ref={articleRef} className={`relative min-h-[590px] px-6 py-8 sm:px-9 sm:py-10 ${bars.length ? "pr-6 sm:pr-40" : ""}`}>
+                  <div aria-hidden className="pointer-events-none absolute inset-y-0 right-4 hidden w-36 sm:block">
+                    {bars.map((bar) => (
+                      <div key={bar.key} className="absolute left-0 flex gap-2" style={{ top: bar.top, height: bar.height }}>
+                        <span className="w-[2px] shrink-0 rounded-full" style={{ backgroundColor: bar.color, height: "100%" }} />
+                        <span className="-mt-0.5 text-[11px] font-medium leading-snug" style={{ color: bar.color }}>{bar.label}</span>
+                      </div>
+                    ))}
+                  </div>
                   <ReactMarkdown remarkPlugins={[remarkGfm, remarkMath, remarkAlerts, remarkMark]} rehypePlugins={[rehypeKatex]} components={{
                     div: ({ children, ...props }) => {
                       const bag = props as Record<string, unknown> & { node?: { properties?: Record<string, unknown> } };
@@ -949,25 +1002,25 @@ function Index() {
                     h1: ({ children, node }) => {
                       const id = headings.find((heading) => heading.line === node?.position?.start.line)?.id;
                       const isFirstH1 = id === firstH1Id;
-                      return <h1 id={id} className={`scroll-mt-8 font-display text-4xl font-semibold leading-tight text-heading-one sm:text-5xl ${isFirstH1 ? "" : "pt-10"}`}>{children}</h1>;
+                      return <h1 id={id} {...lineAttrs(node)} className={`scroll-mt-8 font-display text-4xl font-semibold leading-tight text-heading-one sm:text-5xl ${isFirstH1 ? "" : "pt-10"}`}>{children}</h1>;
                     },
-                    h2: ({ children, node }) => <h2 id={headings.find((heading) => heading.line === node?.position?.start.line)?.id} className="scroll-mt-8 mt-9 font-display text-2xl font-semibold leading-tight text-heading-two">{children}</h2>,
-                    h3: ({ children, node }) => <h3 id={headings.find((heading) => heading.line === node?.position?.start.line)?.id} className="scroll-mt-8 mt-8 font-display text-xl font-semibold leading-tight text-heading-three">{children}</h3>,
-                    h4: ({ children }) => <h4 className="mt-7 font-display text-lg font-semibold text-foreground">{children}</h4>,
-                    p: ({ children }) => <p className="mt-4 max-w-[62ch] text-[15px] leading-7 text-foreground/80">{children}</p>,
-                    ul: ({ children }) => <ul className="mt-4 max-w-[62ch] list-disc space-y-2 pl-5 text-[15px] leading-7 marker:text-heading-two">{children}</ul>,
-                    ol: ({ children }) => <ol className="mt-4 max-w-[62ch] list-decimal space-y-2 pl-5 text-[15px] leading-7 marker:font-medium marker:text-heading-one">{children}</ol>,
-                    blockquote: ({ children }) => <blockquote className="mt-5 border-l-2 border-heading-three bg-heading-three/5 px-4 py-1 italic text-foreground/75">{children}</blockquote>,
+                    h2: ({ children, node }) => <h2 id={headings.find((heading) => heading.line === node?.position?.start.line)?.id} {...lineAttrs(node)} className="scroll-mt-8 mt-9 font-display text-2xl font-semibold leading-tight text-heading-two">{children}</h2>,
+                    h3: ({ children, node }) => <h3 id={headings.find((heading) => heading.line === node?.position?.start.line)?.id} {...lineAttrs(node)} className="scroll-mt-8 mt-8 font-display text-xl font-semibold leading-tight text-heading-three">{children}</h3>,
+                    h4: ({ children, node }) => <h4 {...lineAttrs(node)} className="mt-7 font-display text-lg font-semibold text-foreground">{children}</h4>,
+                    p: ({ children, node }) => <p {...lineAttrs(node)} className="mt-4 max-w-[62ch] text-[15px] leading-7 text-foreground/80">{children}</p>,
+                    ul: ({ children, node }) => <ul {...lineAttrs(node)} className="mt-4 max-w-[62ch] list-disc space-y-2 pl-5 text-[15px] leading-7 marker:text-heading-two">{children}</ul>,
+                    ol: ({ children, node }) => <ol {...lineAttrs(node)} className="mt-4 max-w-[62ch] list-decimal space-y-2 pl-5 text-[15px] leading-7 marker:font-medium marker:text-heading-one">{children}</ol>,
+                    blockquote: ({ children, node }) => <blockquote {...lineAttrs(node)} className="mt-5 border-l-2 border-heading-three bg-heading-three/5 px-4 py-1 italic text-foreground/75">{children}</blockquote>,
                     a: ({ children, href }) => <a className="font-medium text-primary underline decoration-primary/30 underline-offset-4" href={href} target="_blank" rel="noreferrer">{children}</a>,
-                    table: ({ children }) => <div className="mt-5 overflow-x-auto"><table className="w-full border-collapse text-left text-sm">{children}</table></div>,
+                    table: ({ children, node }) => <div {...lineAttrs(node)} className="mt-5 overflow-x-auto"><table className="w-full border-collapse text-left text-sm">{children}</table></div>,
                     th: ({ children }) => <th className="border-b border-border px-3 py-2 font-semibold text-heading-two">{children}</th>,
                     td: ({ children }) => <td className="border-b border-border/70 px-3 py-2 text-foreground/80">{children}</td>,
-                    pre: ({ children }) => {
+                    pre: ({ children, node }) => {
                       const child = (Array.isArray(children) ? children[0] : children) as { props?: { className?: string; children?: unknown } } | undefined;
                       if (child?.props?.className?.includes("language-mermaid")) {
                         return <MermaidDiagram value={String(child.props.children).replace(/\n$/, "")} />;
                       }
-                      return <pre className="mt-4 overflow-x-hidden whitespace-pre-wrap break-words rounded-xl bg-foreground/[0.04] p-5 font-mono text-[13px] leading-6 ring-1 ring-border/70">{children}</pre>;
+                      return <pre {...lineAttrs(node)} className="mt-4 overflow-x-hidden whitespace-pre-wrap break-words rounded-xl bg-foreground/[0.04] p-5 font-mono text-[13px] leading-6 ring-1 ring-border/70">{children}</pre>;
                     },
                     code: ({ className, children }) => {
                       const value = String(children).replace(/\n$/, "");
