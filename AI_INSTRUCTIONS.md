@@ -1,20 +1,24 @@
-# AI annotation instructions
+# AI labeling instructions
 
-You label parts of a Markdown document.
+You analyze a Markdown document. Follow the requested operation exactly.
 
-The user describes what to look for. Find every matching chunk.
+The operation is `{{OPERATION}}`. The numbered document has lines 1 through `{{LINE_COUNT}}`.
 
-## Rules
+## Operation: label
 
-- Each chunk is a contiguous range of line numbers from the numbered document.
-- Chunks must never overlap and must stay inside lines 1 through `{{LINE_COUNT}}`.
-- A label is 1–2 words.
-- The same topic reuses the exact same label (and therefore the same color).
-- Give each label a hex color that suits its meaning — for example, warm reds for errors and calm blues for setup.
-- Return no items when nothing matches.
-- Never invent line numbers. Only use line numbers that exist in the document.
+When the operation is `label`, find every part matching the user's request and return ranges.
 
-## Output format
+Rules:
+
+- Each match is one contiguous range of lines from the numbered document.
+- Ranges must never overlap. Any line may belong to at most one range, although lines may belong to no range.
+- Keep every range inside lines 1 through `{{LINE_COUNT}}`.
+- Use a concise 1–2 word label.
+- Reuse the exact label and color when several ranges cover the same topic.
+- Give every label a meaningful `#rrggbb` color; for example, warm red for errors or calm blue for setup.
+- Include all genuine matches, but do not include unrelated context merely to make a range larger.
+- Never invent line numbers.
+- Return an empty `items` array when nothing matches.
 
 Reply with JSON only, in exactly this shape:
 
@@ -27,11 +31,21 @@ Reply with JSON only, in exactly this shape:
 }
 ```
 
-Field by field:
+- `label`: 1–2 words naming the matching topic.
+- `color`: a valid `#rrggbb` color associated with that label.
+- `startLine`: the first included line, inclusive.
+- `endLine`: the last included line, inclusive.
 
-- `label` — 1–2 words naming what the chunk is about.
-- `color` — a `#rrggbb` hex color that fits the label's meaning.
-- `startLine` — first line of the chunk (inclusive), from the numbered document.
-- `endLine` — last line of the chunk (inclusive), from the numbered document.
+## Operation: suggest
 
-`items` may be empty (`{ "items": [] }`) when nothing in the document matches.
+When the operation is `suggest`, inspect the whole document and propose 3–5 useful things a reader may want to label. Suggestions must be specific to the actual document, distinct from one another, 1–3 words each, and likely to match at least one passage. Do not return generic categories unless the document supports them.
+
+Reply with JSON only, in exactly this shape:
+
+```json
+{
+  "suggestions": ["Features", "Benefits", "Error handling"]
+}
+```
+
+- `suggestions`: 3–5 unique, concise labeling requests based on the document.

@@ -8,6 +8,8 @@ export type AnnotationRange = {
   endLine: number;
 };
 
+type AnnotationOperation = "label" | "suggest";
+
 type RawItem = Partial<Record<"label" | "color", unknown>> &
   Partial<Record<"startLine" | "endLine", unknown>>;
 
@@ -64,36 +66,51 @@ function sanitize(items: RawItem[], lineCount: number): AnnotationRange[] {
 }
 
 export const annotateMarkdown = createServerFn({ method: "POST" })
-  .inputValidator((input: { markdown: string; prompt: string }) => {
+  .inputValidator((input: { markdown: string; prompt?: string; operation?: AnnotationOperation }) => {
     const markdown = String(input?.markdown ?? "");
     const prompt = String(input?.prompt ?? "").trim();
+    const operation: AnnotationOperation = input?.operation === "suggest" ? "suggest" : "label";
     if (!markdown.trim()) throw new Error("There is nothing in the document to look at.");
-    if (!prompt) throw new Error("Describe what you want to find first.");
-    return { markdown: markdown.slice(0, 120_000), prompt: prompt.slice(0, 2_000) };
+    if (operation === "label" && !prompt) throw new Error("Describe what you want to find first.");
+    return { markdown: markdown.slice(0, 120_000), prompt: prompt.slice(0, 2_000), operation };
   })
-  .handler(async ({ data }): Promise<{ ranges: AnnotationRange[]; error?: string }> => {
+  .handler(async ({ data }): Promise<{ ranges: AnnotationRange[]; suggestions: string[]; error?: string }> => {
     const apiKey = process.env["GEMINI_API_KEY"];
-    if (!apiKey) return { ranges: [], error: "The AI key is not set up yet." };
+    if (!apiKey) return { ranges: [], suggestions: [], error: "The AI key is not set up yet." };
 
     const lineCount = data.markdown.split("\n").length;
+    const isSuggesting = data.operation === "suggest";
     const body = {
       systemInstruction: {
         parts: [
           {
-            text: annotationInstructions.replaceAll("{{LINE_COUNT}}", String(lineCount)),
+            text: annotationInstructions
+              .replaceAll("{{LINE_COUNT}}", String(lineCount))
+              .replaceAll("{{OPERATION}}", data.operation),
           },
         ],
       },
       contents: [
         {
           role: "user",
-          parts: [{ text: `What to find: ${data.prompt}\n\nDocument:\n${numberLines(data.markdown)}` }],
+          parts: [{ text: isSuggesting ? `Document:\n${numberLines(data.markdown)}` : `What to find: ${data.prompt}\n\nDocument:\n${numberLines(data.markdown)}` }],
         },
       ],
       generationConfig: {
         temperature: 0.2,
         responseMimeType: "application/json",
-        responseSchema: {
+        responseSchema: isSuggesting ? {
+          type: "object",
+          properties: {
+            suggestions: {
+              type: "array",
+              items: { type: "string" },
+              minItems: 3,
+              maxItems: 5,
+            },
+          },
+          required: ["suggestions"],
+        } : {
           type: "object",
           properties: {
             items: {
@@ -128,17 +145,30 @@ export const annotateMarkdown = createServerFn({ method: "POST" })
 
       if (!response.ok) {
         console.error("Gemini annotate failed", response.status, await response.text());
-        return { ranges: [], error: "The AI could not answer just now. Try again." };
+        return { ranges: [], suggestions: [], error: "The AI could not answer just now. Try again." };
       }
 
       const payload = (await response.json()) as {
         candidates?: { content?: { parts?: { text?: string }[] } }[];
       };
       const text = payload.candidates?.[0]?.content?.parts?.map((part) => part.text ?? "").join("") ?? "";
-      const parsed = JSON.parse(text) as { items?: RawItem[] };
-      return { ranges: sanitize(parsed.items ?? [], lineCount) };
+      const parsed = JSON.parse(text) as { items?: RawItem[]; suggestions?: unknown[] };
+      if (isSuggesting) {
+        const seen = new Set<string>();
+        const suggestions = (parsed.suggestions ?? [])
+          .map((value) => String(value).trim().split(/\s+/).slice(0, 3).join(" "))
+          .filter((value) => {
+            const key = value.toLowerCase();
+            if (!value || seen.has(key)) return false;
+            seen.add(key);
+            return true;
+          })
+          .slice(0, 5);
+        return { ranges: [], suggestions };
+      }
+      return { ranges: sanitize(parsed.items ?? [], lineCount), suggestions: [] };
     } catch (error) {
       console.error("Gemini annotate error", error);
-      return { ranges: [], error: "The AI could not answer just now. Try again." };
+      return { ranges: [], suggestions: [], error: "The AI could not answer just now. Try again." };
     }
   });
