@@ -49,12 +49,10 @@ If not, choose a better suggestion.
 
 - Return up to 3 suggestions based on the actual document.
 - Each suggestion must support at least 2–3 meaningful categories.
-- Give every suggestion a concise `label` of 2–4 words.
-- The `label` should describe the overall categorization, not a single category.
+- Give every suggestion one dead-simple `label` written as a question.
+- Every `label` must be 6–10 words long.
+- The question should describe the complete categorization request that will be sent directly to the labeling AI.
 - Make each suggestion offer a meaningfully different way to categorize the document.
-- Give every suggestion a specific `description` of no more than 12 words.
-- The description must clearly state the categories the labeling AI should identify.
-- Write the description as the complete request sent to the labeling AI.
 - Prefer document-specific categorizations over generic ones.
 - Prefer categories that appear across multiple meaningful parts of the document.
 - Avoid suggestions that would produce only one useful label.
@@ -71,16 +69,13 @@ Reply with JSON only, in exactly this shape:
 {
   "suggestions": [
     {
-      "label": "Content Roles",
-      "description": "Label content as problems, solutions, or supporting evidence"
+      "label": "Which parts are problems, solutions, or supporting evidence?"
     },
     {
-      "label": "Product Analysis",
-      "description": "Label content as features, benefits, or limitations"
+      "label": "Which sections describe features, benefits, or limitations?"
     },
     {
-      "label": "Work Status",
-      "description": "Label content as completed, in progress, or planned"
+      "label": "What work is completed, in progress, or planned?"
     }
   ]
 }
