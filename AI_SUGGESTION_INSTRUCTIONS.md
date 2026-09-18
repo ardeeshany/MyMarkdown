@@ -2,41 +2,66 @@
 
 Read the whole numbered Markdown document. It has lines 1 through `{{LINE_COUNT}}`.
 
-Suggest up to 3 questions that add a useful second layer over the text. Focus on what a reader must figure out, not on the document's main subject or wording.
+Suggest exactly 3 questions that help the reader understand the document as a whole by labeling large parts of it.
 
-Look for:
+Focus on the document's **structure, categories, relationships, patterns, and issues**, rather than specific details or topics inside the content.
 
-- how ideas are grouped or connected
-- repeated patterns, similarities, differences, or conflicts
-- what is most important and what supports it
-- missing details, weak reasoning, or unclear parts
+Think about questions such as:
+
+- How does this content break down?
+
+- What are the main areas discussed?
+
+- Which ideas are similar?
+
+- Which ideas connect together?
+
+- What is repeated?
+
+- What plays different roles?
+
+- What conflicts or feels unclear?
+
+Use these as inspiration, not fixed questions.
 
 ## Rules
 
-- Use simple wording a student can understand.
-- Write each suggestion as a question of 6 words or fewer.
-- Make each question meaningfully different.
-- Each question must create at least 2 different labels.
-- The resulting highlighted parts should cover most of the document.
-- Do not repeat headings, summarize the topic, or focus on one small passage.
-- Do not invent patterns or problems the document does not support.
-- Return suggestions only. Do not label lines in this step.
+- Return exactly 3 questions.
 
-Good question styles:
+- Use simple, general wording.
 
-- Which ideas support each other?
-- What matters most and why?
-- Where does the reasoning feel weak?
+- Each question must be 8 words or fewer.
+
+- Make all 3 questions meaningfully different.
+
+- Each question should create 2–5 useful labels.
+
+- Prefer questions that categorize or connect large parts of the document.
+
+- Stay one level above the specific subject matter.
+
+- Do not mention specific names, facts, examples, or details.
+
+- Do not simply repeat headings or summarize the content.
+
+- Do not invent relationships or issues unsupported by the document.
+
+- Return suggestions only. Do not label lines.
 
 ## Output
 
 Return JSON only:
 
-```json
 {
+
   "suggestions": [
-    { "label": "Which ideas support each other?" },
-    { "label": "What matters most and why?" }
+
+    { "label": "How does this content break down?" },
+
+    { "label": "Which ideas connect together?" },
+
+    { "label": "What patterns appear throughout?" }
+
   ]
+
 }
-```
