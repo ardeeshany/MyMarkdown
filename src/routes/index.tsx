@@ -1050,13 +1050,11 @@ function Index() {
           <h1 className="font-display text-4xl font-bold tracking-tight leading-tight sm:text-5xl">
             Markdown, beautiful for human eyes
           </h1>
-          <p className="mt-3 max-w-2xl text-sm text-muted-foreground sm:text-base">
-            Make your Markdown easier to read and understand, with a little help from AI.
+          <p className="mt-3 max-w-xl text-sm text-muted-foreground sm:text-base">
+            Make your Markdown easier to read and understand, with a little help from AI. Free and
+            Open source.
           </p>
-          <span className="mt-4 inline-flex items-center gap-1.5 rounded-md border border-muted-foreground/15 px-2.5 py-1 text-xs font-medium tracking-[0.06em] text-muted-foreground">
-            <span className="size-1.5 rounded-full bg-primary/70" aria-hidden="true" />
-            Open Source and Free
-          </span>
+
           <div className="mt-6 flex flex-wrap items-center justify-center gap-2.5">
             <Button
               type="button"
