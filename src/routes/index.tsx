@@ -1027,10 +1027,6 @@ function Index() {
         </nav>
 
         <header className="flex flex-col items-center text-center">
-          <span className="mb-4 inline-flex items-center gap-1.5 rounded-full border border-border/70 bg-card/80 px-3 py-1 text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
-            <span className="size-1.5 rounded-full bg-primary/70" aria-hidden="true" />
-            Free and Open Source
-          </span>
           <img
             src={heroImage.url}
             alt="MyMarkdown documents transforming into a polished page"
