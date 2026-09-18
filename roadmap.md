@@ -25,3 +25,4 @@
 - [x] Give AI suggestions hidden descriptions for labeling and remove the GitHub issue footer
 - [x] Rewrite the suggestion instructions around labeling lenses and cap them at 3
 - [x] Hide the Suggest labels button while labels are applied
+- [x] Update the hero headline and subtitle
