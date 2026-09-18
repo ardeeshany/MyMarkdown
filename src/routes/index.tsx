@@ -923,7 +923,7 @@ function Index() {
               {mode === "edit" ? (
                 <textarea ref={editorRef} aria-label="Markdown editor" value={markdown} onChange={(event) => setMarkdown(event.target.value)} spellCheck="false" className="min-h-[590px] w-full resize-y bg-transparent px-6 py-8 font-mono text-[13px] leading-7 outline-none placeholder:text-muted-foreground sm:px-9 sm:py-10" placeholder="# Paste your Markdown here…" />
               ) : (
-                <article ref={articleRef} className={`relative min-h-[590px] px-6 py-8 sm:px-9 sm:py-10 ${bars.length ? "sm:pr-14" : ""}`}>
+                <article ref={articleRef} className="relative min-h-[590px] px-6 py-8 sm:px-9 sm:py-10">
                   {aiRanges.length > 0 && (
                     <div className="mb-5 flex flex-wrap items-center justify-end gap-1.5 sm:mr-1">
                       {Array.from(aiRanges.reduce((map, range) => {
@@ -937,10 +937,10 @@ function Index() {
                       ))}
                     </div>
                   )}
-                  <div aria-hidden className="pointer-events-none absolute inset-y-0 right-2 hidden w-7 sm:block">
+                  <div aria-hidden className="pointer-events-none absolute inset-y-0 right-2 hidden w-1 sm:block">
                     {bars.map((bar) => (
                       <div key={bar.key} className="group absolute right-0 w-1" style={{ top: bar.top, height: bar.height, backgroundColor: bar.color }} title={bar.label}>
-                        <span className="absolute right-3 top-0 z-10 whitespace-nowrap rounded bg-popover px-1.5 py-0.5 text-[10px] font-medium opacity-0 shadow-sm ring-1 ring-border transition-opacity group-hover:opacity-100" style={{ color: bar.color }}>{bar.label}</span>
+                        <span className="absolute bottom-full right-0 z-10 mb-1 whitespace-nowrap rounded bg-popover/90 px-1.5 py-0.5 text-[10px] font-medium leading-none shadow-sm ring-1 ring-border/70 backdrop-blur-sm" style={{ color: bar.color }}>{bar.label}</span>
                       </div>
                     ))}
                   </div>
