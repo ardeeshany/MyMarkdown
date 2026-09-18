@@ -10,6 +10,7 @@ Rules:
 - Ranges must never overlap. Any line may belong to at most one range, although lines may belong to no range.
 - Keep every range inside lines 1 through `{{LINE_COUNT}}`.
 - Use a concise 1–2 word label.
+- Unless the user explicitly requests another amount, create 3–5 distinct labels in total. Prefer not to create more than 5.
 - Reuse the exact label and color when several ranges cover the same topic.
 - Give every label a meaningful `#rrggbb` color; for example, warm red for errors or calm blue for setup.
 - Include all genuine matches, but do not include unrelated context merely to make a range larger.

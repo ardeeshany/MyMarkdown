@@ -841,6 +841,11 @@ function Index() {
     setAiError("");
   };
 
+  const dismissAiError = () => {
+    setAiError("");
+    setAiPrompt("");
+  };
+
   /** Map source-line ownership proportionally into rendered blocks. */
   const measureBars = useCallback(() => {
     const container = articleRef.current;
@@ -1444,7 +1449,7 @@ function Index() {
             onScroll={updateAiBarFade}
             className={`flex min-w-0 gap-2 rounded-xl border border-border/70 bg-popover/95 px-2.5 shadow-xl backdrop-blur-xl ${aiSuggestions.length > 0 ? "flex-col items-stretch py-2" : "ai-bar-scroll h-12 items-center overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"}`}
           >
-            <div className="flex shrink-0 items-center px-0.5">
+            <div className="sticky left-0 z-20 flex shrink-0 items-center bg-popover px-0.5 pr-1">
               <img
                 src={heroImage.url}
                 alt="MyMarkdown"
@@ -1535,7 +1540,7 @@ function Index() {
                         type="button"
                         size="icon"
                         variant="ghost"
-                        onClick={() => setAiError("")}
+                        onClick={dismissAiError}
                         className="size-7 shrink-0 rounded-full text-muted-foreground"
                         aria-label="Dismiss message"
                         title="Dismiss message"

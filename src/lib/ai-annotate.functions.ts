@@ -35,9 +35,10 @@ function numberLines(markdown: string) {
  * lines; a later range starts after the last line already claimed. This is the
  * final authority even when the model returns contradictory ranges.
  */
-function sanitize(items: RawItem[], lineCount: number): AnnotationRange[] {
+function sanitize(items: RawItem[], lineCount: number, maxLabels = 5): AnnotationRange[] {
   const colorByLabel = new Map<string, string>();
   const cleaned: AnnotationRange[] = [];
+  const acceptedLabels = new Set<string>();
 
   for (const item of items) {
     const label = String(item.label ?? "")
@@ -46,6 +47,9 @@ function sanitize(items: RawItem[], lineCount: number): AnnotationRange[] {
       .slice(0, 2)
       .join(" ");
     if (!label) continue;
+    const labelKey = label.toLowerCase();
+    if (!acceptedLabels.has(labelKey) && acceptedLabels.size >= maxLabels) continue;
+    acceptedLabels.add(labelKey);
     let start = Math.trunc(Number(item.startLine));
     let end = Math.trunc(Number(item.endLine));
     if (!Number.isFinite(start) || !Number.isFinite(end)) continue;
@@ -54,9 +58,9 @@ function sanitize(items: RawItem[], lineCount: number): AnnotationRange[] {
     if (end < start) [start, end] = [end, start];
 
     const raw = String(item.color ?? "").trim();
-    const known = colorByLabel.get(label.toLowerCase());
+    const known = colorByLabel.get(labelKey);
     const color = known ?? (HEX.test(raw) ? raw : "#6366f1");
-    colorByLabel.set(label.toLowerCase(), color);
+    colorByLabel.set(labelKey, color);
 
     cleaned.push({ label, color, startLine: start, endLine: end });
   }
@@ -134,8 +138,8 @@ export const annotateMarkdown = createServerFn({ method: "POST" })
                       },
                       required: ["label"],
                     },
-                     minItems: 1,
-                     maxItems: 3,
+                    minItems: 1,
+                    maxItems: 3,
                   },
                 },
                 required: ["suggestions"],
@@ -194,7 +198,11 @@ export const annotateMarkdown = createServerFn({ method: "POST" })
         if (isSuggesting) {
           const seen = new Set<string>();
           const suggestions = (parsed.suggestions ?? [])
-            .map((value) => ({ label: String(value.label ?? "").trim().replace(/\s+/g, " ") }))
+            .map((value) => ({
+              label: String(value.label ?? "")
+                .trim()
+                .replace(/\s+/g, " "),
+            }))
             .filter((value) => {
               const key = value.label.toLowerCase();
               // Never cut a question mid-sentence: an over-long one is dropped whole.
@@ -206,7 +214,12 @@ export const annotateMarkdown = createServerFn({ method: "POST" })
             .slice(0, 3);
           return { ranges: [], suggestions };
         }
-        return { ranges: sanitize(parsed.items ?? [], lineCount), suggestions: [] };
+        const explicitlyRequestsMoreLabels =
+          /\b(?:[6-9]|[1-9]\d+)\s+(?:labels?|categories|groups)\b/i.test(data.prompt);
+        return {
+          ranges: sanitize(parsed.items ?? [], lineCount, explicitlyRequestsMoreLabels ? 12 : 5),
+          suggestions: [],
+        };
       } catch (error) {
         console.error("Gemini annotate error", error);
         return {
