@@ -410,7 +410,7 @@ function promoteRawJsonToFences(source: string) {
 
   while (i < lines.length) {
     const line = lines[i] ?? "";
-    if (!isProtected[i] && /^\s*[\{\[]/.test(line)) {
+    if (!isProtected[i] && /^\s*[{[]/.test(line)) {
       // Accumulate lines until the JSON candidate parses or we run out. Blank lines
       // are included on purpose, so a pretty-printed value with a blank line in it
       // is still recognised as one block.
@@ -421,7 +421,7 @@ function promoteRawJsonToFences(source: string) {
         if (isProtected[j]) break;
         buffer += (buffer ? "\n" : "") + (lines[j] ?? "");
         const trimmed = buffer.trim();
-        if (!/[\}\]]\s*$/.test(trimmed)) continue;
+        if (!/[}\]]\s*$/.test(trimmed)) continue;
         if (parseJsonObject(trimmed) === null) continue;
         matchedEnd = j;
         pretty = prettyJson(trimmed);
@@ -451,7 +451,7 @@ function promoteInlineJsonToFences(source: string) {
       if (isProtected[index]) return line;
       return line.replace(/`([^`\n]+)`/g, (match: string, content: string) => {
         const trimmed = content.trim();
-        if (!/^[\{\[]/.test(trimmed) || !/"[^"]+"\s*:/.test(trimmed)) return match;
+        if (!/^[{[]/.test(trimmed) || !/"[^"]+"\s*:/.test(trimmed)) return match;
         try {
           JSON.parse(trimmed);
           return `\n\n\`\`\`json\n${trimmed}\n\`\`\`\n\n`;
