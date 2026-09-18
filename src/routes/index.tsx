@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
-import { ArrowDown, ArrowRight, ArrowUp, ChevronDown, ChevronUp, ClipboardPaste, Code2, Github, ListTree, Loader2, PenLine, Wand2, X } from "lucide-react";
+import { ArrowDown, ArrowUp, ChevronDown, ChevronUp, ClipboardPaste, Code2, Github, ListTree, Loader2, PenLine, Wand2, X } from "lucide-react";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
 import { annotateMarkdown, type AnnotationRange } from "@/lib/ai-annotate.functions";
