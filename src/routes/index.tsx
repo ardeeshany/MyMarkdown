@@ -1446,7 +1446,6 @@ function Index() {
                   variant="secondary"
                   disabled={aiLoading}
                   onClick={() => {
-                    setAiPrompt(suggestion.description);
                     void findSections(suggestion.description);
                   }}
                   className="h-7 shrink-0 rounded-full px-3 text-xs"
