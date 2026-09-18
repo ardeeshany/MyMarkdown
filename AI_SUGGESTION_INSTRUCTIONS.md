@@ -68,7 +68,7 @@ Questions might explore things like:
 - Which ideas depend on each other?
 - Which parts conflict?
 - What matters most?
-- How can the main content be grouped?
+- How does the content group?
 
 These are examples of the style and level of thinking, not fixed suggestions.
 
