@@ -117,11 +117,11 @@ If not, choose a better suggestion.
 - Return up to 3 suggestions.
 - Base every suggestion on the actual document.
 - Write every suggestion as a simple reader question.
-- Keep each suggestion concise and easy to understand.
+- Keep each question at 6 words or fewer.
 - Make each suggestion a meaningfully different lens.
 - Prefer Grouping, Relationships, Importance, and Patterns/Problems.
-- Prefer suggestions that cover a large or meaningful portion of the document.
-- Prefer questions that can produce at least 2–3 meaningful groups or labels.
+- Every suggestion must produce at least 2 distinct labels — never suggest a question that highlights everything under a single label.
+- Prefer questions whose resulting labels together cover the majority of the document's text, not just a few passages.
 - Avoid reproducing headings or existing document structure.
 - Avoid generic questions when a content-specific question is possible.
 - Avoid trivial categorization that does not improve understanding.
