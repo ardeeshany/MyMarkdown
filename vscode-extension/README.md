@@ -45,6 +45,25 @@ The MyMarkdown activity-bar view lists H1, H2, and H3 headings. Select one to ju
 Heading jumps, unclosed fences, invalid JSON, and mixed bullet styles appear in the
 Problems panel as you type.
 
+### Labels
+
+Long documents hide their own shape. Ask MyMarkdown to label one and it draws coloured
+bars down the edge of the preview, each marking a stretch of the document and naming what
+it is about. Hover a bar to read its label, click it to jump to the next place that label
+appears.
+
+Run **MyMarkdown: Suggest Label Lenses** for three questions worth asking about the open
+document, or **MyMarkdown: Label Document…** to ask your own. Each answer is a *lens*, and
+a document can keep several — one showing how the content breaks down, another showing
+which parts still need work. The MyMarkdown item in the status bar switches between them.
+
+Labels use the AI you already have: a language model provider such as GitHub Copilot, or a
+command you point the extension at. **No API key is stored or sent by this extension.**
+
+Labels are saved beside your workspace, so they are still there tomorrow. Each one
+remembers the text it covers, so editing elsewhere in the document leaves it on the right
+section, and a label whose text you delete quietly disappears.
+
 ## Settings
 
 ### `mymarkdown.lint`
@@ -67,6 +86,37 @@ for Markdown files:
   "editor.formatOnSave": true
 }
 ```
+
+### `mymarkdown.labels.enabled`
+
+Default: `true`
+
+Draws label bars in the preview for documents that have them.
+
+### `mymarkdown.labels.provider`
+
+Default: `auto`
+
+Which AI to ask for labels: `languageModel` for a provider such as Copilot, `cli` for a
+command of your own, or `auto` for whichever is available.
+
+### `mymarkdown.labels.cliCommand`
+
+Default: empty
+
+The command to run when no language model provider is used. The request goes to its
+standard input and JSON is read back from its standard output:
+
+```jsonc
+"mymarkdown.labels.cliCommand": "claude -p"
+```
+
+### `mymarkdown.labels.storagePath`
+
+Default: `.mymd`
+
+The folder holding label files, mirroring each document's path. Add it to `.gitignore` to
+keep labels to yourself, or commit it to share them with everyone on the project.
 
 Settings apply immediately; no reload is needed.
 
