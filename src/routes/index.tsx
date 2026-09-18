@@ -1418,7 +1418,13 @@ function Index() {
       </div>
 
       <div className="fixed inset-x-0 bottom-3 z-40 flex justify-center px-3 sm:bottom-5">
-        <div className="relative w-[min(36rem,calc(100vw-4rem))]">
+        <div
+          className={`relative ${
+            aiSuggestions.length > 0
+              ? "w-[min(45rem,calc(100vw-4rem))]"
+              : "w-[min(36rem,calc(100vw-4rem))]"
+          }`}
+        >
           <div
             className={`rounded-xl border border-border/70 bg-popover/95 shadow-xl backdrop-blur-xl ${aiSuggestions.length > 0 ? "px-2.5 py-2" : "flex h-12 items-stretch"}`}
           >
