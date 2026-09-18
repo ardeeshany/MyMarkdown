@@ -50,3 +50,4 @@
 - [x] Rewrite the hero subtitle to mention raw Markdown and read "It's free and open source"
 - [x] Label chips cycle through their matches on click; arrows removed; logo pinned solid with fade into it
 - [x] Make the suggestion panel 25% wider while suggestions are shown
+- [x] Make the applied badge bar 25% wider so more of each label is visible
