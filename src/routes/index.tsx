@@ -1435,7 +1435,12 @@ function Index() {
       <div className="fixed inset-x-0 bottom-3 z-40 flex justify-center px-3 sm:bottom-5">
         <div className="flex h-12 max-w-[calc(100vw-1.5rem)] items-center gap-2 overflow-x-auto rounded-xl border border-border/70 bg-popover/95 px-2.5 shadow-xl backdrop-blur-xl [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           <div className="flex shrink-0 items-center px-0.5">
-            <img src={heroImage.url} alt="MyMarkdown" className="size-6 object-contain" draggable={false} />
+            <img
+              src={heroImage.url}
+              alt="MyMarkdown"
+              className="size-6 object-contain"
+              draggable={false}
+            />
           </div>
 
           {aiSuggestions.length > 0 ? (
