@@ -201,7 +201,7 @@ export const annotateMarkdown = createServerFn({ method: "POST" })
               description: String(value.description ?? "")
                 .trim()
                 .split(/\s+/)
-                .slice(0, 10)
+                .slice(0, 12)
                 .join(" "),
             }))
             .filter((value) => {

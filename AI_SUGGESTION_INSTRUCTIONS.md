@@ -1,55 +1,66 @@
 # AI Label Suggestion Instructions
 
-You analyze the whole Markdown document and suggest useful ways a reader could label its content.
+You analyze the whole Markdown document and suggest useful ways to categorize and label its content.
 
-The main goal is to help the reader understand the document more deeply by revealing patterns, distinctions, relationships, issues, or important information that may be difficult to notice through normal reading alone.
+The main goal is to help the reader scan and understand the Markdown more easily by grouping meaningful sections or passages into clear visual categories.
 
 The numbered document has lines 1 through `{{LINE_COUNT}}`.
 
 ## How to Think About Suggestions
 
-Each suggestion should provide a useful lens for exploring and understanding the document.
+Each suggestion should provide a useful way to categorize the document.
 
 Consider lenses such as:
 
-- **Structure** — reveal the different roles information plays.
-- **Distinctions** — separate meaningfully different types of information.
-- **Relationships** — reveal connections between ideas or sections.
-- **Attention** — surface information that deserves closer attention.
-- **Patterns** — reveal recurring themes, behaviors, or signals.
-- **Issues** — surface errors, conflicts, contradictions, inconsistencies, or duplication.
-- **Content-specific insight** — discover useful lenses unique to this document.
+- **Content types** — group sections by what kind of information they contain.
+- **Roles** — group information by the role it plays in the document.
+- **Topics** — separate meaningful subjects or themes.
+- **Stages** — distinguish steps, phases, or parts of a process.
+- **Perspectives** — separate different viewpoints, positions, or sides.
+- **Status** — distinguish states, progress, priority, or outcomes.
+- **Issues** — separate errors, conflicts, inconsistencies, duplication, or other problems.
+- **Content-specific categories** — find a categorization particularly useful for this document.
 
 These are ways of thinking, not fixed categories.
 
-Choose only what is useful for the actual document. Do not force these categories onto the content, and freely discover a better lens when appropriate.
+Choose categories based on the actual content. Do not force the document into these lenses.
 
 ## Main Goal
 
-Every suggestion should help the reader discover or understand something useful that may not be obvious from simply reading the document.
+Every suggestion should create a meaningful visual categorization of the Markdown.
 
-Prefer suggestions that make meaningful patterns, differences, relationships, issues, or important information easier to see.
+A good suggestion should:
 
-Avoid suggestions that merely organize or summarize the document without adding understanding.
+- Make the document faster to scan.
+- Make its structure or meaning easier to understand.
+- Divide relevant content into at least 2–3 meaningful categories.
+- Produce categories that are clearly different from one another.
+- Apply to enough content that seeing the labels across the document is useful.
 
-Before returning a suggestion, ask:
+Think about the result visually.
 
-"If these labels appeared visually across the document, would the reader notice or understand something they might otherwise miss?"
+Ask:
+
+"If these categories were shown as colored labels throughout the Markdown, would they make the document easier to scan and understand?"
 
 If not, choose a better suggestion.
 
 ## Rules
 
 - Return up to 3 suggestions based on the actual document.
+- Each suggestion must support at least 2–3 meaningful categories.
 - Give every suggestion a concise `label` of 2–4 words.
-- Make each suggestion offer a meaningfully different lens.
-- Give every suggestion a specific `description` of no more than 10 words.
-- Write the description as the complete labeling request sent to the labeling AI.
-- Prefer document-specific suggestions over generic ones.
-- Suggest labels likely to match at least one meaningful passage.
-- Prefer suggestions that become useful when visualized across the document.
-- Avoid vague suggestions such as "Important," "Interesting," or "Key Points."
-- Do not invent patterns, relationships, problems, or distinctions unsupported by the document.
+- The `label` should describe the overall categorization, not a single category.
+- Make each suggestion offer a meaningfully different way to categorize the document.
+- Give every suggestion a specific `description` of no more than 12 words.
+- The description must clearly state the categories the labeling AI should identify.
+- Write the description as the complete request sent to the labeling AI.
+- Prefer document-specific categorizations over generic ones.
+- Prefer categories that appear across multiple meaningful parts of the document.
+- Avoid suggestions that would produce only one useful label.
+- Avoid categories that are too similar to each other.
+- Avoid vague categorizations such as "Important vs Other" or "Key Points."
+- Do not invent categories unsupported by the document.
 - Do not label the document or return line ranges in this operation.
 
 ## Output Format
@@ -60,21 +71,17 @@ Reply with JSON only, in exactly this shape:
 {
   "suggestions": [
     {
-      "label": "Claims and Evidence",
-      "description": "Label claims and evidence that supports them"
+      "label": "Content Roles",
+      "description": "Label content as problems, solutions, or supporting evidence"
     },
     {
-      "label": "Conflicts and Issues",
-      "description": "Label contradictions, inconsistencies, errors, and conflicts"
+      "label": "Product Analysis",
+      "description": "Label content as features, benefits, or limitations"
     },
     {
-      "label": "Recurring Patterns",
-      "description": "Label meaningful patterns repeated across the document"
+      "label": "Work Status",
+      "description": "Label content as completed, in progress, or planned"
     }
   ]
 }
 ```
-
-- `suggestions`: up to 3 unique suggestions based on the document.
-- `label`: 2–4 words shown to the user.
-- `description`: the hidden labeling request used when the suggestion is selected.
