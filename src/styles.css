@@ -191,6 +191,46 @@
   background: color-mix(in oklab, var(--background) 18%, transparent);
 }
 
+/* Very subtle soft-focus that drifts across the page while analyzing. */
+.preview-scan-blur {
+  backdrop-filter: blur(1.6px);
+  -webkit-backdrop-filter: blur(1.6px);
+  mask-image: linear-gradient(
+    to bottom,
+    transparent,
+    black 22%,
+    black 78%,
+    transparent
+  );
+  -webkit-mask-image: linear-gradient(
+    to bottom,
+    transparent,
+    black 22%,
+    black 78%,
+    transparent
+  );
+  mask-size: 100% 45%;
+  -webkit-mask-size: 100% 45%;
+  mask-repeat: no-repeat;
+  -webkit-mask-repeat: no-repeat;
+  animation: preview-scan-blur 2.4s ease-in-out infinite alternate;
+}
+
+@keyframes preview-scan-blur {
+  from { mask-position: 0% 0%; -webkit-mask-position: 0% 0%; }
+  to { mask-position: 0% 100%; -webkit-mask-position: 0% 100%; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .preview-scan-blur {
+    animation: none;
+    mask-image: none;
+    -webkit-mask-image: none;
+    backdrop-filter: blur(0.8px);
+    -webkit-backdrop-filter: blur(0.8px);
+  }
+}
+
 .preview-scan-line {
   top: -6rem;
   background: linear-gradient(

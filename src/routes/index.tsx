@@ -955,6 +955,7 @@ function Index() {
                   )}
                   {aiLoading && (
                     <div className="preview-scan pointer-events-none absolute inset-0 z-20 overflow-hidden" aria-label="Analyzing document">
+                      <div className="preview-scan-blur absolute inset-0" />
                       <div className="preview-scan-line absolute inset-x-0 h-24" />
                     </div>
                   )}
