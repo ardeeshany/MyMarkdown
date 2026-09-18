@@ -1051,8 +1051,8 @@ function Index() {
             Markdown, beautiful for human eyes
           </h1>
           <p className="mt-3 max-w-xl text-sm text-muted-foreground sm:text-base">
-            Make your Markdown easier to read and understand, with a little help from AI. Free and
-            Open source.
+            Make your raw Markdown easier to read and understand, with a little help from AI. It's
+            free and open source.
           </p>
 
           <div className="mt-6 flex flex-wrap items-center justify-center gap-2.5">
