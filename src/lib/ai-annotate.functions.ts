@@ -1,4 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
+import annotationInstructions from "../../AI_INSTRUCTIONS.md?raw";
 
 export type AnnotationRange = {
   label: string;
@@ -79,15 +80,7 @@ export const annotateMarkdown = createServerFn({ method: "POST" })
       systemInstruction: {
         parts: [
           {
-            text: [
-              "You label parts of a Markdown document.",
-              "The user describes what to look for. Find every matching chunk.",
-              "Each chunk is a contiguous range of line numbers from the numbered document.",
-              "Chunks must never overlap and must stay inside 1.." + lineCount + ".",
-              "A label is 1-2 words. The same topic reuses the exact same label.",
-              "Give each label a hex colour that suits its meaning (for example warm reds for errors, calm blues for setup).",
-              "Return no items when nothing matches. Never invent line numbers.",
-            ].join(" "),
+            text: annotationInstructions.replaceAll("{{LINE_COUNT}}", String(lineCount)),
           },
         ],
       },
