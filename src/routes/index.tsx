@@ -780,6 +780,8 @@ function Index() {
   const [aiError, setAiError] = useState("");
   const [bars, setBars] = useState<GutterBar[]>([]);
   const articleRef = useRef<HTMLDivElement>(null);
+  const aiBarRef = useRef<HTMLDivElement>(null);
+  const [aiBarFade, setAiBarFade] = useState<"none" | "left" | "right" | "both">("none");
   const runAnnotate = useServerFn(annotateMarkdown);
 
   // Line numbers stop matching the moment the document changes.
@@ -837,16 +839,6 @@ function Index() {
     setAiSuggestions([]);
     setHiddenLabels(new Set());
     setAiError("");
-  };
-
-  const toggleLabel = (label: string) => {
-    const key = label.toLowerCase();
-    setHiddenLabels((current) => {
-      const next = new Set(current);
-      if (next.has(key)) next.delete(key);
-      else next.add(key);
-      return next;
-    });
   };
 
   /** Map source-line ownership proportionally into rendered blocks. */
@@ -922,6 +914,23 @@ function Index() {
       behavior: reduceMotion ? "auto" : "smooth",
     });
   };
+
+  const updateAiBarFade = useCallback(() => {
+    const bar = aiBarRef.current;
+    if (!bar || bar.scrollWidth <= bar.clientWidth + 1) {
+      setAiBarFade("none");
+      return;
+    }
+    const hasLeft = bar.scrollLeft > 2;
+    const hasRight = bar.scrollLeft + bar.clientWidth < bar.scrollWidth - 2;
+    setAiBarFade(hasLeft && hasRight ? "both" : hasLeft ? "left" : hasRight ? "right" : "none");
+  }, []);
+
+  useLayoutEffect(() => {
+    updateAiBarFade();
+    window.addEventListener("resize", updateAiBarFade);
+    return () => window.removeEventListener("resize", updateAiBarFade);
+  }, [aiRanges, aiSuggestions, updateAiBarFade]);
 
   const scrollToNextMatch = (barKey: string, label: string) => {
     const currentIndex = bars.findIndex((item) => item.key === barKey);
@@ -1428,144 +1437,166 @@ function Index() {
       </div>
 
       <div className="fixed inset-x-0 bottom-3 z-40 flex justify-center px-3 sm:bottom-5">
-        <div className="flex w-[min(36rem,calc(100vw-1.5rem))] items-center gap-2">
-        <div className={`flex min-w-0 flex-1 gap-2 rounded-xl border border-border/70 bg-popover/95 px-2.5 shadow-xl backdrop-blur-xl ${aiSuggestions.length > 0 ? "flex-col items-stretch py-2" : "ai-bar-scroll h-12 items-center overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"}`}>
-          <div className="flex shrink-0 items-center px-0.5">
-            <img
-              src={heroImage.url}
-              alt="MyMarkdown"
-              className="size-6 object-contain"
-              draggable={false}
-            />
-          </div>
-
-          {aiSuggestions.length > 0 ? (
-            <div className="flex flex-col gap-1">
-              <div className="flex items-center px-1">
-                <span className="text-xs text-muted-foreground">Suggested</span>
-              </div>
-              {aiSuggestions.map((suggestion) => (
-                <Button
-                  key={suggestion.label}
-                  type="button"
-                  variant="ghost"
-                  disabled={aiLoading}
-                  onClick={() => void findSections(suggestion.label)}
-                  className="h-auto justify-start whitespace-normal px-3 py-2 text-left text-xs leading-5"
-                >
-                  {suggestion.label}
-                </Button>
-              ))}
+        <div className="relative w-[min(36rem,calc(100vw-4rem))]">
+          <div
+            ref={aiBarRef}
+            data-fade={aiBarFade}
+            onScroll={updateAiBarFade}
+            className={`flex min-w-0 gap-2 rounded-xl border border-border/70 bg-popover/95 px-2.5 shadow-xl backdrop-blur-xl ${aiSuggestions.length > 0 ? "flex-col items-stretch py-2" : "ai-bar-scroll h-12 items-center overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"}`}
+          >
+            <div className="flex shrink-0 items-center px-0.5">
+              <img
+                src={heroImage.url}
+                alt="MyMarkdown"
+                className="size-6 object-contain"
+                draggable={false}
+              />
             </div>
-          ) : aiRanges.length > 0 ? (
-            <>
-              {Array.from(
-                aiRanges.reduce((map, range) => {
-                  const entry = map.get(range.label);
-                  map.set(range.label, { color: range.color, count: (entry?.count ?? 0) + 1 });
-                  return map;
-                }, new Map<string, { color: string; count: number }>()),
-              ).map(([label, meta]) => {
-                const hidden = hiddenLabels.has(label.toLowerCase());
-                return (
+
+            {aiSuggestions.length > 0 ? (
+              <div className="flex flex-col gap-1">
+                <div className="flex items-center justify-between gap-3 px-1">
+                  <span className="text-xs text-muted-foreground">Suggested</span>
                   <Button
-                    key={label}
                     type="button"
-                    size="sm"
-                    variant="outline"
-                    onClick={() => toggleLabel(label)}
-                    aria-pressed={!hidden}
-                    className={`h-7 shrink-0 rounded-full px-2.5 text-xs font-medium transition-opacity ${hidden ? "opacity-40 grayscale" : ""}`}
-                    style={{
-                      borderColor: `${meta.color}66`,
-                      color: meta.color,
-                      backgroundColor: `${meta.color}12`,
-                    }}
+                    size="icon"
+                    variant="ghost"
+                    onClick={clearAnnotations}
+                    className="size-6 rounded-full text-muted-foreground"
+                    aria-label="Close suggestions"
+                    title="Close suggestions"
                   >
-                    <span className="size-2 rounded-full" style={{ backgroundColor: meta.color }} />
-                    {label} <span className="opacity-60">· {meta.count}</span>
+                    <X className="size-3.5" />
                   </Button>
-                );
-              })}
-            </>
-          ) : (
-            <>
-              <form
-                onSubmit={(event) => {
-                  event.preventDefault();
-                  void findSections();
-                }}
-                className="flex min-w-0 flex-1 items-center gap-1"
-              >
-                {aiError ? (
-                  <>
-                    <span className="min-w-0 flex-1 truncate px-1 text-xs text-muted-foreground" title={aiError}>
-                      {aiError}
-                    </span>
+                </div>
+                {aiSuggestions.map((suggestion) => (
+                  <Button
+                    key={suggestion.label}
+                    type="button"
+                    variant="ghost"
+                    disabled={aiLoading}
+                    onClick={() => void findSections(suggestion.label)}
+                    className="h-auto justify-start whitespace-normal px-3 py-2 text-left text-xs leading-5"
+                  >
+                    {suggestion.label}
+                  </Button>
+                ))}
+              </div>
+            ) : aiRanges.length > 0 ? (
+              <>
+                {Array.from(
+                  aiRanges.reduce((map, range) => {
+                    const entry = map.get(range.label);
+                    map.set(range.label, { color: range.color, count: (entry?.count ?? 0) + 1 });
+                    return map;
+                  }, new Map<string, { color: string; count: number }>()),
+                ).map(([label, meta]) => {
+                  return (
                     <Button
+                      key={label}
                       type="button"
-                      size="icon"
-                      variant="ghost"
-                      onClick={() => setAiError("")}
-                      className="size-7 shrink-0 rounded-full text-muted-foreground"
-                      aria-label="Dismiss message"
-                      title="Dismiss message"
+                      size="sm"
+                      variant="outline"
+                      onClick={() => scrollToLabel(label)}
+                      className="h-7 shrink-0 rounded-full px-2.5 text-xs font-medium"
+                      style={{
+                        borderColor: `${meta.color}66`,
+                        color: meta.color,
+                        backgroundColor: `${meta.color}12`,
+                      }}
                     >
-                      <X className="size-3.5" />
+                      <span
+                        className="size-2 rounded-full"
+                        style={{ backgroundColor: meta.color }}
+                      />
+                      {label} <span className="opacity-60">· {meta.count}</span>
                     </Button>
-                  </>
-                ) : (
-                  <>
-                    <input
-                      value={aiPrompt}
-                      onChange={(event) => setAiPrompt(event.target.value)}
-                      aria-label="Ask AI to label this document"
-                      placeholder="Ask AI to label…"
-                      className="h-8 min-w-0 flex-1 bg-transparent px-1 text-xs outline-none placeholder:text-muted-foreground/50"
-                    />
-                    <Button
-                      type="submit"
-                      size="icon"
-                      variant="ghost"
-                      disabled={aiLoading || !aiPrompt.trim()}
-                      className="size-7 shrink-0 rounded-full"
-                      aria-label="Label document"
-                      title="Label document"
-                    >
-                      {aiLoading ? (
-                        <Loader2 className="size-3.5 animate-spin" />
-                      ) : (
-                        <ArrowUp className="size-3.5" />
-                      )}
-                    </Button>
-                  </>
-                )}
-              </form>
-              <span className="h-5 w-px shrink-0 bg-border" />
-              <Button
-                type="button"
-                size="sm"
-                variant="default"
-                disabled={aiLoading}
-                onClick={() => void suggestLabels()}
-                className="h-8 shrink-0 px-3 text-xs"
-              >
-                Suggest labels
-              </Button>
-            </>
+                  );
+                })}
+              </>
+            ) : (
+              <>
+                <form
+                  onSubmit={(event) => {
+                    event.preventDefault();
+                    void findSections();
+                  }}
+                  className="flex min-w-0 flex-1 items-center gap-1"
+                >
+                  {aiError ? (
+                    <>
+                      <span
+                        className="min-w-0 flex-1 truncate px-1 text-xs text-muted-foreground"
+                        title={aiError}
+                      >
+                        {aiError}
+                      </span>
+                      <Button
+                        type="button"
+                        size="icon"
+                        variant="ghost"
+                        onClick={() => setAiError("")}
+                        className="size-7 shrink-0 rounded-full text-muted-foreground"
+                        aria-label="Dismiss message"
+                        title="Dismiss message"
+                      >
+                        <X className="size-3.5" />
+                      </Button>
+                    </>
+                  ) : (
+                    <>
+                      <input
+                        value={aiPrompt}
+                        onChange={(event) => setAiPrompt(event.target.value)}
+                        aria-label="Ask AI to label this document"
+                        placeholder="Ask AI to label…"
+                        className="h-8 min-w-0 flex-1 bg-transparent px-1 text-xs outline-none placeholder:text-muted-foreground/50"
+                      />
+                      <Button
+                        type="submit"
+                        size="icon"
+                        variant="ghost"
+                        disabled={aiLoading || !aiPrompt.trim()}
+                        className="size-7 shrink-0 rounded-full"
+                        aria-label="Label document"
+                        title="Label document"
+                      >
+                        {aiLoading ? (
+                          <Loader2 className="size-3.5 animate-spin" />
+                        ) : (
+                          <ArrowUp className="size-3.5" />
+                        )}
+                      </Button>
+                    </>
+                  )}
+                </form>
+                <span className="h-5 w-px shrink-0 bg-border" />
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="default"
+                  disabled={aiLoading}
+                  onClick={() => void suggestLabels()}
+                  className="h-8 shrink-0 px-3 text-xs"
+                >
+                  Suggest labels
+                </Button>
+              </>
+            )}
+          </div>
+          {aiRanges.length > 0 && (
+            <Button
+              type="button"
+              size="icon"
+              variant="ghost"
+              onClick={clearAnnotations}
+              className="absolute left-full top-1/2 ml-2 size-8 -translate-y-1/2 rounded-full bg-popover/95 text-muted-foreground shadow-lg ring-1 ring-border/70 backdrop-blur-xl"
+              aria-label="Clear AI labels"
+              title="Clear AI labels"
+            >
+              <X className="size-4" />
+            </Button>
           )}
-        </div>
-        <Button
-          type="button"
-          size="icon"
-          variant="ghost"
-          onClick={clearAnnotations}
-          className="size-8 shrink-0 rounded-full bg-popover/95 text-muted-foreground shadow-lg ring-1 ring-border/70 backdrop-blur-xl"
-          aria-label="Clear AI labels"
-          title="Clear AI labels"
-        >
-          <X className="size-4" />
-        </Button>
         </div>
       </div>
 
