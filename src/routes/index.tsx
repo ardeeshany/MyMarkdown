@@ -1425,7 +1425,7 @@ function Index() {
       </div>
 
       <div className="fixed inset-x-0 bottom-3 z-40 flex justify-center px-3 sm:bottom-5">
-        <div className="flex h-12 max-w-[calc(100vw-1.5rem)] items-center gap-2 overflow-x-auto rounded-xl border border-border/70 bg-popover/95 px-2.5 shadow-xl backdrop-blur-xl [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        <div className={`flex max-w-[calc(100vw-1.5rem)] gap-2 rounded-xl border border-border/70 bg-popover/95 px-2.5 shadow-xl backdrop-blur-xl ${aiSuggestions.length > 0 ? "min-w-72 flex-col items-stretch py-2" : "h-12 items-center overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"}`}>
           <div className="flex shrink-0 items-center px-0.5">
             <img
               src={heroImage.url}
@@ -1436,35 +1436,34 @@ function Index() {
           </div>
 
           {aiSuggestions.length > 0 ? (
-            <>
-              <span className="shrink-0 text-xs text-muted-foreground">Suggested:</span>
+            <div className="flex flex-col gap-1">
+              <div className="flex items-center justify-between gap-3 px-1">
+                <span className="text-xs text-muted-foreground">Suggested</span>
+                <Button
+                  type="button"
+                  size="icon"
+                  variant="ghost"
+                  onClick={clearAnnotations}
+                  className="size-6 rounded-full text-muted-foreground"
+                  aria-label="Close suggestions"
+                  title="Close suggestions"
+                >
+                  <X className="size-3.5" />
+                </Button>
+              </div>
               {aiSuggestions.map((suggestion) => (
                 <Button
                   key={suggestion.label}
                   type="button"
-                  size="sm"
-                  variant="secondary"
+                  variant="ghost"
                   disabled={aiLoading}
-                  onClick={() => {
-                    void findSections(suggestion.description);
-                  }}
-                  className="h-7 shrink-0 rounded-full px-3 text-xs"
+                  onClick={() => void findSections(suggestion.label)}
+                  className="h-auto justify-start whitespace-normal px-3 py-2 text-left text-xs leading-5"
                 >
                   {suggestion.label}
                 </Button>
               ))}
-              <Button
-                type="button"
-                size="icon"
-                variant="ghost"
-                onClick={clearAnnotations}
-                className="size-7 shrink-0 rounded-full text-muted-foreground"
-                aria-label="Close suggestions"
-                title="Close suggestions"
-              >
-                <X className="size-3.5" />
-              </Button>
-            </>
+            </div>
           ) : aiRanges.length > 0 ? (
             <>
               {Array.from(
@@ -1516,28 +1515,49 @@ function Index() {
                 }}
                 className="flex min-w-44 items-center gap-1 sm:min-w-72"
               >
-                <input
-                  value={aiPrompt}
-                  onChange={(event) => setAiPrompt(event.target.value)}
-                  aria-label="Ask AI to label this document"
-                  placeholder="Ask AI to label…"
-                  className="h-8 min-w-0 flex-1 bg-transparent px-1 text-xs outline-none placeholder:text-muted-foreground"
-                />
-                <Button
-                  type="submit"
-                  size="icon"
-                  variant="ghost"
-                  disabled={aiLoading || !aiPrompt.trim()}
-                  className="size-7 shrink-0 rounded-full"
-                  aria-label="Label document"
-                  title="Label document"
-                >
-                  {aiLoading ? (
-                    <Loader2 className="size-3.5 animate-spin" />
-                  ) : (
-                    <ArrowUp className="size-3.5" />
-                  )}
-                </Button>
+                {aiError ? (
+                  <>
+                    <span className="min-w-0 flex-1 truncate px-1 text-xs text-muted-foreground" title={aiError}>
+                      {aiError}
+                    </span>
+                    <Button
+                      type="button"
+                      size="icon"
+                      variant="ghost"
+                      onClick={() => setAiError("")}
+                      className="size-7 shrink-0 rounded-full text-muted-foreground"
+                      aria-label="Dismiss message"
+                      title="Dismiss message"
+                    >
+                      <X className="size-3.5" />
+                    </Button>
+                  </>
+                ) : (
+                  <>
+                    <input
+                      value={aiPrompt}
+                      onChange={(event) => setAiPrompt(event.target.value)}
+                      aria-label="Ask AI to label this document"
+                      placeholder="Ask AI to label…"
+                      className="h-8 min-w-0 flex-1 bg-transparent px-1 text-xs outline-none placeholder:text-muted-foreground"
+                    />
+                    <Button
+                      type="submit"
+                      size="icon"
+                      variant="ghost"
+                      disabled={aiLoading || !aiPrompt.trim()}
+                      className="size-7 shrink-0 rounded-full"
+                      aria-label="Label document"
+                      title="Label document"
+                    >
+                      {aiLoading ? (
+                        <Loader2 className="size-3.5 animate-spin" />
+                      ) : (
+                        <ArrowUp className="size-3.5" />
+                      )}
+                    </Button>
+                  </>
+                )}
               </form>
               <span className="h-5 w-px shrink-0 bg-border" />
               <Button
@@ -1551,15 +1571,6 @@ function Index() {
                 Suggest labels
               </Button>
             </>
-          )}
-
-          {aiError && (
-            <span
-              className="max-w-52 shrink-0 truncate px-1 text-xs text-destructive"
-              title={aiError}
-            >
-              {aiError}
-            </span>
           )}
         </div>
       </div>

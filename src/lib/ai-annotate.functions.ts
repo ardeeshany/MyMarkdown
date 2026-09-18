@@ -11,7 +11,6 @@ export type AnnotationRange = {
 
 export type LabelSuggestion = {
   label: string;
-  description: string;
 };
 
 type AnnotationOperation = "label" | "suggest";
@@ -132,9 +131,8 @@ export const annotateMarkdown = createServerFn({ method: "POST" })
                       type: "object",
                       properties: {
                         label: { type: "string" },
-                        description: { type: "string" },
                       },
-                      required: ["label", "description"],
+                      required: ["label"],
                     },
                      minItems: 1,
                      maxItems: 3,
@@ -191,22 +189,18 @@ export const annotateMarkdown = createServerFn({ method: "POST" })
           payload.candidates?.[0]?.content?.parts?.map((part) => part.text ?? "").join("") ?? "";
         const parsed = JSON.parse(text) as {
           items?: RawItem[];
-          suggestions?: { label?: unknown; description?: unknown }[];
+          suggestions?: { label?: unknown }[];
         };
         if (isSuggesting) {
           const seen = new Set<string>();
           const suggestions = (parsed.suggestions ?? [])
             .map((value) => ({
-              label: String(value.label ?? "").trim().split(/\s+/).slice(0, 4).join(" "),
-              description: String(value.description ?? "")
-                .trim()
-                .split(/\s+/)
-                .slice(0, 12)
-                .join(" "),
+              label: String(value.label ?? "").trim().split(/\s+/).slice(0, 10).join(" "),
             }))
             .filter((value) => {
               const key = value.label.toLowerCase();
-              if (!value.label || !value.description || seen.has(key)) return false;
+              const wordCount = value.label.split(/\s+/).length;
+              if (!value.label || wordCount < 6 || seen.has(key)) return false;
               seen.add(key);
               return true;
             })
