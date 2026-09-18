@@ -187,6 +187,32 @@
   box-shadow: 0 0 0 4px color-mix(in oklab, var(--primary) 14%, transparent);
 }
 
+.preview-scan {
+  background: color-mix(in oklab, var(--background) 18%, transparent);
+}
+
+.preview-scan-line {
+  top: -6rem;
+  background: linear-gradient(
+    to bottom,
+    transparent,
+    color-mix(in oklab, var(--primary) 7%, transparent) 35%,
+    color-mix(in oklab, var(--primary) 22%, transparent) 50%,
+    color-mix(in oklab, var(--primary) 7%, transparent) 65%,
+    transparent
+  );
+  animation: preview-scan 1.65s ease-in-out infinite;
+}
+
+@keyframes preview-scan {
+  from { transform: translateY(0); }
+  to { transform: translateY(calc(590px + 12rem)); }
+}
+
 @media (prefers-reduced-motion: no-preference) {
   button, textarea { transition: color 180ms ease, background-color 180ms ease, box-shadow 180ms ease, transform 180ms ease; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .preview-scan-line { animation: none; top: 0; height: 100%; }
 }

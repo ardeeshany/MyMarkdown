@@ -16,3 +16,4 @@
 - [x] Improve checked task visibility and separate consecutive alert boxes
 - [x] Use the supplied artwork as the VS Code Marketplace icon and keep its size checked
 - [x] Compact the website AI controls and guarantee disjoint annotation markers
+- [x] Move label clearing beside the chips, add next-match arrows, and show a full-preview AI scan
