@@ -6,6 +6,10 @@ Suggest exactly 3 questions that help the reader understand the document as a wh
 
 Focus on the document's **structure, categories, relationships, patterns, and issues**, rather than specific details or topics inside the content.
 
+Each question should help the reader see something they would otherwise have to figure out by reading and connecting the content themselves.
+
+One good question can reveal a few meaningful categories that organize a large part of the content.
+
 Think about questions such as:
 
 - How does this content break down?
@@ -34,7 +38,7 @@ Use these as inspiration, not fixed questions.
 
 - Make all 3 questions meaningfully different.
 
-- Each question should create 2–5 useful labels.
+- Each question should usually create 3–5 useful labels, and preferably no more unless the user explicitly asks.
 
 - Prefer questions that categorize or connect large parts of the document.
 
@@ -47,6 +51,12 @@ Use these as inspiration, not fixed questions.
 - Do not invent relationships or issues unsupported by the document.
 
 - Return suggestions only. Do not label lines.
+
+## Add Information, Don't Repeat It
+
+Do not suggest labels for information already obvious from headings, formatting, or nearby text.
+
+For example, labeling a section titled "Architecture" as `Architecture` adds little value. Connecting several scattered chunks that relate to the same architectural idea can add significant value.
 
 ## Output
 
