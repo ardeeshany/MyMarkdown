@@ -1428,7 +1428,7 @@ function Index() {
       </div>
 
       <div className="fixed inset-x-0 bottom-3 z-40 flex justify-center px-3 sm:bottom-5">
-        <div className={`flex max-w-[calc(100vw-1.5rem)] gap-2 rounded-xl border border-border/70 bg-popover/95 px-2.5 shadow-xl backdrop-blur-xl ${aiSuggestions.length > 0 ? "min-w-72 flex-col items-stretch py-2" : "h-12 items-center overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"}`}>
+        <div className={`flex w-[min(30rem,calc(100vw-1.5rem))] gap-2 rounded-xl border border-border/70 bg-popover/95 px-2.5 shadow-xl backdrop-blur-xl ${aiSuggestions.length > 0 ? "flex-col items-stretch py-2" : "h-12 items-center overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"}`}>
           <div className="flex shrink-0 items-center px-0.5">
             <img
               src={heroImage.url}
@@ -1516,7 +1516,7 @@ function Index() {
                   event.preventDefault();
                   void findSections();
                 }}
-                className="flex min-w-44 items-center gap-1 sm:min-w-72"
+                className="flex min-w-0 flex-1 items-center gap-1"
               >
                 {aiError ? (
                   <>

@@ -40,3 +40,4 @@
 - [x] Show the hero tag as "Open Source and Free" in natural lettering
 - [x] Lighten the AI input placeholder text
 - [x] Cap suggestion questions at six words, require multi-label results, and favor majority document coverage
+- [x] Simplify suggestion guidance, use student-friendly semantic questions, and keep the AI panel width stable
