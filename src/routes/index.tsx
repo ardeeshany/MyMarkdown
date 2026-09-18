@@ -999,7 +999,7 @@ function Index() {
   };
 
   return (
-    <main className="relative min-h-screen overflow-x-clip bg-background px-5 pb-32 pt-8 font-ui text-foreground sm:px-8 sm:pt-10">
+    <main className="relative min-h-screen overflow-x-clip bg-background px-5 pb-32 pt-12 font-ui text-foreground sm:px-8 sm:pt-10">
       <div className="pointer-events-none fixed -right-32 -top-32 size-[34rem] rounded-full bg-primary/15 blur-[130px]" />
       <div className="pointer-events-none fixed -bottom-40 -left-32 size-[30rem] rounded-full bg-heading-two/12 blur-[130px]" />
 
