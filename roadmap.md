@@ -31,3 +31,4 @@
 - [x] Rewrite suggestion instructions around visual categorization and allow 12-word descriptions
 - [x] Return the hero title to the Fraunces display font
 - [x] Simplify AI suggestions into stacked question prompts and place dismissible feedback inside the ask field
+- [x] Rewrite suggestion instructions around reader questions and a semantic second layer over the document
