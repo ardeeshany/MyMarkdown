@@ -38,3 +38,4 @@
 - [x] Lighten the Open Source badge border
 - [x] Lighten the Open Source tag border and add Free to the wording
 - [x] Show the hero tag as "Open Source and Free" in natural lettering
+- [x] Lighten the AI input placeholder text
