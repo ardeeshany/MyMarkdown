@@ -195,14 +195,7 @@
 }
 
 .ai-bar-scroll[data-fade="left"] {
-  mask-image: linear-gradient(
-    to right,
-    black 0,
-    black 2.35rem,
-    transparent 2.4rem,
-    black 3.05rem,
-    black 100%
-  );
+  mask-image: linear-gradient(to right, transparent, black 0.85rem);
 }
 
 .ai-bar-scroll[data-fade="right"] {
@@ -212,11 +205,9 @@
 .ai-bar-scroll[data-fade="both"] {
   mask-image: linear-gradient(
     to right,
-    black 0,
-    black 2.35rem,
-    transparent 2.4rem,
-    black 3.05rem,
-    black calc(100% - 0.65rem),
+    transparent,
+    black 0.85rem,
+    black calc(100% - 0.85rem),
     transparent
   );
 }

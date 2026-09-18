@@ -1,7 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import {
-  ArrowDown,
   ArrowUp,
   ChevronDown,
   ChevronUp,
@@ -757,7 +756,6 @@ type GutterBar = {
   color: string;
   top: number;
   height: number;
-  hasNext: boolean;
 };
 
 function Index() {
@@ -856,8 +854,6 @@ function Index() {
     const blocks = Array.from(container.querySelectorAll<HTMLElement>("[data-line]"));
     const base = container.getBoundingClientRect().top;
     const next: GutterBar[] = [];
-    const lastIndexByLabel = new Map<string, number>();
-    aiRanges.forEach((range, index) => lastIndexByLabel.set(range.label.toLowerCase(), index));
     aiRanges.forEach((range, index) => {
       if (hiddenLabels.has(range.label.toLowerCase())) return;
       let top = Infinity;
@@ -884,7 +880,6 @@ function Index() {
         color: range.color,
         top,
         height: Math.max(4, bottom - top),
-        hasNext: lastIndexByLabel.get(range.label.toLowerCase()) !== index,
       });
     });
     setBars(next);
@@ -909,10 +904,20 @@ function Index() {
     };
   }, [measureBars, mode, previewMarkdown]);
 
+  const labelCursorRef = useRef(new Map<string, number>());
+
+  /** Each click on a label chip jumps to its next match, looping after the last. */
   const scrollToLabel = (label: string) => {
-    const bar = bars.find((item) => item.label === label);
+    const matches = bars.filter(
+      (item) => item.label.toLowerCase() === label.toLowerCase(),
+    );
     const container = articleRef.current;
-    if (!bar || !container) return;
+    if (!matches.length || !container) return;
+    const cursors = labelCursorRef.current;
+    const current = cursors.get(label.toLowerCase()) ?? -1;
+    const nextIndex = (current + 1) % matches.length;
+    cursors.set(label.toLowerCase(), nextIndex);
+    const bar = matches[nextIndex]!;
     const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     window.scrollTo({
       top: window.scrollY + container.getBoundingClientRect().top + bar.top - 90,
@@ -936,20 +941,6 @@ function Index() {
     window.addEventListener("resize", updateAiBarFade);
     return () => window.removeEventListener("resize", updateAiBarFade);
   }, [aiRanges, aiSuggestions, updateAiBarFade]);
-
-  const scrollToNextMatch = (barKey: string, label: string) => {
-    const currentIndex = bars.findIndex((item) => item.key === barKey);
-    const next = bars
-      .slice(currentIndex + 1)
-      .find((item) => item.label.toLowerCase() === label.toLowerCase());
-    const container = articleRef.current;
-    if (!next || !container) return;
-    const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    window.scrollTo({
-      top: window.scrollY + container.getBoundingClientRect().top + next.top - 90,
-      behavior: reduceMotion ? "auto" : "smooth",
-    });
-  };
 
   useEffect(() => {
     const onScroll = () => setShowScrollTop(window.scrollY > 150);
@@ -1143,19 +1134,6 @@ function Index() {
                         >
                           {bar.label}
                         </span>
-                        {bar.hasNext && (
-                          <Button
-                            type="button"
-                            size="icon"
-                            variant="ghost"
-                            onClick={() => scrollToNextMatch(bar.key, bar.label)}
-                            className="pointer-events-auto absolute left-1/2 top-full z-10 mt-1 size-5 -translate-x-1/2 rounded-full bg-popover text-muted-foreground shadow-sm ring-1 ring-border/70 hover:text-foreground"
-                            title={`Next ${bar.label} match`}
-                            aria-label={`Go to next ${bar.label} match`}
-                          >
-                            <ArrowDown className="size-3" />
-                          </Button>
-                        )}
                       </div>
                     ))}
                   </div>
@@ -1442,30 +1420,24 @@ function Index() {
       <div className="fixed inset-x-0 bottom-3 z-40 flex justify-center px-3 sm:bottom-5">
         <div className="relative w-[min(36rem,calc(100vw-4rem))]">
           <div
-            ref={aiBarRef}
-            data-fade={aiBarFade}
-            onScroll={updateAiBarFade}
-            className={`flex min-w-0 gap-2 rounded-xl border border-border/70 bg-popover/95 px-2.5 shadow-xl backdrop-blur-xl ${aiSuggestions.length > 0 ? "flex-col items-stretch py-2" : "ai-bar-scroll h-12 items-center overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"}`}
+            className={`rounded-xl border border-border/70 bg-popover/95 shadow-xl backdrop-blur-xl ${aiSuggestions.length > 0 ? "px-2.5 py-2" : "flex h-12 items-stretch"}`}
           >
-            <div className="sticky left-0 z-20 flex shrink-0 items-center bg-popover px-0.5 pr-1">
-              <img
-                src={heroImage.url}
-                alt="MyMarkdown"
-                className="size-6 object-contain"
-                draggable={false}
-              />
-            </div>
-
             {aiSuggestions.length > 0 ? (
               <div className="flex flex-col gap-1">
-                <div className="flex items-center justify-between gap-3 px-1">
+                <div className="flex items-center gap-2 px-1">
+                  <img
+                    src={heroImage.url}
+                    alt="MyMarkdown"
+                    className="size-6 shrink-0 object-contain"
+                    draggable={false}
+                  />
                   <span className="text-xs text-muted-foreground">Suggested</span>
                   <Button
                     type="button"
                     size="icon"
                     variant="ghost"
                     onClick={clearAnnotations}
-                    className="size-6 rounded-full text-muted-foreground"
+                    className="ml-auto size-6 rounded-full text-muted-foreground"
                     aria-label="Close suggestions"
                     title="Close suggestions"
                   >
@@ -1485,9 +1457,25 @@ function Index() {
                   </Button>
                 ))}
               </div>
-            ) : aiRanges.length > 0 ? (
+            ) : (
               <>
-                {Array.from(
+                <div className="z-10 flex shrink-0 items-center rounded-l-xl bg-popover pl-2.5 pr-1.5">
+                  <img
+                    src={heroImage.url}
+                    alt="MyMarkdown"
+                    className="size-6 object-contain"
+                    draggable={false}
+                  />
+                </div>
+                <div
+                  ref={aiBarRef}
+                  data-fade={aiBarFade}
+                  onScroll={updateAiBarFade}
+                  className="ai-bar-scroll flex min-w-0 flex-1 items-center gap-2 overflow-x-auto pr-2.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+                >
+                  {aiRanges.length > 0 ? (
+                    <>
+                      {Array.from(
                   aiRanges.reduce((map, range) => {
                     const entry = map.get(range.label);
                     map.set(range.label, { color: range.color, count: (entry?.count ?? 0) + 1 });
@@ -1584,6 +1572,9 @@ function Index() {
                 >
                   Suggest labels
                 </Button>
+              </>
+                  )}
+                </div>
               </>
             )}
           </div>
