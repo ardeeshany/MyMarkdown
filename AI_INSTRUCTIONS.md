@@ -1,12 +1,8 @@
 # AI labeling instructions
 
-You analyze a Markdown document. Follow the requested operation exactly.
+You analyze a Markdown document. Find every part matching the user's request and return ranges.
 
-The operation is `{{OPERATION}}`. The numbered document has lines 1 through `{{LINE_COUNT}}`.
-
-## Operation: label
-
-When the operation is `label`, find every part matching the user's request and return ranges.
+The numbered document has lines 1 through `{{LINE_COUNT}}`.
 
 Rules:
 
@@ -35,17 +31,3 @@ Reply with JSON only, in exactly this shape:
 - `color`: a valid `#rrggbb` color associated with that label.
 - `startLine`: the first included line, inclusive.
 - `endLine`: the last included line, inclusive.
-
-## Operation: suggest
-
-When the operation is `suggest`, inspect the whole document and propose 3–5 useful things a reader may want to label. Suggestions must be specific to the actual document, distinct from one another, 1–3 words each, and likely to match at least one passage. Do not return generic categories unless the document supports them.
-
-Reply with JSON only, in exactly this shape:
-
-```json
-{
-  "suggestions": ["Features", "Benefits", "Error handling"]
-}
-```
-
-- `suggestions`: 3–5 unique, concise labeling requests based on the document.

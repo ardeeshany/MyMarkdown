@@ -11,7 +11,6 @@ import {
   ListTree,
   Loader2,
   PenLine,
-  Wand2,
   X,
 } from "lucide-react";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
@@ -1435,9 +1434,13 @@ function Index() {
 
       <div className="fixed inset-x-0 bottom-3 z-40 flex justify-center px-3 sm:bottom-5">
         <div className="flex h-12 max-w-[calc(100vw-1.5rem)] items-center gap-2 overflow-x-auto rounded-xl border border-border/70 bg-popover/95 px-2.5 shadow-xl backdrop-blur-xl [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-          <div className="flex shrink-0 items-center gap-1.5 px-1 text-xs font-semibold text-foreground">
-            <Wand2 className="size-3.5 text-primary" aria-hidden />
-            AI
+          <div className="flex shrink-0 items-center px-0.5">
+            <img
+              src={heroImage.url}
+              alt="MyMarkdown"
+              className="size-6 object-contain"
+              draggable={false}
+            />
           </div>
 
           {aiSuggestions.length > 0 ? (
@@ -1504,10 +1507,10 @@ function Index() {
               <Button
                 type="button"
                 size="sm"
-                variant="ghost"
+                variant="default"
                 disabled={aiLoading}
                 onClick={() => void suggestLabels()}
-                className="h-7 shrink-0 px-2 text-xs text-muted-foreground"
+                className="h-8 shrink-0 px-3 text-xs"
               >
                 Suggest labels
               </Button>
@@ -1559,10 +1562,10 @@ function Index() {
               <Button
                 type="button"
                 size="sm"
-                variant="ghost"
+                variant="default"
                 disabled={aiLoading}
                 onClick={() => void suggestLabels()}
-                className="h-7 shrink-0 px-2 text-xs text-muted-foreground"
+                className="h-8 shrink-0 px-3 text-xs"
               >
                 Suggest labels
               </Button>
