@@ -205,8 +205,8 @@
 }
 
 @keyframes preview-scan {
-  from { transform: translateY(0); }
-  to { transform: translateY(calc(590px + 12rem)); }
+  from { top: -6rem; }
+  to { top: 100%; }
 }
 
 @media (prefers-reduced-motion: no-preference) {
