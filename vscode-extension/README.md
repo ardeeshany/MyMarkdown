@@ -49,13 +49,23 @@ Problems panel as you type.
 
 Long documents hide their own shape. Ask MyMarkdown to label one and it draws coloured
 bars down the edge of the preview, each marking a stretch of the document and naming what
-it is about. Hover a bar to read its label, click it to jump to the next place that label
-appears.
+it is about. A chip row above the preview lists the labels in the active lens; click a
+chip, or the matching bar, to jump to the next place that label appears. When a document
+has several lenses, use the dropdown chip at the start of the row to switch between them.
 
 Run **MyMarkdown: Suggest Label Lenses** for three questions worth asking about the open
 document, or **MyMarkdown: Label Document…** to ask your own. Each answer is a *lens*, and
 a document can keep several — one showing how the content breaks down, another showing
-which parts still need work. The MyMarkdown item in the status bar switches between them.
+which parts still need work. The MyMarkdown item in the status bar also switches between
+lenses or hides labels entirely.
+
+Existing Markdown files are not labelled retroactively. Open any old `.md` file and run
+**MyMarkdown: Suggest Label Lenses** or **MyMarkdown: Label Document…** once; after that,
+its labels are saved and reopen with the document. New Markdown files work the same way:
+write the document, run one of the label commands when it is ready, then use the chip row
+in the preview. If labels do not generate, install a language model provider such as
+GitHub Copilot or set `mymarkdown.labels.cliCommand` to a local command that returns the
+expected JSON.
 
 Labels use the AI you already have: a language model provider such as GitHub Copilot, or a
 command you point the extension at. **No API key is stored or sent by this extension.**

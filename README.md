@@ -23,6 +23,8 @@ Everything runs in your browser. No account, no upload, nothing leaves your mach
 - **Beautify** — one click normalises spacing, list markers, and JSON formatting.
 - **Table of contents** — collapsible, click to jump, highlights the section you are
   reading, truncates long titles with a tooltip.
+- **AI label lenses** — ask MyMarkdown to label long documents, then switch lenses and
+  jump between labelled sections from the preview chip row.
 - **Paste & go** — a single button reads your clipboard and shows the rendered result.
 - **VS Code extension** — the same preview, beautify command, and contents list inside
   your editor. See [`vscode-extension/`](vscode-extension/README.md) or the
