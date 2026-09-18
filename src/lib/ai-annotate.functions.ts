@@ -1,0 +1,150 @@
+import { createServerFn } from "@tanstack/react-start";
+
+export type AnnotationRange = {
+  label: string;
+  color: string;
+  startLine: number;
+  endLine: number;
+};
+
+type RawItem = Partial<Record<"label" | "color", unknown>> &
+  Partial<Record<"startLine" | "endLine", unknown>>;
+
+const MODEL = "gemini-2.5-flash";
+const HEX = /^#[0-9a-fA-F]{6}$/;
+
+/** Lines the model can point at, prefixed so it can name exact numbers. */
+function numberLines(markdown: string) {
+  return markdown
+    .split("\n")
+    .map((line, index) => `${index + 1}: ${line}`)
+    .join("\n");
+}
+
+/**
+ * The model is asked for disjoint ranges but cannot be trusted to deliver them:
+ * clamp, drop nonsense, sort, then trim overlaps so the gutter never draws two
+ * bars over the same lines.
+ */
+function sanitize(items: RawItem[], lineCount: number): AnnotationRange[] {
+  const colorByLabel = new Map<string, string>();
+  const cleaned: AnnotationRange[] = [];
+
+  for (const item of items) {
+    const label = String(item.label ?? "").trim().split(/\s+/).slice(0, 2).join(" ");
+    if (!label) continue;
+    let start = Math.trunc(Number(item.startLine));
+    let end = Math.trunc(Number(item.endLine));
+    if (!Number.isFinite(start) || !Number.isFinite(end)) continue;
+    start = Math.max(1, Math.min(start, lineCount));
+    end = Math.max(1, Math.min(end, lineCount));
+    if (end < start) [start, end] = [end, start];
+
+    const raw = String(item.color ?? "").trim();
+    const known = colorByLabel.get(label.toLowerCase());
+    const color = known ?? (HEX.test(raw) ? raw : "#6366f1");
+    colorByLabel.set(label.toLowerCase(), color);
+
+    cleaned.push({ label, color, startLine: start, endLine: end });
+  }
+
+  cleaned.sort((a, b) => a.startLine - b.startLine || a.endLine - b.endLine);
+
+  const disjoint: AnnotationRange[] = [];
+  let cursor = 0;
+  for (const range of cleaned) {
+    const start = Math.max(range.startLine, cursor + 1);
+    if (range.endLine < start) continue;
+    disjoint.push({ ...range, startLine: start });
+    cursor = range.endLine;
+  }
+  return disjoint.slice(0, 40);
+}
+
+export const annotateMarkdown = createServerFn({ method: "POST" })
+  .inputValidator((input: { markdown: string; prompt: string }) => {
+    const markdown = String(input?.markdown ?? "");
+    const prompt = String(input?.prompt ?? "").trim();
+    if (!markdown.trim()) throw new Error("There is nothing in the document to look at.");
+    if (!prompt) throw new Error("Describe what you want to find first.");
+    return { markdown: markdown.slice(0, 120_000), prompt: prompt.slice(0, 2_000) };
+  })
+  .handler(async ({ data }): Promise<{ ranges: AnnotationRange[]; error?: string }> => {
+    const apiKey = process.env["GEMINI_API_KEY"];
+    if (!apiKey) return { ranges: [], error: "The AI key is not set up yet." };
+
+    const lineCount = data.markdown.split("\n").length;
+    const body = {
+      systemInstruction: {
+        parts: [
+          {
+            text: [
+              "You label parts of a Markdown document.",
+              "The user describes what to look for. Find every matching chunk.",
+              "Each chunk is a contiguous range of line numbers from the numbered document.",
+              "Chunks must never overlap and must stay inside 1.." + lineCount + ".",
+              "A label is 1-2 words. The same topic reuses the exact same label.",
+              "Give each label a hex colour that suits its meaning (for example warm reds for errors, calm blues for setup).",
+              "Return no items when nothing matches. Never invent line numbers.",
+            ].join(" "),
+          },
+        ],
+      },
+      contents: [
+        {
+          role: "user",
+          parts: [{ text: `What to find: ${data.prompt}\n\nDocument:\n${numberLines(data.markdown)}` }],
+        },
+      ],
+      generationConfig: {
+        temperature: 0.2,
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: "object",
+          properties: {
+            items: {
+              type: "array",
+              items: {
+                type: "object",
+                properties: {
+                  label: { type: "string" },
+                  color: { type: "string" },
+                  startLine: { type: "integer" },
+                  endLine: { type: "integer" },
+                },
+                required: ["label", "color", "startLine", "endLine"],
+              },
+            },
+          },
+          required: ["items"],
+        },
+      },
+    };
+
+    try {
+      // No client-side timeout: generation takes as long as the model needs.
+      const response = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent`,
+        {
+          method: "POST",
+          headers: { "content-type": "application/json", "x-goog-api-key": apiKey },
+          body: JSON.stringify(body),
+        },
+      );
+
+      if (!response.ok) {
+        console.error("Gemini annotate failed", response.status, await response.text());
+        return { ranges: [], error: "The AI could not answer just now. Try again." };
+      }
+
+      const payload = (await response.json()) as {
+        candidates?: { content?: { parts?: { text?: string }[] } }[];
+      };
+      const text = payload.candidates?.[0]?.content?.parts?.map((part) => part.text ?? "").join("") ?? "";
+      const parsed = JSON.parse(text) as { items?: RawItem[] };
+      return { ranges: sanitize(parsed.items ?? [], lineCount) };
+    } catch (error) {
+      console.error("Gemini annotate error", error);
+      return { ranges: [], error: "The AI could not answer just now. Try again." };
+    }
+  });
