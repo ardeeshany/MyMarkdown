@@ -999,7 +999,7 @@ function Index() {
   };
 
   return (
-    <main className="relative min-h-screen overflow-x-clip bg-background px-5 pb-32 pt-8 text-foreground sm:px-8 sm:pt-10">
+    <main className="relative min-h-screen overflow-x-clip bg-background px-5 pb-32 pt-8 font-ui text-foreground sm:px-8 sm:pt-10">
       <div className="pointer-events-none fixed -right-32 -top-32 size-[34rem] rounded-full bg-primary/15 blur-[130px]" />
       <div className="pointer-events-none fixed -bottom-40 -left-32 size-[30rem] rounded-full bg-heading-two/12 blur-[130px]" />
 
@@ -1033,7 +1033,7 @@ function Index() {
             className="mb-4 size-32 object-contain sm:size-40"
             draggable={false}
           />
-          <h1 className="font-display text-4xl font-bold tracking-tight leading-tight sm:text-5xl">
+          <h1 className="text-4xl font-bold tracking-tight leading-tight sm:text-5xl">
             Markdown, beautiful for human eyes
           </h1>
           <p className="mt-3 max-w-2xl text-sm text-muted-foreground sm:text-base">
@@ -1103,7 +1103,7 @@ function Index() {
               ) : (
                 <article
                   ref={articleRef}
-                  className="relative min-h-[590px] px-6 py-8 sm:px-9 sm:py-10"
+                  className="relative min-h-[590px] px-6 py-8 font-body sm:px-9 sm:py-10"
                 >
                   {aiLoading && (
                     <div
