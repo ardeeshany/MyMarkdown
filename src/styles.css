@@ -72,9 +72,9 @@
   --font-display: "Fraunces", serif;
   --font-body: "DM Sans", sans-serif;
   --font-mono: "JetBrains Mono", monospace;
-  /* Inter drives the product surface (hero, nav, toolbars). Rendered documents
+  /* Poppins drives the product surface (hero, nav, toolbars). Rendered documents
      keep Fraunces headings and DM Sans prose so the output still looks typeset. */
-  --font-ui: "Inter", sans-serif;
+  --font-ui: "Poppins", sans-serif;
 }
 
 :root {

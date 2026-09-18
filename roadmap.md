@@ -26,4 +26,5 @@
 - [x] Rewrite the suggestion instructions around labeling lenses and cap them at 3
 - [x] Hide the Suggest labels button while labels are applied
 - [x] Update the hero headline and subtitle
-- [x] Use Inter for the hero and product surface, keeping Fraunces and DM Sans in rendered documents
+- [x] Use Poppins for the hero and product surface, keeping Fraunces and DM Sans in rendered documents
+- [x] Expand the hero subtitle to mention exploring deeper with AI
