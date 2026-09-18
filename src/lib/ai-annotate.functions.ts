@@ -138,8 +138,8 @@ export const annotateMarkdown = createServerFn({ method: "POST" })
                       },
                       required: ["label"],
                     },
-                     minItems: 1,
-                     maxItems: 3,
+                    minItems: 1,
+                    maxItems: 3,
                   },
                 },
                 required: ["suggestions"],
@@ -198,7 +198,11 @@ export const annotateMarkdown = createServerFn({ method: "POST" })
         if (isSuggesting) {
           const seen = new Set<string>();
           const suggestions = (parsed.suggestions ?? [])
-            .map((value) => ({ label: String(value.label ?? "").trim().replace(/\s+/g, " ") }))
+            .map((value) => ({
+              label: String(value.label ?? "")
+                .trim()
+                .replace(/\s+/g, " "),
+            }))
             .filter((value) => {
               const key = value.label.toLowerCase();
               // Never cut a question mid-sentence: an over-long one is dropped whole.
@@ -210,9 +214,8 @@ export const annotateMarkdown = createServerFn({ method: "POST" })
             .slice(0, 3);
           return { ranges: [], suggestions };
         }
-        const explicitlyRequestsMoreLabels = /\b(?:[6-9]|[1-9]\d+)\s+(?:labels?|categories|groups)\b/i.test(
-          data.prompt,
-        );
+        const explicitlyRequestsMoreLabels =
+          /\b(?:[6-9]|[1-9]\d+)\s+(?:labels?|categories|groups)\b/i.test(data.prompt);
         return {
           ranges: sanitize(parsed.items ?? [], lineCount, explicitlyRequestsMoreLabels ? 12 : 5),
           suggestions: [],

@@ -64,7 +64,7 @@ Return JSON only:
 
 {
 
-  "suggestions": [
+"suggestions": [
 
     { "label": "How does this content break down?" },
 
@@ -72,6 +72,6 @@ Return JSON only:
 
     { "label": "What patterns appear throughout?" }
 
-  ]
+]
 
 }
