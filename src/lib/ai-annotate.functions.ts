@@ -10,7 +10,7 @@ export type AnnotationRange = {
 type RawItem = Partial<Record<"label" | "color", unknown>> &
   Partial<Record<"startLine" | "endLine", unknown>>;
 
-const MODEL = "gemini-2.5-flash";
+const MODEL = "gemini-3.6-flash";
 const HEX = /^#[0-9a-fA-F]{6}$/;
 
 /** Lines the model can point at, prefixed so it can name exact numbers. */
