@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
-import { ArrowUp, Check, ChevronDown, ChevronUp, Clipboard, ClipboardPaste, Code2, Github, ListTree, Loader2, PenLine, Sparkles, Wand2, X } from "lucide-react";
+import { ArrowUp, ChevronDown, ChevronUp, ClipboardPaste, Code2, Github, ListTree, Loader2, PenLine, Wand2, X } from "lucide-react";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
 import { annotateMarkdown, type AnnotationRange } from "@/lib/ai-annotate.functions";
@@ -693,7 +693,6 @@ type GutterBar = { key: string; label: string; color: string; top: number; heigh
 function Index() {
   const [markdown, setMarkdown] = useState(SAMPLE);
   const [mode, setMode] = useState<"edit" | "preview">("preview");
-  const [copied, setCopied] = useState(false);
   const [tocOpen, setTocOpen] = useState(true);
   const previewMarkdown = useMemo(() => promoteInlineJsonToFences(markdown), [markdown]);
   const headings = useMemo(() => getTocHeadings(previewMarkdown), [previewMarkdown]);
@@ -739,7 +738,7 @@ function Index() {
     setAiError("");
   };
 
-  /** Place a bar beside every rendered block the range covers. */
+  /** Map source-line ownership proportionally into rendered blocks. */
   const measureBars = useCallback(() => {
     const container = articleRef.current;
     if (!container || !aiRanges.length) {
@@ -758,8 +757,14 @@ function Index() {
         if (!Number.isFinite(start)) continue;
         if (end < range.startLine || start > range.endLine) continue;
         const box = block.getBoundingClientRect();
-        top = Math.min(top, box.top - base);
-        bottom = Math.max(bottom, box.bottom - base);
+        const lineSpan = Math.max(1, end - start + 1);
+        const ownedStart = Math.max(start, range.startLine);
+        const ownedEnd = Math.min(end, range.endLine);
+        const blockTop = box.top - base;
+        const sliceTop = blockTop + ((ownedStart - start) / lineSpan) * box.height;
+        const sliceBottom = blockTop + ((ownedEnd - start + 1) / lineSpan) * box.height;
+        top = Math.min(top, sliceTop);
+        bottom = Math.max(bottom, sliceBottom);
       }
       if (top === Infinity) return;
       next.push({
@@ -767,7 +772,7 @@ function Index() {
         label: range.label,
         color: range.color,
         top,
-        height: Math.max(18, bottom - top),
+        height: Math.max(4, bottom - top),
       });
     });
     setBars(next);
@@ -853,17 +858,6 @@ function Index() {
     return () => window.removeEventListener("scroll", updateActiveHeading);
   }, [headings, mode]);
 
-  const beautify = () => {
-    setMarkdown(formatMarkdown(markdown));
-    setMode("preview");
-  };
-
-  const copy = async () => {
-    await navigator.clipboard.writeText(markdown);
-    setCopied(true);
-    window.setTimeout(() => setCopied(false), 1600);
-  };
-
   const scrollToHeading = (id: string) => {
     const target = document.getElementById(id);
     if (!target) return;
@@ -910,73 +904,43 @@ function Index() {
 
         <div className="mt-8 grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_16rem]">
           <div className="min-w-0">
-            <div className="mb-3">
-              <form
-                onSubmit={(event) => { event.preventDefault(); void findSections(); }}
-                className="flex items-center gap-2 rounded-xl border border-border/70 bg-card/60 px-3 py-2"
-              >
-                <Wand2 className="size-4 shrink-0 text-muted-foreground" aria-hidden />
-                <input
-                  value={aiPrompt}
-                  onChange={(event) => setAiPrompt(event.target.value)}
-                  aria-label="Ask the AI to label parts of this document"
-                  placeholder="Find the parts about… e.g. error handling"
-                  className="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
-                />
-                {aiRanges.length > 0 && (
-                  <Button type="button" size="sm" variant="ghost" onClick={clearAnnotations} className="h-7 px-2 text-xs text-muted-foreground" title="Clear labels">
-                    <X className="size-3.5" />Clear
-                  </Button>
-                )}
-                <Button type="submit" size="sm" disabled={aiLoading || !aiPrompt.trim()} className="h-7 rounded-lg px-3 text-xs">
-                  {aiLoading ? <Loader2 className="size-3.5 animate-spin" /> : null}Find
-                </Button>
-              </form>
-              {aiError && <p className="mt-1.5 px-1 text-xs text-muted-foreground">{aiError}</p>}
-              {aiRanges.length > 0 && (
-                <div className="mt-2 flex flex-wrap items-center gap-1.5 px-1">
-                  {Array.from(
-                    aiRanges.reduce((map, range) => {
-                      const entry = map.get(range.label);
-                      map.set(range.label, { color: range.color, count: (entry?.count ?? 0) + 1 });
-                      return map;
-                    }, new Map<string, { color: string; count: number }>()),
-                  ).map(([label, meta]) => (
-                    <button
-                      key={label}
-                      type="button"
-                      onClick={() => scrollToLabel(label)}
-                      className="rounded-full border px-2.5 py-1 text-xs font-medium transition-opacity hover:opacity-80"
-                      style={{ borderColor: `${meta.color}55`, color: meta.color, backgroundColor: `${meta.color}12` }}
-                    >
-                      {label} <span className="opacity-60">{meta.count}</span>
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
             <section className="frosted-surface overflow-hidden rounded-2xl ring-1 ring-card/80">
-              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border/70 bg-glass px-3 py-2.5 sm:px-4">
+              <div className="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-3 border-b border-border/70 bg-glass px-3 py-2.5 sm:px-4">
                 <div className="flex min-w-0 items-center gap-2">
                   <div className="flex items-center rounded-lg bg-background/55 p-0.5 ring-1 ring-border/70" aria-label="Document mode">
                     {(["edit", "preview"] as const).map((item) => <Button key={item} type="button" size="sm" variant={mode === item ? "secondary" : "ghost"} onClick={() => setMode(item)} className={`h-7 rounded-md px-2.5 text-xs capitalize ${mode === item ? "bg-foreground text-background hover:bg-foreground/90" : "text-muted-foreground"}`}>{item}</Button>)}
                   </div>
                 </div>
-                <div className="flex items-center gap-1.5">
-                  <Button type="button" size="sm" variant="ghost" onClick={copy} className="text-muted-foreground" title={copied ? "Copied" : "Copy to clipboard"} aria-label={copied ? "Copied" : "Copy to clipboard"}>{copied ? <Check /> : <Clipboard />}</Button>
-                  <Button type="button" size="sm" variant="ghost" onClick={beautify} className="text-primary hover:text-primary"><Sparkles className="text-primary" />Beautify</Button>
-                </div>
+                <form onSubmit={(event) => { event.preventDefault(); void findSections(); }} className="ml-auto flex w-full max-w-sm min-w-0 items-center rounded-full border border-border/70 bg-background/55 p-1 pl-3 focus-within:ring-2 focus-within:ring-primary/15">
+                  <Wand2 className="mr-2 size-3.5 shrink-0 text-muted-foreground" aria-hidden />
+                  <input value={aiPrompt} onChange={(event) => setAiPrompt(event.target.value)} aria-label="Ask the AI to label parts of this document" placeholder="Find in document…" className="min-w-0 flex-1 bg-transparent text-xs outline-none placeholder:text-muted-foreground" />
+                  {aiRanges.length > 0 && <Button type="button" size="icon" variant="ghost" onClick={clearAnnotations} className="size-7 rounded-full text-muted-foreground" title="Clear labels" aria-label="Clear labels"><X className="size-3.5" /></Button>}
+                  <Button type="submit" size="sm" disabled={aiLoading || !aiPrompt.trim()} className="h-7 rounded-full px-3 text-xs">{aiLoading ? <Loader2 className="size-3.5 animate-spin" /> : null}Find</Button>
+                </form>
               </div>
+              {aiError && <p className="border-b border-border/60 px-4 py-1.5 text-right text-xs text-muted-foreground">{aiError}</p>}
 
               {mode === "edit" ? (
                 <textarea ref={editorRef} aria-label="Markdown editor" value={markdown} onChange={(event) => setMarkdown(event.target.value)} spellCheck="false" className="min-h-[590px] w-full resize-y bg-transparent px-6 py-8 font-mono text-[13px] leading-7 outline-none placeholder:text-muted-foreground sm:px-9 sm:py-10" placeholder="# Paste your Markdown here…" />
               ) : (
-                <article ref={articleRef} className={`relative min-h-[590px] px-6 py-8 sm:px-9 sm:py-10 ${bars.length ? "pr-6 sm:pr-40" : ""}`}>
-                  <div aria-hidden className="pointer-events-none absolute inset-y-0 right-4 hidden w-36 sm:block">
+                <article ref={articleRef} className={`relative min-h-[590px] px-6 py-8 sm:px-9 sm:py-10 ${bars.length ? "sm:pr-14" : ""}`}>
+                  {aiRanges.length > 0 && (
+                    <div className="mb-5 flex flex-wrap items-center justify-end gap-1.5 sm:mr-1">
+                      {Array.from(aiRanges.reduce((map, range) => {
+                        const entry = map.get(range.label);
+                        map.set(range.label, { color: range.color, count: (entry?.count ?? 0) + 1 });
+                        return map;
+                      }, new Map<string, { color: string; count: number }>())).map(([label, meta]) => (
+                        <Button key={label} type="button" size="sm" variant="outline" onClick={() => scrollToLabel(label)} className="h-6 rounded-full px-2 text-[10px] font-medium" style={{ borderColor: `${meta.color}55`, color: meta.color, backgroundColor: `${meta.color}12` }}>
+                          {label} <span className="opacity-60">· {meta.count}</span>
+                        </Button>
+                      ))}
+                    </div>
+                  )}
+                  <div aria-hidden className="pointer-events-none absolute inset-y-0 right-2 hidden w-7 sm:block">
                     {bars.map((bar) => (
-                      <div key={bar.key} className="absolute left-0 flex gap-2" style={{ top: bar.top, height: bar.height }}>
-                        <span className="w-[2px] shrink-0 rounded-full" style={{ backgroundColor: bar.color, height: "100%" }} />
-                        <span className="-mt-0.5 text-[11px] font-medium leading-snug" style={{ color: bar.color }}>{bar.label}</span>
+                      <div key={bar.key} className="group absolute right-0 w-1" style={{ top: bar.top, height: bar.height, backgroundColor: bar.color }} title={bar.label}>
+                        <span className="absolute right-3 top-0 z-10 whitespace-nowrap rounded bg-popover px-1.5 py-0.5 text-[10px] font-medium opacity-0 shadow-sm ring-1 ring-border transition-opacity group-hover:opacity-100" style={{ color: bar.color }}>{bar.label}</span>
                       </div>
                     ))}
                   </div>
