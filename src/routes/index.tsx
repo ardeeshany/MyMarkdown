@@ -1437,7 +1437,7 @@ function Index() {
                     size="icon"
                     variant="ghost"
                     onClick={clearAnnotations}
-                    className="size-6 rounded-full text-muted-foreground"
+                    className="ml-auto size-6 rounded-full text-muted-foreground"
                     aria-label="Close suggestions"
                     title="Close suggestions"
                   >
@@ -1457,9 +1457,25 @@ function Index() {
                   </Button>
                 ))}
               </div>
-            ) : aiRanges.length > 0 ? (
+            ) : (
               <>
-                {Array.from(
+                <div className="z-10 flex shrink-0 items-center rounded-l-xl bg-popover pl-2.5 pr-1.5">
+                  <img
+                    src={heroImage.url}
+                    alt="MyMarkdown"
+                    className="size-6 object-contain"
+                    draggable={false}
+                  />
+                </div>
+                <div
+                  ref={aiBarRef}
+                  data-fade={aiBarFade}
+                  onScroll={updateAiBarFade}
+                  className="ai-bar-scroll flex min-w-0 flex-1 items-center gap-2 overflow-x-auto pr-2.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+                >
+                  {aiRanges.length > 0 ? (
+                    <>
+                      {Array.from(
                   aiRanges.reduce((map, range) => {
                     const entry = map.get(range.label);
                     map.set(range.label, { color: range.color, count: (entry?.count ?? 0) + 1 });
