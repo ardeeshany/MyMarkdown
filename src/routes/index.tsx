@@ -950,7 +950,7 @@ function Index() {
                           {label} <span className="opacity-60">· {meta.count}</span>
                         </Button>
                       ))}
-                      <Button type="button" size="icon" variant="ghost" onClick={clearAnnotations} className="group relative size-6 rounded-full text-muted-foreground" aria-label="Clear labels"><X className="size-3.5" /><span aria-hidden className="pointer-events-none absolute right-0 top-full z-30 mt-1.5 whitespace-nowrap rounded-md bg-popover px-2 py-1 text-[10px] font-medium leading-none text-muted-foreground opacity-0 shadow-sm ring-1 ring-border/70 backdrop-blur-sm transition-opacity duration-150 group-hover:opacity-100 group-focus-visible:opacity-100">Clear labels</span></Button>
+                      <Button type="button" size="icon" variant="ghost" onClick={clearAnnotations} className="group relative size-6 rounded-full text-muted-foreground" aria-label="Clear labels"><X className="size-3.5" /><span aria-hidden className="pointer-events-none absolute bottom-full right-0 z-30 mb-1.5 whitespace-nowrap rounded-md bg-popover px-2 py-1 text-[10px] font-medium leading-none text-muted-foreground opacity-0 shadow-sm ring-1 ring-border/70 backdrop-blur-sm transition-opacity duration-150 group-hover:opacity-100 group-focus-visible:opacity-100">Clear labels</span></Button>
                     </div>
                   )}
                   {aiLoading && (
