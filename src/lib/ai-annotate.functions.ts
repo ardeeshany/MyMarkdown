@@ -136,8 +136,8 @@ export const annotateMarkdown = createServerFn({ method: "POST" })
                       },
                       required: ["label", "description"],
                     },
-                    minItems: 3,
-                    maxItems: 5,
+                     minItems: 1,
+                     maxItems: 3,
                   },
                 },
                 required: ["suggestions"],
@@ -197,7 +197,7 @@ export const annotateMarkdown = createServerFn({ method: "POST" })
           const seen = new Set<string>();
           const suggestions = (parsed.suggestions ?? [])
             .map((value) => ({
-              label: String(value.label ?? "").trim().split(/\s+/).slice(0, 3).join(" "),
+              label: String(value.label ?? "").trim().split(/\s+/).slice(0, 4).join(" "),
               description: String(value.description ?? "")
                 .trim()
                 .split(/\s+/)
@@ -210,7 +210,7 @@ export const annotateMarkdown = createServerFn({ method: "POST" })
               seen.add(key);
               return true;
             })
-            .slice(0, 5);
+            .slice(0, 3);
           return { ranges: [], suggestions };
         }
         return { ranges: sanitize(parsed.items ?? [], lineCount), suggestions: [] };
