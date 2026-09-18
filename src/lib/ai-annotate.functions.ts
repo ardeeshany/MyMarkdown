@@ -1,5 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import annotationInstructions from "../../AI_INSTRUCTIONS.md?raw";
+import suggestionInstructions from "../../AI_SUGGESTION_INSTRUCTIONS.md?raw";
 
 export type AnnotationRange = {
   label: string;
@@ -94,9 +95,10 @@ export const annotateMarkdown = createServerFn({ method: "POST" })
         systemInstruction: {
           parts: [
             {
-              text: annotationInstructions
-                .replaceAll("{{LINE_COUNT}}", String(lineCount))
-                .replaceAll("{{OPERATION}}", data.operation),
+              text: (isSuggesting ? suggestionInstructions : annotationInstructions).replaceAll(
+                "{{LINE_COUNT}}",
+                String(lineCount),
+              ),
             },
           ],
         },
