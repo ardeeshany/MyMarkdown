@@ -999,7 +999,7 @@ function Index() {
   };
 
   return (
-    <main className="relative min-h-screen overflow-x-clip bg-background px-5 pb-32 pt-8 font-ui text-foreground sm:px-8 sm:pt-10">
+    <main className="relative min-h-screen overflow-x-clip bg-background px-5 pb-32 pt-12 font-ui text-foreground sm:px-8 sm:pt-10">
       <div className="pointer-events-none fixed -right-32 -top-32 size-[34rem] rounded-full bg-primary/15 blur-[130px]" />
       <div className="pointer-events-none fixed -bottom-40 -left-32 size-[30rem] rounded-full bg-heading-two/12 blur-[130px]" />
 
@@ -1027,6 +1027,10 @@ function Index() {
         </nav>
 
         <header className="flex flex-col items-center text-center">
+          <span className="mb-4 inline-flex items-center gap-1.5 rounded-full border border-border/70 bg-card/80 px-3 py-1 text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
+            <span className="size-1.5 rounded-full bg-primary/70" aria-hidden="true" />
+            Free and Open Source
+          </span>
           <img
             src={heroImage.url}
             alt="MyMarkdown documents transforming into a polished page"
@@ -1037,8 +1041,7 @@ function Index() {
             Markdown, beautiful for human eyes
           </h1>
           <p className="mt-3 max-w-2xl text-sm text-muted-foreground sm:text-base">
-            Make your Markdown easier to read and understand, with a little help from AI to explore
-            deeper. Free and open source.
+            Make your Markdown easier to read and understand, with a little help from AI.
           </p>
           <div className="mt-6 flex flex-wrap items-center justify-center gap-2.5">
             <Button
