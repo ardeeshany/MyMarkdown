@@ -701,6 +701,107 @@ function Index() {
   const [showScrollTop, setShowScrollTop] = useState(false);
   const editorRef = useRef<HTMLTextAreaElement>(null);
 
+  const [aiPrompt, setAiPrompt] = useState("");
+  const [aiRanges, setAiRanges] = useState<AnnotationRange[]>([]);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiError, setAiError] = useState("");
+  const [bars, setBars] = useState<GutterBar[]>([]);
+  const articleRef = useRef<HTMLDivElement>(null);
+  const runAnnotate = useServerFn(annotateMarkdown);
+
+  // Line numbers stop matching the moment the document changes.
+  useEffect(() => {
+    setAiRanges([]);
+    setAiError("");
+  }, [previewMarkdown]);
+
+  const findSections = async () => {
+    if (!aiPrompt.trim() || aiLoading) return;
+    setAiLoading(true);
+    setAiError("");
+    try {
+      const result = await runAnnotate({ data: { markdown: previewMarkdown, prompt: aiPrompt } });
+      setAiRanges(result.ranges);
+      if (result.error) setAiError(result.error);
+      else if (!result.ranges.length) setAiError("Nothing in this document matched.");
+      else setMode("preview");
+    } catch {
+      setAiError("The AI could not answer just now. Try again.");
+    } finally {
+      setAiLoading(false);
+    }
+  };
+
+  const clearAnnotations = () => {
+    setAiRanges([]);
+    setAiError("");
+  };
+
+  /** Place a bar beside every rendered block the range covers. */
+  const measureBars = useCallback(() => {
+    const container = articleRef.current;
+    if (!container || !aiRanges.length) {
+      setBars([]);
+      return;
+    }
+    const blocks = Array.from(container.querySelectorAll<HTMLElement>("[data-line]"));
+    const base = container.getBoundingClientRect().top;
+    const next: GutterBar[] = [];
+    aiRanges.forEach((range, index) => {
+      let top = Infinity;
+      let bottom = -Infinity;
+      for (const block of blocks) {
+        const start = Number(block.dataset["line"]);
+        const end = Number(block.dataset["endLine"] ?? block.dataset["line"]);
+        if (!Number.isFinite(start)) continue;
+        if (end < range.startLine || start > range.endLine) continue;
+        const box = block.getBoundingClientRect();
+        top = Math.min(top, box.top - base);
+        bottom = Math.max(bottom, box.bottom - base);
+      }
+      if (top === Infinity) return;
+      next.push({
+        key: `${index}-${range.label}-${range.startLine}`,
+        label: range.label,
+        color: range.color,
+        top,
+        height: Math.max(18, bottom - top),
+      });
+    });
+    setBars(next);
+  }, [aiRanges]);
+
+  useLayoutEffect(() => {
+    if (mode !== "preview") {
+      setBars([]);
+      return;
+    }
+    measureBars();
+    const container = articleRef.current;
+    if (!container) return;
+    const observer = new ResizeObserver(() => measureBars());
+    observer.observe(container);
+    window.addEventListener("resize", measureBars);
+    const timer = window.setTimeout(measureBars, 300);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener("resize", measureBars);
+      window.clearTimeout(timer);
+    };
+  }, [measureBars, mode, previewMarkdown]);
+
+  const scrollToLabel = (label: string) => {
+    const bar = bars.find((item) => item.label === label);
+    const container = articleRef.current;
+    if (!bar || !container) return;
+    const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    window.scrollTo({
+      top: window.scrollY + container.getBoundingClientRect().top + bar.top - 90,
+      behavior: reduceMotion ? "auto" : "smooth",
+    });
+  };
+
+
   useEffect(() => {
     const onScroll = () => setShowScrollTop(window.scrollY > 150);
     onScroll();
