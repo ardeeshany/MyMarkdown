@@ -310,15 +310,16 @@ function renderHighlights(state) {
 function markerHtml(env, readLens, escapeHtml) {
   const uri = env && env.currentDocument;
   if (!uri || typeof readLens !== "function") return "";
-  let lens = null;
+  let payload = null;
   try {
-    lens = readLens(uri);
+    payload = readLens(uri);
   } catch {
     // A sidecar that cannot be read is the same as no sidecar.
     return "";
   }
-  if (!lens || !lens.ranges || !lens.ranges.length) return "";
-  return '<div id="mymd-labels" hidden data-lens="' + escapeHtml(JSON.stringify(lens)) + '"></div>\n';
+  const lenses = payload && payload.lenses ? payload.lenses : payload && payload.ranges ? [payload] : [];
+  if (!lenses.length) return "";
+  return '<div id="mymd-labels" hidden data-lens="' + escapeHtml(JSON.stringify(payload)) + '"></div>\n';
 }
 
 /**

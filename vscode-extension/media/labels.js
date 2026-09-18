@@ -15,17 +15,20 @@
 
   var MARKER_ID = "mymd-labels";
   var LAYER_ID = "mymd-label-layer";
+  var CHIPS_ID = "mymd-label-chips";
   var reduceMotion =
     window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
-  /** @returns {{lens: {name: string, ranges: Array<object>}} | null} */
-  function readLens() {
+  /** @returns {{active: string, lenses: Array<object>} | null} */
+  function readPayload() {
     var marker = document.getElementById(MARKER_ID);
     if (!marker) return null;
     try {
       var parsed = JSON.parse(marker.getAttribute("data-lens") || "null");
-      if (!parsed || !parsed.ranges || !parsed.ranges.length) return null;
-      return parsed;
+      if (!parsed) return null;
+      if (parsed.ranges && parsed.ranges.length) return { active: parsed.name, lenses: [parsed] };
+      if (parsed.lenses && parsed.lenses.length) return parsed;
+      return null;
     } catch (e) {
       return null;
     }
@@ -93,7 +96,97 @@
     return node;
   }
 
-  var state = { bars: [], activeKey: null };
+  function chips(root) {
+    var existing = document.getElementById(CHIPS_ID);
+    if (existing) return existing;
+    var node = document.createElement("div");
+    node.id = CHIPS_ID;
+    node.setAttribute("role", "toolbar");
+    node.setAttribute("aria-label", "Document labels");
+    root.insertBefore(node, root.firstChild);
+    return node;
+  }
+
+  function activeLens(payload) {
+    if (!payload || !payload.lenses.length) return null;
+    var wanted = state.activeLensName || payload.active;
+    for (var i = 0; i < payload.lenses.length; i += 1) {
+      if (payload.lenses[i].name === wanted) return payload.lenses[i];
+    }
+    state.activeLensName = payload.active || payload.lenses[0].name;
+    return payload.lenses[0];
+  }
+
+  /** One chip per distinct label, in first-seen order, each counting its own ranges. */
+  function renderChips(root, payload, lens) {
+    var host = document.getElementById(CHIPS_ID);
+    if (!lens || !lens.ranges.length) {
+      if (host) host.remove();
+      return;
+    }
+    host = chips(root);
+    var order = [];
+    var counts = Object.create(null);
+    var colors = Object.create(null);
+    for (var i = 0; i < lens.ranges.length; i += 1) {
+      var range = lens.ranges[i];
+      if (!(range.label in counts)) {
+        order.push(range.label);
+        colors[range.label] = range.color;
+        counts[range.label] = 0;
+      }
+      counts[range.label] += 1;
+    }
+
+    host.textContent = "";
+    if (payload.lenses.length > 1) {
+      var switcher = document.createElement("label");
+      switcher.className = "mymd-lens-chip";
+      var select = document.createElement("select");
+      select.className = "mymd-lens-select";
+      select.setAttribute("aria-label", "Switch label lens");
+      for (var optionIndex = 0; optionIndex < payload.lenses.length; optionIndex += 1) {
+        var optionLens = payload.lenses[optionIndex];
+        var option = document.createElement("option");
+        option.value = optionLens.name;
+        option.textContent = optionLens.name;
+        option.selected = optionLens.name === lens.name;
+        select.appendChild(option);
+      }
+      switcher.appendChild(select);
+      host.appendChild(switcher);
+    }
+
+    for (var j = 0; j < order.length; j += 1) {
+      var label = order[j];
+      var color = colors[label];
+      var chip = document.createElement("button");
+      chip.type = "button";
+      chip.className = "mymd-label-chip";
+      chip.dataset.label = label;
+      chip.style.color = color;
+      chip.style.borderColor = color + "66";
+      chip.style.backgroundColor = color + "1f";
+
+      var dot = document.createElement("span");
+      dot.className = "mymd-label-chip-dot";
+      dot.style.backgroundColor = color;
+      chip.appendChild(dot);
+
+      chip.appendChild(document.createTextNode(label));
+
+      if (counts[label] > 1) {
+        var count = document.createElement("span");
+        count.className = "mymd-label-chip-count";
+        count.textContent = String(counts[label]);
+        chip.appendChild(count);
+      }
+
+      host.appendChild(chip);
+    }
+  }
+
+  var state = { bars: [], activeKey: null, activeLensName: "" };
 
   /** Scroll to a label's next occurrence, wrapping at the end, the way the site's chips do. */
   function cycle(label) {
@@ -118,8 +211,11 @@
 
   function paint() {
     var root = body();
-    var lens = readLens();
+    var payload = readPayload();
+    var lens = activeLens(payload);
     var host = document.getElementById(LAYER_ID);
+
+    renderChips(root, payload, lens);
 
     if (!lens) {
       if (host) host.remove();
@@ -145,10 +241,14 @@
       bar.className = "mymd-label-bar";
       bar.style.top = box.top + "px";
       bar.style.height = box.height + "px";
-      bar.style.backgroundColor = range.color;
+      bar.style.color = range.color;
       bar.title = range.label;
       bar.setAttribute("aria-label", range.label);
       bar.dataset.label = range.label;
+
+      var fill = document.createElement("span");
+      fill.className = "mymd-label-fill";
+      bar.appendChild(fill);
 
       var tag = document.createElement("span");
       tag.className = "mymd-label-tag";
@@ -178,11 +278,22 @@
   // One listener for every bar: they are replaced on each paint, so per-bar handlers would
   // have to be rebound constantly.
   document.addEventListener("click", function (event) {
-    var bar = event.target && event.target.closest && event.target.closest(".mymd-label-bar");
-    if (!bar) return;
+    var target =
+      event.target &&
+      event.target.closest &&
+      event.target.closest(".mymd-label-bar, .mymd-label-chip");
+    if (!target) return;
     event.preventDefault();
     event.stopPropagation();
-    cycle(bar.dataset.label);
+    cycle(target.dataset.label);
+  });
+
+  document.addEventListener("change", function (event) {
+    var select = event.target && event.target.closest && event.target.closest(".mymd-lens-select");
+    if (!select) return;
+    state.activeLensName = select.value;
+    state.activeKey = null;
+    paint();
   });
 
   // The preview swaps its content in place when the document changes, so redraw on any
@@ -190,7 +301,9 @@
   var observer = new MutationObserver(function (records) {
     for (var i = 0; i < records.length; i += 1) {
       var target = records[i].target;
-      if (target && target.closest && target.closest("#" + LAYER_ID)) continue;
+      if (target && target.closest && (target.closest("#" + LAYER_ID) || target.closest("#" + CHIPS_ID))) {
+        continue;
+      }
       schedule();
       return;
     }

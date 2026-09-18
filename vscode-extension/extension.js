@@ -235,6 +235,16 @@ function activeLensFor(uri) {
   return lens || null;
 }
 
+function labelPayloadFor(uri) {
+  if (!config().get("labels.enabled", true)) return null;
+  const key = uri.toString();
+  const entry = lensCache.get(key);
+  if (!entry || !entry.lenses.length) return null;
+  if (activeLens.get(key) === "") return null;
+  const lens = activeLensFor(uri);
+  return { active: lens ? lens.name : "", lenses: entry.lenses };
+}
+
 let labelStatus;
 
 function refreshLabelStatus() {
@@ -656,7 +666,7 @@ function activate(context) {
   // JSON colouring, loose-JSON promotion and task lists are added to it.
   void refreshLabels(currentMarkdownDocument());
 
-  return { extendMarkdownIt: (md) => mymarkdownPlugin(md, { readLens: activeLensFor }) };
+  return { extendMarkdownIt: (md) => mymarkdownPlugin(md, { readLens: labelPayloadFor }) };
 }
 
 function deactivate() {}

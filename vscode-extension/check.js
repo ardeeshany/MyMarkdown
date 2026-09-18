@@ -241,6 +241,9 @@ check("Marketplace artwork and preview-state styles are included", () => {
   const css = fs.readFileSync(path.join(__dirname, "media", "preview.css"), "utf8");
   includes(css, "input.mymd-task:checked", "checked task styling");
   includes(css, "blockquote.mymd-alert + blockquote.mymd-alert", "alert spacing");
+  includes(css, "color-scheme: light", "light lens dropdown color scheme");
+  includes(css, "color-scheme: dark", "dark lens dropdown color scheme");
+  includes(css, ".mymd-lens-select option", "lens dropdown option styling");
 });
 
 check("Mermaid preview is packaged as one ordered script", () => {
@@ -737,7 +740,7 @@ check("a skill-written sidecar with no sourceHash or anchors still yields its le
 check("the active lens reaches the preview, and only for a real document", () => {
   if (!MarkdownIt) return;
   const lens = { name: "L", ranges: [{ label: "Intro", color: "#2563eb", startLine: 1, endLine: 3 }] };
-  const md = mymarkdownPlugin(new MarkdownIt({ html: true }), { readLens: () => lens });
+  const md = mymarkdownPlugin(new MarkdownIt({ html: true }), { readLens: () => ({ active: "L", lenses: [lens] }) });
   const src = "# Title\n\nIntro.\n";
 
   // VS Code's real engine calls parse() with env.currentDocument always unset, and only
@@ -748,6 +751,7 @@ check("the active lens reaches the preview, and only for a real document", () =>
   const withDoc = md.renderer.render(tokens, md.options, { currentDocument: { path: "/x.md" } });
   includes(withDoc, 'id="mymd-labels"', "the marker for the preview script");
   includes(withDoc, "Intro", "the lens content");
+  includes(withDoc, "lenses", "the marker carries all lenses for in-preview switching");
   assert(withDoc.indexOf('id="mymd-labels"') > withDoc.indexOf("<h1"), "the marker goes after the document");
   // markdown.api.render passes no document, so nothing may be added to its output.
   const noDoc = md.renderer.render(tokens, md.options, {});
@@ -760,7 +764,7 @@ check("a hostile label cannot break out of the data-lens attribute", () => {
     name: "L",
     ranges: [{ label: '"><img src=x onerror=alert(1)>&</div>', color: "#2563eb", startLine: 1, endLine: 1 }],
   };
-  const md = mymarkdownPlugin(new MarkdownIt({ html: true }), { readLens: () => hostile });
+  const md = mymarkdownPlugin(new MarkdownIt({ html: true }), { readLens: () => ({ active: "L", lenses: [hostile] }) });
   const tokens = md.parse("# Title\n", {});
   const html = md.renderer.render(tokens, md.options, { currentDocument: { path: "/x.md" } });
 
@@ -775,7 +779,7 @@ check("a hostile label cannot break out of the data-lens attribute", () => {
     .replace(/&quot;/g, '"')
     .replace(/&amp;/g, "&");
   assert(
-    JSON.parse(decoded).ranges[0].label === hostile.ranges[0].label,
+    JSON.parse(decoded).lenses[0].ranges[0].label === hostile.ranges[0].label,
     "escaping must round-trip the label losslessly",
   );
 });
