@@ -195,12 +195,7 @@
 }
 
 .ai-bar-scroll[data-fade="left"] {
-  mask-image: linear-gradient(
-    to right,
-    transparent,
-    black 0.65rem,
-    black 100%
-  );
+  mask-image: linear-gradient(to right, transparent, black 0.65rem, black 100%);
 }
 
 .ai-bar-scroll[data-fade="right"] {
@@ -208,7 +203,13 @@
 }
 
 .ai-bar-scroll[data-fade="both"] {
-  mask-image: linear-gradient(to right, transparent, black 0.65rem, black calc(100% - 0.65rem), transparent);
+  mask-image: linear-gradient(
+    to right,
+    transparent,
+    black 0.65rem,
+    black calc(100% - 0.65rem),
+    transparent
+  );
 }
 
 .preview-scan {
@@ -219,20 +220,8 @@
    The blur itself is a Tailwind utility on the element; this class only
    animates the mask so the blurred band slowly sweeps top to bottom. */
 .preview-scan-blur {
-  mask-image: linear-gradient(
-    to bottom,
-    transparent,
-    black 22%,
-    black 78%,
-    transparent
-  );
-  -webkit-mask-image: linear-gradient(
-    to bottom,
-    transparent,
-    black 22%,
-    black 78%,
-    transparent
-  );
+  mask-image: linear-gradient(to bottom, transparent, black 22%, black 78%, transparent);
+  -webkit-mask-image: linear-gradient(to bottom, transparent, black 22%, black 78%, transparent);
   mask-size: 100% 45%;
   -webkit-mask-size: 100% 45%;
   mask-repeat: no-repeat;
@@ -241,8 +230,12 @@
 }
 
 @keyframes preview-scan-blur {
-  from { mask-position: 0% 0%; }
-  to { mask-position: 0% 100%; }
+  from {
+    mask-position: 0% 0%;
+  }
+  to {
+    mask-position: 0% 100%;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -267,14 +260,29 @@
 }
 
 @keyframes preview-scan {
-  from { top: -6rem; }
-  to { top: 100%; }
+  from {
+    top: -6rem;
+  }
+  to {
+    top: 100%;
+  }
 }
 
 @media (prefers-reduced-motion: no-preference) {
-  button, textarea { transition: color 180ms ease, background-color 180ms ease, box-shadow 180ms ease, transform 180ms ease; }
+  button,
+  textarea {
+    transition:
+      color 180ms ease,
+      background-color 180ms ease,
+      box-shadow 180ms ease,
+      transform 180ms ease;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .preview-scan-line { animation: none; top: 0; height: 100%; }
+  .preview-scan-line {
+    animation: none;
+    top: 0;
+    height: 100%;
+  }
 }
