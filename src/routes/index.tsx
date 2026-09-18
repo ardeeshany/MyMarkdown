@@ -942,20 +942,6 @@ function Index() {
     return () => window.removeEventListener("resize", updateAiBarFade);
   }, [aiRanges, aiSuggestions, updateAiBarFade]);
 
-  const scrollToNextMatch = (barKey: string, label: string) => {
-    const currentIndex = bars.findIndex((item) => item.key === barKey);
-    const next = bars
-      .slice(currentIndex + 1)
-      .find((item) => item.label.toLowerCase() === label.toLowerCase());
-    const container = articleRef.current;
-    if (!next || !container) return;
-    const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    window.scrollTo({
-      top: window.scrollY + container.getBoundingClientRect().top + next.top - 90,
-      behavior: reduceMotion ? "auto" : "smooth",
-    });
-  };
-
   useEffect(() => {
     const onScroll = () => setShowScrollTop(window.scrollY > 150);
     onScroll();
@@ -1148,19 +1134,6 @@ function Index() {
                         >
                           {bar.label}
                         </span>
-                        {bar.hasNext && (
-                          <Button
-                            type="button"
-                            size="icon"
-                            variant="ghost"
-                            onClick={() => scrollToNextMatch(bar.key, bar.label)}
-                            className="pointer-events-auto absolute left-1/2 top-full z-10 mt-1 size-5 -translate-x-1/2 rounded-full bg-popover text-muted-foreground shadow-sm ring-1 ring-border/70 hover:text-foreground"
-                            title={`Next ${bar.label} match`}
-                            aria-label={`Go to next ${bar.label} match`}
-                          >
-                            <ArrowDown className="size-3" />
-                          </Button>
-                        )}
                       </div>
                     ))}
                   </div>
