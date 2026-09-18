@@ -940,7 +940,7 @@ function Index() {
               ) : (
                 <article ref={articleRef} className="relative min-h-[590px] px-6 py-8 sm:px-9 sm:py-10">
                   {aiRanges.length > 0 && (
-                    <div className="mb-5 flex flex-wrap items-center justify-end gap-1.5">
+                    <div className="-mr-4 mb-8 flex flex-wrap items-center justify-end gap-1.5 sm:-mr-7">
                       {Array.from(aiRanges.reduce((map, range) => {
                         const entry = map.get(range.label);
                         map.set(range.label, { color: range.color, count: (entry?.count ?? 0) + 1 });
@@ -950,7 +950,7 @@ function Index() {
                           {label} <span className="opacity-60">· {meta.count}</span>
                         </Button>
                       ))}
-                      <Button type="button" size="icon" variant="ghost" onClick={clearAnnotations} className="size-6 rounded-full text-muted-foreground" title="Clear labels" aria-label="Clear labels"><X className="size-3.5" /></Button>
+                      <Button type="button" size="icon" variant="ghost" onClick={clearAnnotations} className="group relative size-6 rounded-full text-muted-foreground" aria-label="Clear labels"><X className="size-3.5" /><span aria-hidden className="pointer-events-none absolute right-0 top-full z-30 mt-1.5 whitespace-nowrap rounded-md bg-popover px-2 py-1 text-[10px] font-medium leading-none text-muted-foreground opacity-0 shadow-sm ring-1 ring-border/70 backdrop-blur-sm transition-opacity duration-150 group-hover:opacity-100 group-focus-visible:opacity-100">Clear labels</span></Button>
                     </div>
                   )}
                   {aiLoading && (
@@ -961,7 +961,7 @@ function Index() {
                   <div className="pointer-events-none absolute inset-y-0 right-2 hidden w-1 sm:block">
                     {bars.map((bar) => (
                       <div key={bar.key} className="group absolute right-0 w-1" style={{ top: bar.top, height: bar.height, backgroundColor: bar.color }} title={bar.label}>
-                        <span className="absolute bottom-full right-0 z-10 mb-1 whitespace-nowrap rounded bg-popover/90 px-1.5 py-0.5 text-[10px] font-medium leading-none shadow-sm ring-1 ring-border/70 backdrop-blur-sm" style={{ color: bar.color }}>{bar.label}</span>
+                        <span className="absolute bottom-full right-0 z-10 mb-1 whitespace-nowrap rounded-md bg-popover/95 px-2 py-1.5 text-[11px] font-medium leading-none shadow-sm ring-1 ring-border/70 backdrop-blur-sm" style={{ color: bar.color }}>{bar.label}</span>
                         {bar.hasNext && <Button type="button" size="icon" variant="ghost" onClick={() => scrollToNextMatch(bar.key, bar.label)} className="pointer-events-auto absolute left-1/2 top-full z-10 mt-1 size-5 -translate-x-1/2 rounded-full bg-popover text-muted-foreground shadow-sm ring-1 ring-border/70 hover:text-foreground" title={`Next ${bar.label} match`} aria-label={`Go to next ${bar.label} match`}><ArrowDown className="size-3" /></Button>}
                       </div>
                     ))}
