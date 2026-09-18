@@ -679,10 +679,12 @@ function TruncatedLabel({ text, className }: { text: string; className?: string 
 }
 
 /** Source lines a rendered block covers, so AI labels can be drawn beside it. */
-type MdNode = { position?: { start: { line: number }; end: { line: number } } };
+type MdNode = { position?: { start?: { line?: number }; end?: { line?: number } } | undefined };
 function lineAttrs(node?: MdNode) {
-  if (!node?.position) return {};
-  return { "data-line": node.position.start.line, "data-end-line": node.position.end.line };
+  const start = node?.position?.start?.line;
+  const end = node?.position?.end?.line;
+  if (typeof start !== "number") return {};
+  return { "data-line": start, "data-end-line": typeof end === "number" ? end : start };
 }
 
 type GutterBar = { key: string; label: string; color: string; top: number; height: number };
