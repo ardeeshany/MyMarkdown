@@ -43,3 +43,4 @@
 - [x] Simplify suggestion guidance, use student-friendly semantic questions, and keep the AI panel width stable
 
 - [x] Rewrite suggestion instructions as three short structural questions and allow up to 8 words
+- [x] Widen the AI panel, fade horizontally cropped edges, and keep its close button outside on the right

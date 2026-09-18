@@ -1428,7 +1428,8 @@ function Index() {
       </div>
 
       <div className="fixed inset-x-0 bottom-3 z-40 flex justify-center px-3 sm:bottom-5">
-        <div className={`flex w-[min(30rem,calc(100vw-1.5rem))] gap-2 rounded-xl border border-border/70 bg-popover/95 px-2.5 shadow-xl backdrop-blur-xl ${aiSuggestions.length > 0 ? "flex-col items-stretch py-2" : "h-12 items-center overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"}`}>
+        <div className="flex w-[min(36rem,calc(100vw-1.5rem))] items-center gap-2">
+        <div className={`flex min-w-0 flex-1 gap-2 rounded-xl border border-border/70 bg-popover/95 px-2.5 shadow-xl backdrop-blur-xl ${aiSuggestions.length > 0 ? "flex-col items-stretch py-2" : "ai-bar-scroll h-12 items-center overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"}`}>
           <div className="flex shrink-0 items-center px-0.5">
             <img
               src={heroImage.url}
@@ -1440,19 +1441,8 @@ function Index() {
 
           {aiSuggestions.length > 0 ? (
             <div className="flex flex-col gap-1">
-              <div className="flex items-center justify-between gap-3 px-1">
+              <div className="flex items-center px-1">
                 <span className="text-xs text-muted-foreground">Suggested</span>
-                <Button
-                  type="button"
-                  size="icon"
-                  variant="ghost"
-                  onClick={clearAnnotations}
-                  className="size-6 rounded-full text-muted-foreground"
-                  aria-label="Close suggestions"
-                  title="Close suggestions"
-                >
-                  <X className="size-3.5" />
-                </Button>
               </div>
               {aiSuggestions.map((suggestion) => (
                 <Button
@@ -1497,17 +1487,6 @@ function Index() {
                   </Button>
                 );
               })}
-              <Button
-                type="button"
-                size="icon"
-                variant="ghost"
-                onClick={clearAnnotations}
-                className="size-7 shrink-0 rounded-full text-muted-foreground"
-                aria-label="Clear labels"
-                title="Clear labels"
-              >
-                <X className="size-3.5" />
-              </Button>
             </>
           ) : (
             <>
@@ -1575,6 +1554,18 @@ function Index() {
               </Button>
             </>
           )}
+        </div>
+        <Button
+          type="button"
+          size="icon"
+          variant="ghost"
+          onClick={clearAnnotations}
+          className="size-8 shrink-0 rounded-full bg-popover/95 text-muted-foreground shadow-lg ring-1 ring-border/70 backdrop-blur-xl"
+          aria-label="Clear AI labels"
+          title="Clear AI labels"
+        >
+          <X className="size-4" />
+        </Button>
         </div>
       </div>
 
