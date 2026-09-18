@@ -1,6 +1,9 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { ArrowUp, Check, ChevronDown, ChevronUp, Clipboard, ClipboardPaste, Code2, Github, ListTree, PenLine, Sparkles } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useServerFn } from "@tanstack/react-start";
+import { ArrowUp, Check, ChevronDown, ChevronUp, Clipboard, ClipboardPaste, Code2, Github, ListTree, Loader2, PenLine, Sparkles, Wand2, X } from "lucide-react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+
+import { annotateMarkdown, type AnnotationRange } from "@/lib/ai-annotate.functions";
 import ReactMarkdown from "react-markdown";
 import rehypeKatex from "rehype-katex";
 import remarkGfm from "remark-gfm";
@@ -674,6 +677,16 @@ function TruncatedLabel({ text, className }: { text: string; className?: string 
 
   return <span ref={ref} className={className} title={isTruncated ? text : undefined}>{text}</span>;
 }
+
+/** Source lines a rendered block covers, so AI labels can be drawn beside it. */
+type MdNode = { position?: { start: { line: number }; end: { line: number } } };
+function lineAttrs(node?: MdNode) {
+  if (!node?.position) return {};
+  return { "data-line": node.position.start.line, "data-end-line": node.position.end.line };
+}
+
+type GutterBar = { key: string; label: string; color: string; top: number; height: number };
+
 
 function Index() {
   const [markdown, setMarkdown] = useState(SAMPLE);
