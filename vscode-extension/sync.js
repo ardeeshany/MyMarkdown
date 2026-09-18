@@ -7,8 +7,9 @@
   What it does, in order:
     1. copies the Markdown rules out of src/routes/index.tsx   -> lib/mymarkdown.js
     2. copies the colour palette out of src/styles.css         -> media/preview.css
-    3. runs the checks in check.js                             (aborts on failure)
-    4. bumps the patch version and builds the install file
+    3. copies the AI labelling instructions from the repo root -> lib/ai-instructions.js
+    4. runs the checks in check.js                             (aborts on failure)
+    5. bumps the patch version and builds the install file
 
   The website is only ever read, never written.
 
@@ -31,6 +32,9 @@ const MERMAID_FILE = path.join(EXT_DIR, "media", "mermaid.min.js");
 const MERMAID_PREVIEW_FILE = path.join(EXT_DIR, "media", "mermaid-preview.js");
 const MERMAID_BUNDLE_FILE = path.join(EXT_DIR, "media", "mermaid-preview.bundle.js");
 const PKG_FILE = path.join(EXT_DIR, "package.json");
+const LABEL_INSTRUCTIONS_FILE = path.join(ROOT, "AI_INSTRUCTIONS.md");
+const SUGGESTION_INSTRUCTIONS_FILE = path.join(ROOT, "AI_SUGGESTION_INSTRUCTIONS.md");
+const INSTRUCTIONS_OUT = path.join(EXT_DIR, "lib", "ai-instructions.js");
 
 // First and last function of the block that is shared with the website.
 const BLOCK_START = "function slugifyHeading";
@@ -295,6 +299,41 @@ function replaceRegion(css, tag, lines) {
 
 /* ---------------- 3. checks ---------------- */
 
+/* ---------------- 3. AI labelling instructions ---------------- */
+
+/**
+ * The extension asks a model for label ranges the same way the website's server function
+ * does, so it has to ask in the same words. Copying both instruction files in here keeps
+ * one readable source for the prompts instead of a second copy that quietly drifts.
+ */
+function writeInstructions() {
+  const label = read(LABEL_INSTRUCTIONS_FILE, "The AI labelling instructions");
+  const suggestion = read(SUGGESTION_INSTRUCTIONS_FILE, "The AI suggestion instructions");
+  if (!label.includes("{{LINE_COUNT}}")) {
+    fail("AI_INSTRUCTIONS.md no longer mentions {{LINE_COUNT}}, so line numbers cannot be pinned.");
+  }
+  const file =
+    "// AI labelling instructions for the VS Code extension.\n" +
+    "//\n" +
+    "// GENERATED FILE, DO NOT EDIT. Rebuild it from the project root with:\n" +
+    "//     npm run extension\n" +
+    "//\n" +
+    "// The text below is copied from AI_INSTRUCTIONS.md and AI_SUGGESTION_INSTRUCTIONS.md,\n" +
+    "// which the website's server function reads directly.\n" +
+    '"use strict";\n\n' +
+    "const labelInstructions = " +
+    JSON.stringify(label) +
+    ";\n\n" +
+    "const suggestionInstructions = " +
+    JSON.stringify(suggestion) +
+    ";\n\n" +
+    "module.exports = { labelInstructions, suggestionInstructions };\n";
+  fs.writeFileSync(INSTRUCTIONS_OUT, file);
+  return { labelBytes: label.length, suggestionBytes: suggestion.length };
+}
+
+/* ---------------- 4. checks ---------------- */
+
 function runChecks() {
   const result = spawnSync(process.execPath, [path.join(EXT_DIR, "check.js")], {
     cwd: EXT_DIR,
@@ -370,6 +409,12 @@ function main() {
   css = replaceRegion(css, "TOKENS-DARK", tokenLines(dark, "    ", 0.05));
   fs.writeFileSync(CSS_FILE, css);
   step("colours", TOKENS.length + " tokens copied from src/styles.css (light + dark)");
+
+  const instructions = writeInstructions();
+  step(
+    "AI instructions",
+    instructions.labelBytes + " + " + instructions.suggestionBytes + " bytes copied from the root",
+  );
 
   // VS Code marks every contributed preview script as async. Separate files can therefore
   // execute out of order, leaving the renderer unable to see window.mermaid. One file keeps

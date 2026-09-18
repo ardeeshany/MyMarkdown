@@ -30,3 +30,7 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# MyMarkdown label sidecars. Regenerable from the documents, so not committed by
+# default; drop this line if you would rather share labels with the team.
+.mymd/

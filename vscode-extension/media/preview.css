@@ -303,3 +303,139 @@ body.vscode-high-contrast .markdown-body mark.mymd-mark {
   background: rgba(251, 191, 36, 0.3);
   color: inherit;
 }
+
+/* Label bars — the active lens, drawn down the right edge by media/labels.js.
+   markdown-body has no horizontal padding of its own, so the layer is pushed out past the
+   text column into VS Code's own ~26px body padding instead of sitting on top of it. */
+#mymd-label-layer {
+  position: absolute;
+  top: 0;
+  right: -14px;
+  width: 14px;
+  height: 100%;
+  pointer-events: none;
+}
+.markdown-body {
+  position: relative;
+}
+.mymd-label-bar {
+  /* Wider than the visible fill so the tag is easy to hover, not just the 3px strip. */
+  position: absolute;
+  right: 0;
+  width: 14px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  pointer-events: auto;
+}
+.mymd-label-fill {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 3px;
+  border-radius: 2px;
+  background: currentColor;
+}
+.mymd-label-bar:focus-visible {
+  outline: 2px solid var(--vscode-focusBorder);
+  outline-offset: 2px;
+}
+.mymd-label-tag {
+  position: absolute;
+  right: 0;
+  bottom: 100%;
+  margin-bottom: 4px;
+  padding: 2px 6px;
+  border-radius: 5px;
+  font-family: var(--mm-body, inherit);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.3;
+  white-space: nowrap;
+  background: var(--vscode-editor-background);
+  box-shadow: 0 0 0 1px var(--mm-border, rgba(127, 127, 127, 0.3));
+  opacity: 0;
+  transition: opacity 0.1s ease;
+}
+.mymd-label-bar:hover .mymd-label-tag,
+.mymd-label-bar:focus-visible .mymd-label-tag {
+  opacity: 1;
+}
+
+/* Label chip row — a sticky legend above the document listing every distinct label, so
+   readers see what is labelled without first finding and hovering a bar. */
+#mymd-label-chips {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 0 10px;
+  margin-bottom: 0.5rem;
+  background: var(--vscode-editor-background);
+  border-bottom: 1px solid var(--mm-border, rgba(127, 127, 127, 0.3));
+}
+.mymd-lens-chip {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid var(--mm-border, rgba(127, 127, 127, 0.3));
+  border-radius: 999px;
+  background: var(--vscode-editor-background);
+}
+.mymd-lens-select {
+  max-width: min(280px, 70vw);
+  border: 0;
+  border-radius: 999px;
+  padding: 3px 28px 3px 10px;
+  color-scheme: light;
+  color: var(--mm-fg, inherit);
+  background: transparent;
+  font-family: var(--mm-body, inherit);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.4;
+}
+.mymd-lens-select:focus-visible {
+  outline: 2px solid var(--vscode-focusBorder);
+  outline-offset: 2px;
+}
+.mymd-lens-select option {
+  color: var(--mm-fg, inherit);
+  background: var(--mm-bg, var(--vscode-editor-background));
+}
+body.vscode-dark .mymd-lens-select,
+body.vscode-high-contrast:not(.vscode-high-contrast-light) .mymd-lens-select {
+  color-scheme: dark;
+}
+.mymd-label-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border: 1px solid;
+  border-radius: 999px;
+  padding: 3px 10px;
+  font-family: var(--mm-body, inherit);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.4;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.mymd-label-chip:focus-visible {
+  outline: 2px solid var(--vscode-focusBorder);
+  outline-offset: 2px;
+}
+.mymd-label-chip-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+}
+.mymd-label-chip-count {
+  opacity: 0.65;
+  font-weight: 500;
+}
