@@ -1417,6 +1417,12 @@ function Index() {
         </div>
       </div>
 
+      {/* Fades body content as it scrolls under the AI bar: sharp above the
+          box, smoothly dissolving toward the bottom of the screen. */}
+      <div
+        aria-hidden
+        className="pointer-events-none fixed inset-x-0 bottom-0 z-30 h-36 bg-gradient-to-t from-background via-background/85 to-transparent"
+      />
       <div className="fixed inset-x-0 bottom-3 z-40 flex justify-center px-3 sm:bottom-5">
         <div className="relative w-[min(45rem,calc(100vw-4rem))]">
           <div
