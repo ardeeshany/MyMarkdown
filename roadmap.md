@@ -20,3 +20,4 @@
 - [x] Move the Gemini annotation instructions into an editable Markdown file and verify the key stays secret
 - [x] Give the label row more breathing room, align it with the markers, and enlarge the marker labels
 - [x] Switch the labelling model to gemini-3.8-flash
+- [x] Replace the AI controls with one fixed three-state label bar and document-specific suggestions
