@@ -39,3 +39,4 @@
 - [x] Lighten the Open Source tag border and add Free to the wording
 - [x] Show the hero tag as "Open Source and Free" in natural lettering
 - [x] Lighten the AI input placeholder text
+- [x] Cap suggestion questions at six words, require multi-label results, and favor majority document coverage
