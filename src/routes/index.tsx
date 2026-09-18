@@ -1542,7 +1542,7 @@ function Index() {
                       onChange={(event) => setAiPrompt(event.target.value)}
                       aria-label="Ask AI to label this document"
                       placeholder="Ask AI to label…"
-                      className="h-8 min-w-0 flex-1 bg-transparent px-1 text-xs outline-none placeholder:text-muted-foreground"
+                      className="h-8 min-w-0 flex-1 bg-transparent px-1 text-xs outline-none placeholder:text-muted-foreground/50"
                     />
                     <Button
                       type="submit"
