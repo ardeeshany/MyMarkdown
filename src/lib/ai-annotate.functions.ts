@@ -199,7 +199,7 @@ export const annotateMarkdown = createServerFn({ method: "POST" })
               const key = value.label.toLowerCase();
               // Never cut a question mid-sentence: an over-long one is dropped whole.
               const wordCount = value.label.split(" ").length;
-              if (!value.label || wordCount > 6 || seen.has(key)) return false;
+              if (!value.label || wordCount > 8 || seen.has(key)) return false;
               seen.add(key);
               return true;
             })

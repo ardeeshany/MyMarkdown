@@ -41,3 +41,5 @@
 - [x] Lighten the AI input placeholder text
 - [x] Cap suggestion questions at six words, require multi-label results, and favor majority document coverage
 - [x] Simplify suggestion guidance, use student-friendly semantic questions, and keep the AI panel width stable
+
+- [x] Rewrite suggestion instructions as three short structural questions and allow up to 8 words
