@@ -191,10 +191,10 @@
   background: color-mix(in oklab, var(--background) 18%, transparent);
 }
 
-/* Very subtle soft-focus that drifts across the page while analyzing. */
+/* Very subtle soft-focus that drifts across the page while analyzing.
+   The blur itself is a Tailwind utility on the element; this class only
+   animates the mask so the blurred band slowly sweeps top to bottom. */
 .preview-scan-blur {
-  backdrop-filter: blur(1.6px);
-  -webkit-backdrop-filter: blur(1.6px);
   mask-image: linear-gradient(
     to bottom,
     transparent,
@@ -217,8 +217,8 @@
 }
 
 @keyframes preview-scan-blur {
-  from { mask-position: 0% 0%; -webkit-mask-position: 0% 0%; }
-  to { mask-position: 0% 100%; -webkit-mask-position: 0% 100%; }
+  from { mask-position: 0% 0%; }
+  to { mask-position: 0% 100%; }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -226,8 +226,6 @@
     animation: none;
     mask-image: none;
     -webkit-mask-image: none;
-    backdrop-filter: blur(0.8px);
-    -webkit-backdrop-filter: blur(0.8px);
   }
 }
 
