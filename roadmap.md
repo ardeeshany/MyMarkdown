@@ -36,3 +36,4 @@
 - [x] Move the Open Source badge below the subtitle as an outlined, lightly rounded tag
 - [x] Rename the hero badge to Open Source and darken its border
 - [x] Lighten the Open Source badge border
+- [x] Lighten the Open Source tag border and add Free to the wording
