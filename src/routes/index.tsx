@@ -15,7 +15,11 @@ import {
 } from "lucide-react";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
-import { annotateMarkdown, type AnnotationRange } from "@/lib/ai-annotate.functions";
+import {
+  annotateMarkdown,
+  type AnnotationRange,
+  type LabelSuggestion,
+} from "@/lib/ai-annotate.functions";
 import ReactMarkdown from "react-markdown";
 import rehypeKatex from "rehype-katex";
 import remarkGfm from "remark-gfm";
@@ -770,7 +774,7 @@ function Index() {
 
   const [aiPrompt, setAiPrompt] = useState("");
   const [aiRanges, setAiRanges] = useState<AnnotationRange[]>([]);
-  const [aiSuggestions, setAiSuggestions] = useState<string[]>([]);
+  const [aiSuggestions, setAiSuggestions] = useState<LabelSuggestion[]>([]);
   const [hiddenLabels, setHiddenLabels] = useState<Set<string>>(() => new Set());
   const [aiLoading, setAiLoading] = useState(false);
   const [aiError, setAiError] = useState("");
@@ -1420,18 +1424,6 @@ function Index() {
         </div>
       </div>
 
-      <footer className="mt-8 text-center text-xs text-muted-foreground">
-        Have an idea or found a bug?{" "}
-        <a
-          href="https://github.com/ardeeshany/mymarkdown/issues/new"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="underline underline-offset-4 hover:text-foreground"
-        >
-          Open an issue on GitHub
-        </a>
-      </footer>
-
       <div className="fixed inset-x-0 bottom-3 z-40 flex justify-center px-3 sm:bottom-5">
         <div className="flex h-12 max-w-[calc(100vw-1.5rem)] items-center gap-2 overflow-x-auto rounded-xl border border-border/70 bg-popover/95 px-2.5 shadow-xl backdrop-blur-xl [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           <div className="flex shrink-0 items-center px-0.5">
@@ -1448,18 +1440,18 @@ function Index() {
               <span className="shrink-0 text-xs text-muted-foreground">Suggested:</span>
               {aiSuggestions.map((suggestion) => (
                 <Button
-                  key={suggestion}
+                  key={suggestion.label}
                   type="button"
                   size="sm"
                   variant="secondary"
                   disabled={aiLoading}
                   onClick={() => {
-                    setAiPrompt(suggestion);
-                    void findSections(suggestion);
+                    setAiPrompt(suggestion.description);
+                    void findSections(suggestion.description);
                   }}
                   className="h-7 shrink-0 rounded-full px-3 text-xs"
                 >
-                  {suggestion}
+                  {suggestion.label}
                 </Button>
               ))}
               <Button
