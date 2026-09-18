@@ -28,3 +28,4 @@
 - [x] Update the hero headline and subtitle
 - [x] Use Poppins for the hero and product surface, keeping Fraunces and DM Sans in rendered documents
 - [x] Expand the hero subtitle to mention exploring deeper with AI
+- [x] Rewrite suggestion instructions around visual categorization and allow 12-word descriptions
