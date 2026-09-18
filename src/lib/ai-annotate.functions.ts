@@ -23,8 +23,9 @@ function numberLines(markdown: string) {
 
 /**
  * The model is asked for disjoint ranges but cannot be trusted to deliver them:
- * clamp, drop nonsense, sort, then trim overlaps so the gutter never draws two
- * bars over the same lines.
+ * clamp, drop nonsense, sort, then remove overlaps. Earlier ranges keep their
+ * lines; a later range starts after the last line already claimed. This is the
+ * final authority even when the model returns contradictory ranges.
  */
 function sanitize(items: RawItem[], lineCount: number): AnnotationRange[] {
   const colorByLabel = new Map<string, string>();
@@ -51,12 +52,12 @@ function sanitize(items: RawItem[], lineCount: number): AnnotationRange[] {
   cleaned.sort((a, b) => a.startLine - b.startLine || a.endLine - b.endLine);
 
   const disjoint: AnnotationRange[] = [];
-  let cursor = 0;
+  let lastClaimedLine = 0;
   for (const range of cleaned) {
-    const start = Math.max(range.startLine, cursor + 1);
+    const start = Math.max(range.startLine, lastClaimedLine + 1);
     if (range.endLine < start) continue;
     disjoint.push({ ...range, startLine: start });
-    cursor = range.endLine;
+    lastClaimedLine = range.endLine;
   }
   return disjoint.slice(0, 40);
 }
