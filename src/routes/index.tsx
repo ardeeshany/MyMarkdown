@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
-import { ArrowDown, ArrowUp, ChevronDown, ChevronUp, ClipboardPaste, Code2, Github, ListTree, Loader2, PenLine, Wand2, X } from "lucide-react";
+import { ArrowDown, ArrowRight, ArrowUp, ChevronDown, ChevronUp, ClipboardPaste, Code2, Github, ListTree, Loader2, PenLine, Wand2, X } from "lucide-react";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
 import { annotateMarkdown, type AnnotationRange } from "@/lib/ai-annotate.functions";
@@ -704,6 +704,8 @@ function Index() {
 
   const [aiPrompt, setAiPrompt] = useState("");
   const [aiRanges, setAiRanges] = useState<AnnotationRange[]>([]);
+  const [aiSuggestions, setAiSuggestions] = useState<string[]>([]);
+  const [hiddenLabels, setHiddenLabels] = useState<Set<string>>(() => new Set());
   const [aiLoading, setAiLoading] = useState(false);
   const [aiError, setAiError] = useState("");
   const [bars, setBars] = useState<GutterBar[]>([]);
@@ -713,17 +715,22 @@ function Index() {
   // Line numbers stop matching the moment the document changes.
   useEffect(() => {
     setAiRanges([]);
+    setAiSuggestions([]);
+    setHiddenLabels(new Set());
     setAiError("");
   }, [previewMarkdown]);
 
-  const findSections = async () => {
-    if (!aiPrompt.trim() || aiLoading) return;
+  const findSections = async (requestedPrompt = aiPrompt) => {
+    const prompt = requestedPrompt.trim();
+    if (!prompt || aiLoading) return;
     setMode("preview");
     setAiLoading(true);
     setAiError("");
+    setAiSuggestions([]);
     try {
-      const result = await runAnnotate({ data: { markdown: previewMarkdown, prompt: aiPrompt } });
+      const result = await runAnnotate({ data: { markdown: previewMarkdown, prompt, operation: "label" } });
       setAiRanges(result.ranges);
+      setHiddenLabels(new Set());
       if (result.error) setAiError(result.error);
       else if (!result.ranges.length) setAiError("Nothing in this document matched.");
       else setMode("preview");
@@ -734,9 +741,38 @@ function Index() {
     }
   };
 
+  const suggestLabels = async () => {
+    if (aiLoading) return;
+    setMode("preview");
+    setAiLoading(true);
+    setAiError("");
+    try {
+      const result = await runAnnotate({ data: { markdown: previewMarkdown, operation: "suggest" } });
+      setAiSuggestions(result.suggestions);
+      if (result.error) setAiError(result.error);
+      else if (!result.suggestions.length) setAiError("No useful labels were suggested.");
+    } catch {
+      setAiError("The AI could not answer just now. Try again.");
+    } finally {
+      setAiLoading(false);
+    }
+  };
+
   const clearAnnotations = () => {
     setAiRanges([]);
+    setAiSuggestions([]);
+    setHiddenLabels(new Set());
     setAiError("");
+  };
+
+  const toggleLabel = (label: string) => {
+    const key = label.toLowerCase();
+    setHiddenLabels((current) => {
+      const next = new Set(current);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
   };
 
   /** Map source-line ownership proportionally into rendered blocks. */
@@ -752,6 +788,7 @@ function Index() {
     const lastIndexByLabel = new Map<string, number>();
     aiRanges.forEach((range, index) => lastIndexByLabel.set(range.label.toLowerCase(), index));
     aiRanges.forEach((range, index) => {
+      if (hiddenLabels.has(range.label.toLowerCase())) return;
       let top = Infinity;
       let bottom = -Infinity;
       for (const block of blocks) {
@@ -780,7 +817,7 @@ function Index() {
       });
     });
     setBars(next);
-  }, [aiRanges]);
+  }, [aiRanges, hiddenLabels]);
 
   useLayoutEffect(() => {
     if (mode !== "preview") {
@@ -883,7 +920,7 @@ function Index() {
   };
 
   return (
-    <main className="relative min-h-screen overflow-x-clip bg-background px-5 pb-16 pt-8 text-foreground sm:px-8 sm:pt-10">
+    <main className="relative min-h-screen overflow-x-clip bg-background px-5 pb-32 pt-8 text-foreground sm:px-8 sm:pt-10">
       <div className="pointer-events-none fixed -right-32 -top-32 size-[34rem] rounded-full bg-primary/15 blur-[130px]" />
       <div className="pointer-events-none fixed -bottom-40 -left-32 size-[30rem] rounded-full bg-heading-two/12 blur-[130px]" />
 
@@ -921,38 +958,18 @@ function Index() {
         <div className="mt-8 grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_16rem]">
           <div className="min-w-0">
             <section className="frosted-surface overflow-hidden rounded-2xl ring-1 ring-card/80">
-              <div className="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-3 border-b border-border/70 bg-glass px-3 py-2.5 sm:px-4">
+              <div className="flex items-center border-b border-border/70 bg-glass px-3 py-2.5 sm:px-4">
                 <div className="flex min-w-0 items-center gap-2">
                   <div className="flex items-center rounded-lg bg-background/55 p-0.5 ring-1 ring-border/70" aria-label="Document mode">
                     {(["edit", "preview"] as const).map((item) => <Button key={item} type="button" size="sm" variant={mode === item ? "secondary" : "ghost"} onClick={() => setMode(item)} className={`h-7 rounded-md px-2.5 text-xs capitalize ${mode === item ? "bg-foreground text-background hover:bg-foreground/90" : "text-muted-foreground"}`}>{item}</Button>)}
                   </div>
                 </div>
-                <form onSubmit={(event) => { event.preventDefault(); void findSections(); }} className="ml-auto flex w-full max-w-sm min-w-0 items-center rounded-full border border-border/70 bg-background/55 p-1 pl-3 focus-within:ring-2 focus-within:ring-primary/15">
-                  <Wand2 className="mr-2 size-3.5 shrink-0 text-muted-foreground" aria-hidden />
-                  <input value={aiPrompt} onChange={(event) => setAiPrompt(event.target.value)} aria-label="Ask the AI to label parts of this document" placeholder="Find in document…" className="min-w-0 flex-1 bg-transparent text-xs outline-none placeholder:text-muted-foreground" />
-                  <Button type="submit" size="sm" disabled={aiLoading || !aiPrompt.trim()} className="h-7 rounded-full px-3 text-xs">{aiLoading ? <Loader2 className="size-3.5 animate-spin" /> : null}Find</Button>
-                </form>
               </div>
-              {aiError && <p className="border-b border-border/60 px-4 py-1.5 text-right text-xs text-muted-foreground">{aiError}</p>}
 
               {mode === "edit" ? (
                 <textarea ref={editorRef} aria-label="Markdown editor" value={markdown} onChange={(event) => setMarkdown(event.target.value)} spellCheck="false" className="min-h-[590px] w-full resize-y bg-transparent px-6 py-8 font-mono text-[13px] leading-7 outline-none placeholder:text-muted-foreground sm:px-9 sm:py-10" placeholder="# Paste your Markdown here…" />
               ) : (
                 <article ref={articleRef} className="relative min-h-[590px] px-6 py-8 sm:px-9 sm:py-10">
-                  {aiRanges.length > 0 && (
-                    <div className="-mr-4 mb-8 flex flex-wrap items-center justify-end gap-1.5 sm:-mr-7">
-                      {Array.from(aiRanges.reduce((map, range) => {
-                        const entry = map.get(range.label);
-                        map.set(range.label, { color: range.color, count: (entry?.count ?? 0) + 1 });
-                        return map;
-                      }, new Map<string, { color: string; count: number }>())).map(([label, meta]) => (
-                        <Button key={label} type="button" size="sm" variant="outline" onClick={() => scrollToLabel(label)} className="h-6 rounded-full px-2 text-[10px] font-medium" style={{ borderColor: `${meta.color}55`, color: meta.color, backgroundColor: `${meta.color}12` }}>
-                          {label} <span className="opacity-60">· {meta.count}</span>
-                        </Button>
-                      ))}
-                      <Button type="button" size="icon" variant="ghost" onClick={clearAnnotations} className="group relative size-6 rounded-full text-muted-foreground/60 ring-1 ring-muted-foreground/25 transition-colors hover:text-muted-foreground hover:ring-muted-foreground/45" aria-label="Clear labels"><X className="size-3.5" /><span aria-hidden className="pointer-events-none absolute bottom-full right-0 z-30 mb-1.5 whitespace-nowrap rounded-md bg-popover px-2 py-1 text-[10px] font-medium leading-none text-muted-foreground opacity-0 shadow-sm ring-1 ring-border/70 backdrop-blur-sm transition-opacity duration-150 group-hover:opacity-100 group-focus-visible:opacity-100">Clear labels</span></Button>
-                    </div>
-                  )}
                   {aiLoading && (
                     <div className="preview-scan pointer-events-none absolute inset-0 z-20 overflow-hidden" aria-label="Analyzing document">
                       <div className="preview-scan-blur absolute inset-0 backdrop-blur-[1.6px]" />
@@ -1066,8 +1083,55 @@ function Index() {
           </a>
         </footer>
 
+      <div className="fixed inset-x-0 bottom-3 z-40 flex justify-center px-3 sm:bottom-5">
+        <div className="flex h-12 max-w-[calc(100vw-1.5rem)] items-center gap-2 overflow-x-auto rounded-xl border border-border/70 bg-popover/95 px-2.5 shadow-xl backdrop-blur-xl [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          <div className="flex shrink-0 items-center gap-1.5 px-1 text-xs font-semibold text-foreground">
+            <Wand2 className="size-3.5 text-primary" aria-hidden />AI
+          </div>
+
+          {aiSuggestions.length > 0 ? (
+            <>
+              {aiSuggestions.map((suggestion) => (
+                <Button key={suggestion} type="button" size="sm" variant="secondary" disabled={aiLoading} onClick={() => { setAiPrompt(suggestion); void findSections(suggestion); }} className="h-7 shrink-0 rounded-full px-3 text-xs">
+                  {suggestion}
+                </Button>
+              ))}
+              <Button type="button" size="icon" variant="ghost" onClick={() => { setAiSuggestions([]); setAiError(""); }} className="size-7 shrink-0 rounded-full text-muted-foreground" aria-label="Close suggestions" title="Close suggestions"><X className="size-3.5" /></Button>
+            </>
+          ) : aiRanges.length > 0 ? (
+            <>
+              {Array.from(aiRanges.reduce((map, range) => {
+                const entry = map.get(range.label);
+                map.set(range.label, { color: range.color, count: (entry?.count ?? 0) + 1 });
+                return map;
+              }, new Map<string, { color: string; count: number }>())).map(([label, meta]) => {
+                const hidden = hiddenLabels.has(label.toLowerCase());
+                return (
+                  <Button key={label} type="button" size="sm" variant="outline" onClick={() => toggleLabel(label)} onDoubleClick={() => scrollToLabel(label)} aria-pressed={!hidden} className={`h-7 shrink-0 rounded-full px-2.5 text-xs font-medium transition-opacity ${hidden ? "opacity-40 grayscale" : ""}`} style={{ borderColor: `${meta.color}66`, color: meta.color, backgroundColor: `${meta.color}12` }}>
+                    <span className="size-2 rounded-full" style={{ backgroundColor: meta.color }} />{label} <span className="opacity-60">· {meta.count}</span>
+                  </Button>
+                );
+              })}
+              <Button type="button" size="sm" variant="ghost" disabled={aiLoading} onClick={() => void suggestLabels()} className="h-7 shrink-0 px-2 text-xs text-muted-foreground">Suggest labels</Button>
+              <Button type="button" size="icon" variant="ghost" onClick={clearAnnotations} className="size-7 shrink-0 rounded-full text-muted-foreground" aria-label="Clear labels" title="Clear labels"><X className="size-3.5" /></Button>
+            </>
+          ) : (
+            <>
+              <form onSubmit={(event) => { event.preventDefault(); void findSections(); }} className="flex min-w-44 items-center gap-1 sm:min-w-72">
+                <input value={aiPrompt} onChange={(event) => setAiPrompt(event.target.value)} aria-label="Ask AI to label this document" placeholder="Ask AI to label…" className="h-8 min-w-0 flex-1 bg-transparent px-1 text-xs outline-none placeholder:text-muted-foreground" />
+                <Button type="submit" size="icon" variant="ghost" disabled={aiLoading || !aiPrompt.trim()} className="size-7 shrink-0 rounded-full" aria-label="Label document" title="Label document">{aiLoading ? <Loader2 className="size-3.5 animate-spin" /> : <ArrowRight className="size-3.5" />}</Button>
+              </form>
+              <span className="h-5 w-px shrink-0 bg-border" />
+              <Button type="button" size="sm" variant="ghost" disabled={aiLoading} onClick={() => void suggestLabels()} className="h-7 shrink-0 px-2 text-xs text-muted-foreground">Suggest labels</Button>
+            </>
+          )}
+
+          {aiError && <span className="max-w-52 shrink-0 truncate px-1 text-xs text-destructive" title={aiError}>{aiError}</span>}
+        </div>
+      </div>
+
       {showScrollTop && (
-        <Button type="button" size="icon" variant="secondary" onClick={scrollToTop} aria-label="Scroll back to top" title="Back to top" className="fixed bottom-6 left-6 z-20 size-10 rounded-full bg-glass shadow-lg ring-1 ring-border/70 backdrop-blur-md hover:bg-glass">
+        <Button type="button" size="icon" variant="secondary" onClick={scrollToTop} aria-label="Scroll back to top" title="Back to top" className="fixed bottom-20 left-6 z-20 size-10 rounded-full bg-glass shadow-lg ring-1 ring-border/70 backdrop-blur-md hover:bg-glass">
           <ArrowUp />
         </Button>
       )}
