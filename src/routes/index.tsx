@@ -1096,7 +1096,7 @@ function Index() {
                   {suggestion}
                 </Button>
               ))}
-              <Button type="button" size="icon" variant="ghost" onClick={() => { setAiSuggestions([]); setAiError(""); }} className="size-7 shrink-0 rounded-full text-muted-foreground" aria-label="Close suggestions" title="Close suggestions"><X className="size-3.5" /></Button>
+              <Button type="button" size="icon" variant="ghost" onClick={clearAnnotations} className="size-7 shrink-0 rounded-full text-muted-foreground" aria-label="Close suggestions" title="Close suggestions"><X className="size-3.5" /></Button>
             </>
           ) : aiRanges.length > 0 ? (
             <>
@@ -1119,7 +1119,7 @@ function Index() {
             <>
               <form onSubmit={(event) => { event.preventDefault(); void findSections(); }} className="flex min-w-44 items-center gap-1 sm:min-w-72">
                 <input value={aiPrompt} onChange={(event) => setAiPrompt(event.target.value)} aria-label="Ask AI to label this document" placeholder="Ask AI to label…" className="h-8 min-w-0 flex-1 bg-transparent px-1 text-xs outline-none placeholder:text-muted-foreground" />
-                <Button type="submit" size="icon" variant="ghost" disabled={aiLoading || !aiPrompt.trim()} className="size-7 shrink-0 rounded-full" aria-label="Label document" title="Label document">{aiLoading ? <Loader2 className="size-3.5 animate-spin" /> : <ArrowRight className="size-3.5" />}</Button>
+                <Button type="submit" size="icon" variant="ghost" disabled={aiLoading || !aiPrompt.trim()} className="size-7 shrink-0 rounded-full" aria-label="Label document" title="Label document">{aiLoading ? <Loader2 className="size-3.5 animate-spin" /> : <ArrowUp className="size-3.5" />}</Button>
               </form>
               <span className="h-5 w-px shrink-0 bg-border" />
               <Button type="button" size="sm" variant="ghost" disabled={aiLoading} onClick={() => void suggestLabels()} className="h-7 shrink-0 px-2 text-xs text-muted-foreground">Suggest labels</Button>
