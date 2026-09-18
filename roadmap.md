@@ -22,3 +22,4 @@
 - [x] Switch the labelling model to gemini-3.8-flash
 - [x] Replace the AI controls with one fixed three-state label bar and document-specific suggestions
 - [x] Separate suggestion instructions, use the MyMarkdown logo, and emphasize Suggest labels
+- [x] Give AI suggestions hidden descriptions for labeling and remove the GitHub issue footer

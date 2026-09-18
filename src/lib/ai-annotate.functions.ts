@@ -9,6 +9,11 @@ export type AnnotationRange = {
   endLine: number;
 };
 
+export type LabelSuggestion = {
+  label: string;
+  description: string;
+};
+
 type AnnotationOperation = "label" | "suggest";
 
 type RawItem = Partial<Record<"label" | "color", unknown>> &
@@ -85,7 +90,7 @@ export const annotateMarkdown = createServerFn({ method: "POST" })
   .handler(
     async ({
       data,
-    }): Promise<{ ranges: AnnotationRange[]; suggestions: string[]; error?: string }> => {
+    }): Promise<{ ranges: AnnotationRange[]; suggestions: LabelSuggestion[]; error?: string }> => {
       const apiKey = process.env["GEMINI_API_KEY"];
       if (!apiKey) return { ranges: [], suggestions: [], error: "The AI key is not set up yet." };
 
@@ -123,7 +128,14 @@ export const annotateMarkdown = createServerFn({ method: "POST" })
                 properties: {
                   suggestions: {
                     type: "array",
-                    items: { type: "string" },
+                    items: {
+                      type: "object",
+                      properties: {
+                        label: { type: "string" },
+                        description: { type: "string" },
+                      },
+                      required: ["label", "description"],
+                    },
                     minItems: 3,
                     maxItems: 5,
                   },
@@ -177,14 +189,24 @@ export const annotateMarkdown = createServerFn({ method: "POST" })
         };
         const text =
           payload.candidates?.[0]?.content?.parts?.map((part) => part.text ?? "").join("") ?? "";
-        const parsed = JSON.parse(text) as { items?: RawItem[]; suggestions?: unknown[] };
+        const parsed = JSON.parse(text) as {
+          items?: RawItem[];
+          suggestions?: { label?: unknown; description?: unknown }[];
+        };
         if (isSuggesting) {
           const seen = new Set<string>();
           const suggestions = (parsed.suggestions ?? [])
-            .map((value) => String(value).trim().split(/\s+/).slice(0, 3).join(" "))
+            .map((value) => ({
+              label: String(value.label ?? "").trim().split(/\s+/).slice(0, 3).join(" "),
+              description: String(value.description ?? "")
+                .trim()
+                .split(/\s+/)
+                .slice(0, 10)
+                .join(" "),
+            }))
             .filter((value) => {
-              const key = value.toLowerCase();
-              if (!value || seen.has(key)) return false;
+              const key = value.label.toLowerCase();
+              if (!value.label || !value.description || seen.has(key)) return false;
               seen.add(key);
               return true;
             })
