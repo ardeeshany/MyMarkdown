@@ -191,13 +191,24 @@
 }
 
 .ai-bar-scroll {
+  mask-image: none;
+}
+
+.ai-bar-scroll[data-fade="left"] {
   mask-image: linear-gradient(
     to right,
     transparent,
     black 0.65rem,
-    black calc(100% - 0.65rem),
-    transparent
+    black 100%
   );
+}
+
+.ai-bar-scroll[data-fade="right"] {
+  mask-image: linear-gradient(to right, black 0%, black calc(100% - 0.65rem), transparent);
+}
+
+.ai-bar-scroll[data-fade="both"] {
+  mask-image: linear-gradient(to right, transparent, black 0.65rem, black calc(100% - 0.65rem), transparent);
 }
 
 .preview-scan {

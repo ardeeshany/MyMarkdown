@@ -44,4 +44,4 @@
 
 - [x] Rewrite suggestion instructions as three short structural questions and allow up to 8 words
 - [x] Widen the AI panel, fade horizontally cropped edges, and keep its close button outside on the right
-- [ ] Separate suggestion and label close controls, make edge fades scroll-aware, and jump label chips to their first match
+- [x] Separate suggestion and label close controls, make edge fades scroll-aware, and jump label chips to their first match
