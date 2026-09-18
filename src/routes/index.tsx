@@ -1033,7 +1033,7 @@ function Index() {
             className="mb-4 size-32 object-contain sm:size-40"
             draggable={false}
           />
-          <h1 className="text-4xl font-bold tracking-tight leading-tight sm:text-5xl">
+          <h1 className="font-display text-4xl font-bold tracking-tight leading-tight sm:text-5xl">
             Markdown, beautiful for human eyes
           </h1>
           <p className="mt-3 max-w-2xl text-sm text-muted-foreground sm:text-base">
