@@ -47,3 +47,4 @@
 - [x] Separate suggestion and label close controls, make edge fades scroll-aware, and jump label chips to their first match
 - [x] Pin the AI logo, default to 3–5 label badges, make empty-result dismissal stable, and strengthen suggestion guidance
 - [x] Remove the hero Open Source badge and fold "Free and Open source" into a narrower subtitle
+- [x] Rewrite the hero subtitle to mention raw Markdown and read "It's free and open source"
