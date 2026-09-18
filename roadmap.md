@@ -32,3 +32,4 @@
 - [x] Return the hero title to the Fraunces display font
 - [x] Simplify AI suggestions into stacked question prompts and place dismissible feedback inside the ask field
 - [x] Rewrite suggestion instructions around reader questions and a semantic second layer over the document
+- [x] Add a Free and Open Source badge above the hero logo and shorten the subtitle
