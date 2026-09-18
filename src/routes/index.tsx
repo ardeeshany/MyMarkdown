@@ -1573,6 +1573,9 @@ function Index() {
                   Suggest labels
                 </Button>
               </>
+                  )}
+                </div>
+              </>
             )}
           </div>
           {aiRanges.length > 0 && (
