@@ -51,3 +51,4 @@
 - [x] Label chips cycle through their matches on click; arrows removed; logo pinned solid with fade into it
 - [x] Make the suggestion panel 25% wider while suggestions are shown
 - [x] Make the applied badge bar 25% wider so more of each label is visible
+- [x] Add Google site verification file (google097a48aad2a730a9.html) for Analytics/Search Console — needs a publish to go live
