@@ -448,6 +448,61 @@ async function labelDocument(question) {
   await refreshLabels(document);
 }
 
+/** Whether the labels feature is on at all, across every document. */
+function labelsEnabled() {
+  return config().get("labels.enabled", true);
+}
+
+/** Flips the global on/off switch. Reachable from the Command Palette even once the
+ * status bar item (which hides itself while disabled) is gone, so there is always a way
+ * back in. */
+async function toggleLabelsEnabled() {
+  const next = !labelsEnabled();
+  await vscode.workspace
+    .getConfiguration("mymarkdown")
+    .update("labels.enabled", next, vscode.ConfigurationTarget.Global);
+  vscode.window.showInformationMessage(
+    next
+      ? "MyMarkdown: labels enabled."
+      : 'MyMarkdown: labels disabled everywhere. Run "MyMarkdown: Switch Label Lens" to turn them back on.',
+  );
+  refreshLabelStatus();
+  const document = currentMarkdownDocument();
+  if (document) await refreshLabels(document);
+}
+
+/** Shared by the standalone remove command and the picker inside switchLens. */
+async function pickAndDeleteLens(document, lenses) {
+  const picked = await vscode.window.showQuickPick(
+    lenses.map((lens) => lens.name),
+    { title: "MyMarkdown: remove which lens?" },
+  );
+  if (!picked) return false;
+  const kept = lenses.filter((lens) => lens.name !== picked);
+  const uri = sidecarUri(document);
+  if (!uri) return false;
+  try {
+    if (kept.length) {
+      await vscode.workspace.fs.writeFile(
+        uri,
+        Buffer.from(
+          JSON.stringify(Labels.writeLabels(document.getText(), kept, null), null, 2) + "\n",
+          "utf8",
+        ),
+      );
+    } else {
+      await vscode.workspace.fs.delete(uri);
+    }
+  } catch (error) {
+    vscode.window.showErrorMessage("MyMarkdown: " + (error?.message || "could not remove the lens."));
+    return false;
+  }
+  lensCache.delete(document.uri.toString());
+  if (activeLens.get(document.uri.toString()) === picked) activeLens.delete(document.uri.toString());
+  await refreshLabels(document);
+  return true;
+}
+
 async function switchLens() {
   const document = currentMarkdownDocument();
   if (!document) {
@@ -464,10 +519,21 @@ async function switchLens() {
     description: lens.ranges.length + (lens.ranges.length === 1 ? " range" : " ranges"),
     detail: lens.generatedBy === "skill" ? "Written while the document was authored" : undefined,
   }));
-  const picked = await vscode.window.showQuickPick([...items, { label: "Hide labels" }], {
-    title: "MyMarkdown: label lens",
-  });
+  const DELETE = "$(trash) Delete a lens…";
+  const TOGGLE = labelsEnabled() ? "$(circle-slash) Disable labels completely" : "$(check) Enable labels";
+  const picked = await vscode.window.showQuickPick(
+    [...items, { label: "Hide labels" }, { label: DELETE }, { label: TOGGLE }],
+    { title: "MyMarkdown: label lens" },
+  );
   if (!picked) return;
+  if (picked.label === DELETE) {
+    await pickAndDeleteLens(document, lenses);
+    return;
+  }
+  if (picked.label === TOGGLE) {
+    await toggleLabelsEnabled();
+    return;
+  }
   if (picked.label === "Hide labels") activeLens.set(document.uri.toString(), "");
   else activeLens.set(document.uri.toString(), picked.label);
   await refreshLabels(document);
@@ -481,33 +547,7 @@ async function removeLens() {
     vscode.window.showInformationMessage("MyMarkdown: this document has no labels.");
     return;
   }
-  const picked = await vscode.window.showQuickPick(
-    lenses.map((lens) => lens.name),
-    { title: "MyMarkdown: remove which lens?" },
-  );
-  if (!picked) return;
-  const kept = lenses.filter((lens) => lens.name !== picked);
-  const uri = sidecarUri(document);
-  if (!uri) return;
-  try {
-    if (kept.length) {
-      await vscode.workspace.fs.writeFile(
-        uri,
-        Buffer.from(
-          JSON.stringify(Labels.writeLabels(document.getText(), kept, null), null, 2) + "\n",
-          "utf8",
-        ),
-      );
-    } else {
-      await vscode.workspace.fs.delete(uri);
-    }
-  } catch (error) {
-    vscode.window.showErrorMessage("MyMarkdown: could not update labels — " + (error?.message || error));
-    return;
-  }
-  lensCache.delete(document.uri.toString());
-  activeLens.delete(document.uri.toString());
-  await refreshLabels(document);
+  await pickAndDeleteLens(document, lenses);
 }
 
 class HeadingItem extends vscode.TreeItem {
@@ -577,6 +617,7 @@ function activate(context) {
     vscode.commands.registerCommand("mymarkdown.labelDocument", () => labelDocument()),
     vscode.commands.registerCommand("mymarkdown.switchLens", () => switchLens()),
     vscode.commands.registerCommand("mymarkdown.removeLens", () => removeLens()),
+    vscode.commands.registerCommand("mymarkdown.toggleLabels", () => toggleLabelsEnabled()),
     vscode.commands.registerCommand("mymarkdown.revealLine", (line) => {
       const editor = activeMarkdownEditor();
       if (!editor) return;

@@ -56,8 +56,16 @@ has several lenses, use the dropdown chip at the start of the row to switch betw
 Run **MyMarkdown: Suggest Label Lenses** for three questions worth asking about the open
 document, or **MyMarkdown: Label Document…** to ask your own. Each answer is a *lens*, and
 a document can keep several — one showing how the content breaks down, another showing
-which parts still need work. The MyMarkdown item in the status bar also switches between
-lenses or hides labels entirely.
+which parts still need work. Click the MyMarkdown item in the status bar (or run
+**MyMarkdown: Switch Label Lens**) to switch between lenses, hide labels for the open
+document, delete a lens you no longer want, or turn labels off everywhere with one click.
+**MyMarkdown: Remove Label Lens** and **MyMarkdown: Toggle Labels** do the same two things
+directly, for a keybinding or the Command Palette.
+
+The chip row inside the preview is read-only: VS Code's built-in preview gives a
+contributed script no way to write back to the editor, so deleting a lens or disabling the
+feature always goes through one of the commands above, never a click inside the preview
+itself.
 
 Existing Markdown files are not labelled retroactively. Open any old `.md` file and run
 **MyMarkdown: Suggest Label Lenses** or **MyMarkdown: Label Document…** once; after that,

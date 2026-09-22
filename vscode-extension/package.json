@@ -64,6 +64,11 @@
         "command": "mymarkdown.removeLens",
         "title": "Remove Label Lens",
         "category": "MyMarkdown"
+      },
+      {
+        "command": "mymarkdown.toggleLabels",
+        "title": "Toggle Labels",
+        "category": "MyMarkdown"
       }
     ],
     "menus": {
@@ -93,6 +98,10 @@
         },
         {
           "command": "mymarkdown.removeLens",
+          "when": "editorLangId == markdown"
+        },
+        {
+          "command": "mymarkdown.toggleLabels",
           "when": "editorLangId == markdown"
         }
       ]

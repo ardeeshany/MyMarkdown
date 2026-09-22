@@ -55,9 +55,27 @@ function codeSpan(html) {
 let passed = 0;
 const failures = [];
 
+// A check may return a promise (driving an async command handler end to end rather than
+// just confirming it is registered); its pass/fail is then only known once that settles,
+// so it goes on `pending` and the final report waits for it below.
+const pending = [];
+
 function check(name, fn) {
   try {
-    fn();
+    const result = fn();
+    if (result && typeof result.then === "function") {
+      pending.push(
+        result.then(
+          () => {
+            passed += 1;
+          },
+          (e) => {
+            failures.push(name + "\n      " + (e && e.message ? e.message : String(e)));
+          },
+        ),
+      );
+      return;
+    }
     passed += 1;
   } catch (e) {
     failures.push(name + "\n      " + (e && e.message ? e.message : String(e)));
@@ -810,10 +828,237 @@ check("suggestions are held to three short, distinct questions", () => {
   }
 });
 
-if (failures.length) {
-  console.error("\n  MyMarkdown checks: " + passed + " passed, " + failures.length + " failed\n");
-  failures.forEach((f) => console.error("    - " + f));
-  console.error("");
-  process.exit(1);
+/**
+ * A minimal, stateful stub for the two label-management flows added after the rest of
+ * this file's big shared stub was written: a config store `.get()`/`.update()` actually
+ * round-trip through, and a command registry that keeps the real handlers instead of
+ * discarding them, so a check can invoke `mymarkdown.toggleLabels` etc. directly rather
+ * than only confirming it is *declared*.
+ */
+function driveLabelCommands(sidecarByPath, activeDocument) {
+  const path_ = require("path");
+  const Module = require("module");
+  const load = Module._load;
+  const off = { dispose() {} };
+  const configStore = { "labels.enabled": true };
+  const commandHandlers = {};
+  const quickPickQueue = [];
+  const written = [];
+  let deleted = false;
+
+  const stub = {
+    Range: class {},
+    Position: class {},
+    Selection: class {},
+    TextEdit: { replace: () => ({}) },
+    Diagnostic: class {},
+    WorkspaceEdit: class {},
+    EndOfLine: { LF: 1, CRLF: 2 },
+    DiagnosticSeverity: { Warning: 1, Information: 2 },
+    ConfigurationTarget: { Global: 1, Workspace: 2, WorkspaceFolder: 3 },
+    ThemeIcon: class {},
+    ThemeColor: class {},
+    TreeItem: class {},
+    TreeItemCollapsibleState: { None: 0 },
+    TextEditorRevealType: { AtTop: 3 },
+    StatusBarAlignment: { Left: 1, Right: 2 },
+    ProgressLocation: { Notification: 15 },
+    LanguageModelChatMessage: { User: (text) => ({ text }) },
+    Uri: {
+      joinPath: (base, ...parts) => ({
+        fsPath: [base && base.fsPath, ...parts].filter(Boolean).join("/"),
+        toString() {
+          return this.fsPath;
+        },
+      }),
+    },
+    EventEmitter: class {
+      constructor() {
+        this.event = () => off;
+      }
+      fire() {}
+    },
+    languages: {
+      createDiagnosticCollection: () => ({ set() {}, delete() {}, clear() {}, dispose() {} }),
+      registerDocumentFormattingEditProvider: () => off,
+    },
+    window: {
+      activeTextEditor: activeDocument ? { document: activeDocument } : undefined,
+      registerTreeDataProvider: () => off,
+      onDidChangeActiveTextEditor: () => off,
+      showInformationMessage() {},
+      showWarningMessage() {},
+      showErrorMessage() {},
+      // Each call consumes the next queued answer, in the order the code under test asks -
+      // the same shape as a person clicking through a chain of quick picks by hand.
+      showQuickPick: async () => quickPickQueue.shift(),
+      showInputBox: async () => undefined,
+      setStatusBarMessage() {},
+      withProgress: async (_options, work) => work({ onCancellationRequested: () => off }),
+      createStatusBarItem: () => ({ text: "", tooltip: "", command: "", show() {}, hide() {}, dispose() {} }),
+    },
+    workspace: {
+      getConfiguration: () => ({
+        get: (key, fallback) => (key in configStore ? configStore[key] : fallback),
+        update: async (key, value) => {
+          configStore[key] = value;
+        },
+      }),
+      onDidChangeTextDocument: () => off,
+      onDidOpenTextDocument: () => off,
+      onDidCloseTextDocument: () => off,
+      onDidChangeConfiguration: () => off,
+      textDocuments: [],
+      applyEdit: async () => true,
+      getWorkspaceFolder: () => ({ uri: { fsPath: "/ws" } }),
+      fs: {
+        readFile: async (uri) => {
+          const body = sidecarByPath[uri.fsPath];
+          if (body === undefined) throw new Error("no sidecar");
+          return Buffer.from(JSON.stringify(body), "utf8");
+        },
+        writeFile: async (uri, contents) => {
+          written.push({ path: uri.fsPath, body: JSON.parse(contents.toString("utf8")) });
+        },
+        createDirectory: async () => {},
+        delete: async () => {
+          deleted = true;
+        },
+      },
+    },
+    commands: {
+      registerCommand: (name, handler) => {
+        commandHandlers[name] = handler;
+        return off;
+      },
+      executeCommand: async () => undefined,
+    },
+    lm: { selectChatModels: async () => [] },
+  };
+
+  Module._load = (request, ...rest) => (request === "vscode" ? stub : load(request, ...rest));
+  let handlers;
+  try {
+    const entry = path_.join(__dirname, "extension.js");
+    delete require.cache[require.resolve(entry)];
+    const extension = require(entry);
+    extension.activate({ subscriptions: [] });
+    handlers = commandHandlers;
+  } finally {
+    Module._load = load;
+  }
+
+  return {
+    handlers,
+    configStore,
+    queueQuickPick: (...answers) => quickPickQueue.push(...answers),
+    written,
+    deleted: () => deleted,
+  };
 }
-console.log("  MyMarkdown checks: " + passed + " passed");
+
+check("toggling labels flips the setting both ways and is reachable with no document open", () => {
+  const host = driveLabelCommands({});
+  assert(host.configStore["labels.enabled"] === true, "labels start enabled");
+  return host.handlers["mymarkdown.toggleLabels"]()
+    .then(() => {
+      assert(host.configStore["labels.enabled"] === false, "one toggle disables");
+      return host.handlers["mymarkdown.toggleLabels"]();
+    })
+    .then(() => {
+      assert(host.configStore["labels.enabled"] === true, "a second toggle re-enables");
+    });
+});
+
+function fakeMarkdownDocument(fsPath, text) {
+  return {
+    uri: { fsPath, toString: () => "file://" + fsPath },
+    languageId: "markdown",
+    isClosed: false,
+    version: 1,
+    getText: () => text,
+  };
+}
+
+check("removeLens deletes only the picked lens and keeps the rest", () => {
+  const doc = "# A\n\nabc\n\n# B\n\ndef\n";
+  const before = Labels.writeLabels(
+    doc,
+    [
+      { name: "First", ranges: [{ label: "One", color: "#111111", startLine: 1, endLine: 3 }] },
+      { name: "Second", ranges: [{ label: "Two", color: "#222222", startLine: 5, endLine: 7 }] },
+    ],
+    null,
+  );
+  const document = fakeMarkdownDocument("/ws/doc.md", doc);
+  const host = driveLabelCommands({ "/ws/.mymd/doc.md.json": before }, document);
+  host.queueQuickPick("First");
+  return host.handlers["mymarkdown.removeLens"]().then(() => {
+    assert(host.written.length === 1, "expected one write, got " + host.written.length);
+    const names = host.written[0].body.lenses.map((l) => l.name);
+    assert(names.join(",") === "Second", "First should be gone, Second should remain: " + names);
+    assert(!host.deleted(), "the sidecar file itself should not be deleted while a lens remains");
+  });
+});
+
+check("removeLens deletes the sidecar file rather than writing an empty one when nothing is left", () => {
+  const doc = "# A\n\nabc\n";
+  const before = Labels.writeLabels(
+    doc,
+    [{ name: "Only", ranges: [{ label: "One", color: "#111111", startLine: 1, endLine: 3 }] }],
+    null,
+  );
+  const document = fakeMarkdownDocument("/ws/doc.md", doc);
+  const host = driveLabelCommands({ "/ws/.mymd/doc.md.json": before }, document);
+  host.queueQuickPick("Only");
+  return host.handlers["mymarkdown.removeLens"]().then(() => {
+    assert(host.deleted(), "the sidecar file should be removed, not left holding an empty lens list");
+    assert(host.written.length === 0, "nothing should be written once the last lens is gone");
+  });
+});
+
+check("switchLens's own \"Delete a lens...\" item reaches the same deletion path", () => {
+  const doc = "# A\n\nabc\n\n# B\n\ndef\n";
+  const before = Labels.writeLabels(
+    doc,
+    [
+      { name: "First", ranges: [{ label: "One", color: "#111111", startLine: 1, endLine: 3 }] },
+      { name: "Second", ranges: [{ label: "Two", color: "#222222", startLine: 5, endLine: 7 }] },
+    ],
+    null,
+  );
+  const document = fakeMarkdownDocument("/ws/doc.md", doc);
+  const host = driveLabelCommands({ "/ws/.mymd/doc.md.json": before }, document);
+  // First answer picks the picker's delete item; second answer picks which lens.
+  host.queueQuickPick({ label: "$(trash) Delete a lens…" }, "Second");
+  return host.handlers["mymarkdown.switchLens"]().then(() => {
+    assert(host.written.length === 1, "expected one write, got " + host.written.length);
+    const names = host.written[0].body.lenses.map((l) => l.name);
+    assert(names.join(",") === "First", "Second should be gone, First should remain: " + names);
+  });
+});
+
+check("switchLens's own toggle item disables labels without a separate command", () => {
+  const doc = "# A\n\nabc\n";
+  const before = Labels.writeLabels(
+    doc,
+    [{ name: "Only", ranges: [{ label: "One", color: "#111111", startLine: 1, endLine: 3 }] }],
+    null,
+  );
+  const document = fakeMarkdownDocument("/ws/doc.md", doc);
+  const host = driveLabelCommands({ "/ws/.mymd/doc.md.json": before }, document);
+  host.queueQuickPick({ label: "$(circle-slash) Disable labels completely" });
+  return host.handlers["mymarkdown.switchLens"]().then(() => {
+    assert(host.configStore["labels.enabled"] === false, "the picker's toggle item should flip the setting");
+  });
+});
+
+Promise.all(pending).then(() => {
+  if (failures.length) {
+    console.error("\n  MyMarkdown checks: " + passed + " passed, " + failures.length + " failed\n");
+    failures.forEach((f) => console.error("    - " + f));
+    console.error("");
+    process.exit(1);
+  }
+  console.log("  MyMarkdown checks: " + passed + " passed");
+});
