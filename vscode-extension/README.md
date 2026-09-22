@@ -112,7 +112,8 @@ for Markdown files:
 
 Default: `true`
 
-Draws label bars in the preview for documents that have them.
+Draws label bars in the preview for documents that have them. Run
+**MyMarkdown: Toggle Labels** to flip it without opening Settings.
 
 ### `mymarkdown.labels.provider`
 
