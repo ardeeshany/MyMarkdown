@@ -439,3 +439,12 @@ body.vscode-high-contrast:not(.vscode-high-contrast-light) .mymd-lens-select {
   opacity: 0.65;
   font-weight: 500;
 }
+.mymd-lens-hint {
+  font-family: var(--mm-body, inherit);
+  font-size: 12px;
+  font-style: italic;
+  opacity: 0.75;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}

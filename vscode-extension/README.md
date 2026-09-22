@@ -65,7 +65,10 @@ directly, for a keybinding or the Command Palette.
 The chip row inside the preview is read-only: VS Code's built-in preview gives a
 contributed script no way to write back to the editor, so deleting a lens or disabling the
 feature always goes through one of the commands above, never a click inside the preview
-itself.
+itself. The dropdown lists "Delete a lens…" and "Disable labels completely" alongside the
+real lenses so both options are visible from there too, but picking either just shows a
+one-line reminder of the command to run and puts the dropdown back on the lens you were
+already viewing — the preview only ever displays, never acts.
 
 Existing Markdown files are not labelled retroactively. Open any old `.md` file and run
 **MyMarkdown: Suggest Label Lenses** or **MyMarkdown: Label Document…** once; after that,

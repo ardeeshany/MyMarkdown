@@ -16,6 +16,15 @@
   var MARKER_ID = "mymd-labels";
   var LAYER_ID = "mymd-label-layer";
   var CHIPS_ID = "mymd-label-chips";
+  // Sentinels, not real lens names: this preview script has no channel back to the
+  // extension host (acquireVsCodeApi() is already claimed by VS Code's own preview
+  // script, and command: links are silently dropped by its click handler - verified
+  // against the installed bundle, not assumed), so picking either of these cannot
+  // itself delete a lens or flip a setting. They exist so the same choices you would
+  // reach for in the picker are visible here too, with an honest note on how to act
+  // on them, rather than being missing from this dropdown entirely.
+  var DELETE_SENTINEL = "\u0000delete-a-lens";
+  var TOGGLE_SENTINEL = "\u0000disable-labels";
   var reduceMotion =
     window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
@@ -156,8 +165,27 @@
       option.selected = optionLens.name === lens.name;
       select.appendChild(option);
     }
+
+    var deleteOption = document.createElement("option");
+    deleteOption.value = DELETE_SENTINEL;
+    deleteOption.textContent = "Delete a lens…";
+    select.appendChild(deleteOption);
+
+    var toggleOption = document.createElement("option");
+    toggleOption.value = TOGGLE_SENTINEL;
+    toggleOption.textContent = "Disable labels completely";
+    select.appendChild(toggleOption);
+
     switcher.appendChild(select);
     host.appendChild(switcher);
+
+    if (state.hint) {
+      var hint = document.createElement("span");
+      hint.className = "mymd-lens-hint";
+      hint.setAttribute("role", "status");
+      hint.textContent = state.hint;
+      host.appendChild(hint);
+    }
 
     for (var j = 0; j < order.length; j += 1) {
       var label = order[j];
@@ -188,7 +216,21 @@
     }
   }
 
-  var state = { bars: [], activeKey: null, activeLensName: "" };
+  var state = { bars: [], activeKey: null, activeLensName: "", hint: null };
+  var hintTimer = null;
+
+  /** Neither sentinel can be acted on here; show where to actually do it, then repaint
+   *  the select back onto the real active lens so it never looks stuck on a fake entry. */
+  function showHint(message) {
+    state.hint = message;
+    if (hintTimer) clearTimeout(hintTimer);
+    hintTimer = window.setTimeout(function () {
+      hintTimer = null;
+      state.hint = null;
+      paint();
+    }, 4000);
+    paint();
+  }
 
   /** Scroll to a label's next occurrence, wrapping at the end, the way the site's chips do. */
   function cycle(label) {
@@ -293,6 +335,19 @@
   document.addEventListener("change", function (event) {
     var select = event.target && event.target.closest && event.target.closest(".mymd-lens-select");
     if (!select) return;
+    if (select.value === DELETE_SENTINEL) {
+      showHint('To delete a lens, use the status bar item or "MyMarkdown: Switch Label Lens".');
+      return;
+    }
+    if (select.value === TOGGLE_SENTINEL) {
+      showHint('To disable labels everywhere, run "MyMarkdown: Toggle Labels" (Ctrl+Shift+P).');
+      return;
+    }
+    if (hintTimer) {
+      clearTimeout(hintTimer);
+      hintTimer = null;
+    }
+    state.hint = null;
     state.activeLensName = select.value;
     state.activeKey = null;
     paint();
