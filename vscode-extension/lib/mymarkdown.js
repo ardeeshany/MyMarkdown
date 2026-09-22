@@ -12,11 +12,11 @@
   "use strict";
 
   function slugifyHeading(value) {
-      return (value
+      return value
           .toLowerCase()
           .replace(/[`*_~[\]()]/g, "")
           .replace(/[^\p{L}\p{N}]+/gu, "-")
-          .replace(/^-|-$/g, "") || "section");
+          .replace(/^-|-$/g, "") || "section";
   }
   /* ---------------------------------------------------------------------------
    * Region scanning.
@@ -143,8 +143,7 @@
           if (afterBlankLine && line.trim() !== "" && codeIndented) {
               let close = i;
               while (close + 1 < lines.length &&
-                  (indentWidth(lines[close + 1] ?? "") >= contentColumn + 4 ||
-                      (lines[close + 1] ?? "").trim() === "")) {
+                  (indentWidth(lines[close + 1] ?? "") >= contentColumn + 4 || (lines[close + 1] ?? "").trim() === "")) {
                   close += 1;
               }
               while (close > i && (lines[close] ?? "").trim() === "")
@@ -160,14 +159,7 @@
           const info = (fence?.[3] ?? "").replace(/\s+$/, "");
           // A backtick fence's info string may not itself contain a backtick.
           if (fence && !codeIndented && !(marker.startsWith("`") && info.includes("`"))) {
-              const region = {
-                  kind: "fence",
-                  open: i,
-                  close: null,
-                  marker,
-                  indent: fence[1] ?? "",
-                  info,
-              };
+              const region = { kind: "fence", open: i, close: null, marker, indent: fence[1] ?? "", info };
               isProtected[i] = true;
               for (let j = i + 1; j < lines.length; j += 1) {
                   isProtected[j] = true;
@@ -298,7 +290,7 @@
       let i = 0;
       while (i < lines.length) {
           const line = lines[i] ?? "";
-          if (!isProtected[i] && /^\s*[{[]/.test(line)) {
+          if (!isProtected[i] && /^\s*[\{\[]/.test(line)) {
               // Accumulate lines until the JSON candidate parses or we run out. Blank lines
               // are included on purpose, so a pretty-printed value with a blank line in it
               // is still recognised as one block.
@@ -310,7 +302,7 @@
                       break;
                   buffer += (buffer ? "\n" : "") + (lines[j] ?? "");
                   const trimmed = buffer.trim();
-                  if (!/[}\]]\s*$/.test(trimmed))
+                  if (!/[\}\]]\s*$/.test(trimmed))
                       continue;
                   if (parseJsonObject(trimmed) === null)
                       continue;
@@ -342,7 +334,7 @@
               return line;
           return line.replace(/`([^`\n]+)`/g, (match, content) => {
               const trimmed = content.trim();
-              if (!/^[{[]/.test(trimmed) || !/"[^"]+"\s*:/.test(trimmed))
+              if (!/^[\{\[]/.test(trimmed) || !/"[^"]+"\s*:/.test(trimmed))
                   return match;
               try {
                   JSON.parse(trimmed);
@@ -405,9 +397,7 @@
                   blankLine();
               const language = fenceLanguage(region.info);
               const at = language ? region.info.toLowerCase().indexOf(language) : -1;
-              const info = at === -1
-                  ? region.info
-                  : region.info.slice(0, at) + language + region.info.slice(at + language.length);
+              const info = at === -1 ? region.info : region.info.slice(0, at) + language + region.info.slice(at + language.length);
               output.push(region.indent + region.marker + info);
               const end = region.close === null ? lines.length : region.close;
               let content = lines.slice(i + 1, end);
@@ -460,11 +450,7 @@
               return;
           const level = (heading[1] ?? "").length;
           if (previousLevel && level > previousLevel + 1) {
-              issues.push({
-                  kind: "warning",
-                  message: `Heading level jumps to H${level}`,
-                  ...wholeLine(index),
-              });
+              issues.push({ kind: "warning", message: `Heading level jumps to H${level}`, ...wholeLine(index) });
           }
           previousLevel = level;
       });

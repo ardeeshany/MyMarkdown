@@ -139,23 +139,25 @@
     }
 
     host.textContent = "";
-    if (payload.lenses.length > 1) {
-      var switcher = document.createElement("label");
-      switcher.className = "mymd-lens-chip";
-      var select = document.createElement("select");
-      select.className = "mymd-lens-select";
-      select.setAttribute("aria-label", "Switch label lens");
-      for (var optionIndex = 0; optionIndex < payload.lenses.length; optionIndex += 1) {
-        var optionLens = payload.lenses[optionIndex];
-        var option = document.createElement("option");
-        option.value = optionLens.name;
-        option.textContent = optionLens.name;
-        option.selected = optionLens.name === lens.name;
-        select.appendChild(option);
-      }
-      switcher.appendChild(select);
-      host.appendChild(switcher);
+    // Shown even for a single lens: it's the one place the active question is named, and
+    // keeping it present (not just appearing once a second lens exists) means asking for
+    // one more lens later doesn't make a dropdown suddenly appear where there was none.
+    var switcher = document.createElement("label");
+    switcher.className = "mymd-lens-chip";
+    var select = document.createElement("select");
+    select.className = "mymd-lens-select";
+    select.setAttribute("aria-label", "Switch label lens");
+    select.disabled = payload.lenses.length < 2;
+    for (var optionIndex = 0; optionIndex < payload.lenses.length; optionIndex += 1) {
+      var optionLens = payload.lenses[optionIndex];
+      var option = document.createElement("option");
+      option.value = optionLens.name;
+      option.textContent = optionLens.name;
+      option.selected = optionLens.name === lens.name;
+      select.appendChild(option);
     }
+    switcher.appendChild(select);
+    host.appendChild(switcher);
 
     for (var j = 0; j < order.length; j += 1) {
       var label = order[j];
