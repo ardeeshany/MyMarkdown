@@ -17,7 +17,7 @@ import heroImage from "@/assets/mymarkdown-logo-v2.webp.asset.json";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
 
-const VERSION = "0.1.22";
+const VERSION = "0.2.0";
 
 const INSTALL_COMMAND = `code --install-extension mymarkdown-${VERSION}.vsix`;
 

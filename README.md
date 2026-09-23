@@ -7,7 +7,9 @@ lint hints for the rough edges.
 
 **Live app:** https://mymarkdown.site
 
-Everything runs in your browser. No account, no upload, nothing leaves your machine.
+Markdown stays local unless you explicitly generate AI labels, in which case the document
+is sent to your selected AI provider. Otherwise: no account, no upload, everything runs in
+your browser.
 
 ![MyMarkdown showing tables, a Mermaid diagram, and math in VS Code](https://raw.githubusercontent.com/ardeeshany/mymarkdown/main/vscode-extension/media/preview-dark.png)
 
@@ -23,9 +25,13 @@ Everything runs in your browser. No account, no upload, nothing leaves your mach
 - **Beautify** — one click normalises spacing, list markers, and JSON formatting.
 - **Table of contents** — collapsible, click to jump, highlights the section you are
   reading, truncates long titles with a tooltip.
+- **AI labelling** — ask MyMarkdown to label parts of a document, or let it suggest a
+  few questions worth asking; matching sections get coloured chips you can jump between.
 - **Paste & go** — a single button reads your clipboard and shows the rendered result.
 - **VS Code extension** — the same preview, beautify command, and contents list inside
-  your editor. See [`vscode-extension/`](vscode-extension/README.md) or the
+  your editor, plus labels saved beside the file so you can switch between several
+  question-and-answer lenses instead of re-asking every time. See
+  [`vscode-extension/`](vscode-extension/README.md) or the
   [extension page](https://mymarkdown.site/vscode-extension).
 
 ## Tech stack
