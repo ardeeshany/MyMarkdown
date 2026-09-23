@@ -14,6 +14,7 @@ import {
 import { useState } from "react";
 
 import heroImage from "@/assets/mymarkdown-logo-v2.webp.asset.json";
+import overviewImage from "@/assets/vscode-overview.webp.asset.json";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
 
@@ -175,6 +176,15 @@ function ExtensionPage() {
             Version {VERSION} · about 1 MB · works with VS Code 1.85+
           </p>
         </header>
+
+        <figure className="mt-10 overflow-hidden rounded-2xl border border-border/70 bg-card shadow-xl shadow-foreground/10">
+          <img
+            src={overviewImage.url}
+            alt="MyMarkdown showing a support report in the Markdown editor and formatted VS Code preview with AI label lenses"
+            className="block h-auto w-full"
+            draggable={false}
+          />
+        </figure>
 
         <section className="mt-12 grid gap-4 sm:grid-cols-2">
           {FEATURES.map((feature) => (

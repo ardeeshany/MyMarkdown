@@ -6,7 +6,7 @@ a clickable Contents view to VS Code's own Markdown preview.
 
 **Private by design:** no account, no network requests, and nothing leaves your computer.
 
-![MyMarkdown showing tables, a Mermaid diagram, and math in VS Code](https://raw.githubusercontent.com/ardeeshany/mymarkdown/main/vscode-extension/media/preview-dark.png)
+![MyMarkdown showing a support report in the editor and formatted VS Code preview with AI label lenses](https://raw.githubusercontent.com/ardeeshany/mymarkdown/main/vscode-extension/media/overview.webp)
 
 ## What you get
 
@@ -27,8 +27,6 @@ working.
 JSON is formatted one field per line and coloured by type. Long values wrap inside the
 preview, and `\n` inside strings becomes a visible line break. Bare and inline JSON are
 recognized too.
-
-![Formatted JSON wrapping cleanly in the MyMarkdown preview](https://raw.githubusercontent.com/ardeeshany/mymarkdown/main/vscode-extension/media/json-light.png)
 
 ### Beautify with one command
 
