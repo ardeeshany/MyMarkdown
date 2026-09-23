@@ -6,7 +6,7 @@ a clickable Contents view to VS Code's own Markdown preview.
 
 **Private by design:** no account, no network requests, and nothing leaves your computer.
 
-![MyMarkdown showing a support report in the editor and formatted VS Code preview with AI label lenses](https://raw.githubusercontent.com/ardeeshany/mymarkdown/main/vscode-extension/media/overview.webp)
+![MyMarkdown showing a support report in the editor and formatted VS Code preview with smart labels](https://raw.githubusercontent.com/ardeeshany/mymarkdown/main/vscode-extension/media/overview.webp)
 
 ## What you get
 

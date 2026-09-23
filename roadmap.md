@@ -55,3 +55,5 @@
 - **VS Code extension 0.2.0 packaged** — includes label lenses; landing page download updated; privacy wording corrected in both READMEs (Markdown stays local unless AI labels are generated).
 - [x] Add the new VS Code overview screenshot to the extension page
 - [x] Replace the two older VS Code README screenshots with the new overview image
+- [x] Package VS Code extension 0.2.1 and explain AI-assisted smart labeling more clearly on its page
+- [x] Replace the old screenshots on the main GitHub README with the new VS Code overview image

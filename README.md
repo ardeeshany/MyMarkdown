@@ -11,9 +11,7 @@ Markdown stays local unless you explicitly generate AI labels, in which case the
 is sent to your selected AI provider. Otherwise: no account, no upload, everything runs in
 your browser.
 
-![MyMarkdown showing tables, a Mermaid diagram, and math in VS Code](https://raw.githubusercontent.com/ardeeshany/mymarkdown/main/vscode-extension/media/preview-dark.png)
-
-![Formatted JSON wrapping cleanly in the MyMarkdown preview](https://raw.githubusercontent.com/ardeeshany/mymarkdown/main/vscode-extension/media/json-light.png)
+![MyMarkdown showing a support report in the editor and formatted VS Code preview with smart labels](https://raw.githubusercontent.com/ardeeshany/mymarkdown/main/vscode-extension/media/overview.webp)
 
 ## Features
 
