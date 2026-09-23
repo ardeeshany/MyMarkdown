@@ -74,6 +74,11 @@ definition lists, alerts, emoji shortcodes, chart/ABC/GeoJSON fences, Mermaid, p
 common regression cases (headings, lists, JSON fences, HTML, lint edge cases). It does
 not change the app’s default sample.
 
+[`samples/q3-support-report.md`](samples/q3-support-report.md) is a separate example:
+a full quarterly support report with nested headings, tables, alerts, a diagram,
+a chart, and an appendix. Use it when you want to see a complex document, not a
+feature checklist.
+
 ## Project layout
 
 ```text

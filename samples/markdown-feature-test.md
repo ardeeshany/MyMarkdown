@@ -204,10 +204,15 @@ Use these when fixing renderer, beautify, lint, or TOC bugs.
 ## Headings
 
 # Heading 1
+
 ## Heading 2
+
 ### Heading 3
+
 #### Heading 4
+
 ##### Heading 5
+
 ###### Heading 6
 
 ## Emphasis and inline
@@ -240,8 +245,8 @@ Ordered:
 
 Mixed markers before Beautify (`*` and `+` should become `-`):
 
-* star item
-+ plus item
+- star item
+- plus item
 - dash item
 
 ## Blockquote
@@ -270,7 +275,15 @@ function greet(name) {
 JSON (valid — should pretty-print / colour):
 
 ```json
-{"version":2,"channel":"stable","features":["lint","format","preview"]}
+{
+  "version": 2,
+  "channel": "stable",
+  "features": [
+    "lint",
+    "format",
+    "preview"
+  ]
+}
 ```
 
 JSON (invalid — should lint / leave alone carefully):

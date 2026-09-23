@@ -1,0 +1,53 @@
+{
+  "version": 1,
+  "sourceHash": "16cca85ca389e71f113f591bba69ea016efea926975a33a9f5a6bb9b5dc897b4",
+  "lenses": [
+    {
+      "name": "What is each section meant to test?",
+      "generatedBy": "on-demand",
+      "generatedAt": "2026-09-23T17:26:00.764Z",
+      "ranges": [
+        {
+          "label": "Extended syntax",
+          "color": "#2563eb",
+          "startLine": 11,
+          "endLine": 131,
+          "anchor": "## 1. math",
+          "endAnchor": "developers love coffee :coffee:"
+        },
+        {
+          "label": "Custom fences",
+          "color": "#9333ea",
+          "startLine": 134,
+          "endLine": 179,
+          "anchor": "## 10. other fences",
+          "endAnchor": "```"
+        },
+        {
+          "label": "Support matrix",
+          "color": "#16a34a",
+          "startLine": 183,
+          "endLine": 196,
+          "anchor": "## current support",
+          "endAnchor": "| 10 | other fences | ❌ | ❌ |"
+        },
+        {
+          "label": "Core regression",
+          "color": "#f59e0b",
+          "startLine": 200,
+          "endLine": 334,
+          "anchor": "# extra regression checks",
+          "endAnchor": "```"
+        },
+        {
+          "label": "Lint edges",
+          "color": "#e11d48",
+          "startLine": 336,
+          "endLine": 352,
+          "anchor": "## edge cases",
+          "endAnchor": "### lint jump child (skips h2)"
+        }
+      ]
+    }
+  ]
+}
