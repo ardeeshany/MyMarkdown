@@ -7,7 +7,9 @@ lint hints for the rough edges.
 
 **Live app:** https://mymarkdown.site
 
-Everything runs in your browser. No account, no upload, nothing leaves your machine.
+Markdown stays local unless you explicitly generate AI labels, in which case the document
+is sent to your selected AI provider. Otherwise: no account, no upload, everything runs in
+your browser.
 
 ![MyMarkdown showing tables, a Mermaid diagram, and math in VS Code](https://raw.githubusercontent.com/ardeeshany/mymarkdown/main/vscode-extension/media/preview-dark.png)
 
