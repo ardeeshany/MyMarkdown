@@ -53,5 +53,5 @@
 - [x] Make the applied badge bar 25% wider so more of each label is visible
 - [x] Add Google site verification file (google097a48aad2a730a9.html) for Analytics/Search Console — needs a publish to go live
 - **VS Code extension 0.2.0 packaged** — includes label lenses; landing page download updated; privacy wording corrected in both READMEs (Markdown stays local unless AI labels are generated).
-- [ ] Add the new VS Code overview screenshot to the extension page
-- [ ] Replace the two older README screenshots with the new overview image
+- [x] Add the new VS Code overview screenshot to the extension page
+- [x] Replace the two older VS Code README screenshots with the new overview image
