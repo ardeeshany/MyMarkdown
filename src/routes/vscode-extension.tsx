@@ -18,7 +18,7 @@ import overviewImage from "@/assets/vscode-overview.webp.asset.json";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
 
-const VERSION = "0.2.0";
+const VERSION = "0.2.1";
 
 const INSTALL_COMMAND = `code --install-extension mymarkdown-${VERSION}.vsix`;
 
@@ -31,7 +31,7 @@ export const Route = createFileRoute("/vscode-extension")({
       {
         name: "description",
         content:
-          "A clearer Markdown preview for VS Code with AI label lenses, colorful headings, formatted JSON, beautify, and a clickable table of contents.",
+          "A clearer Markdown preview for VS Code with AI-assisted smart labels, colorful headings, formatted JSON, beautify, and a clickable table of contents.",
       },
       {
         property: "og:title",
@@ -49,7 +49,7 @@ export const Route = createFileRoute("/vscode-extension")({
       {
         name: "twitter:description",
         content:
-          "AI label lenses, colorful previews, beautify, and a clickable table of contents inside VS Code.",
+          "AI-assisted smart labels, colorful previews, beautify, and a clickable table of contents inside VS Code.",
       },
     ],
     links: [{ rel: "canonical", href: "https://mymarkdown.site/vscode-extension" }],
@@ -60,8 +60,8 @@ export const Route = createFileRoute("/vscode-extension")({
 const FEATURES = [
   {
     icon: Tags,
-    title: "AI label lenses",
-    body: "Ask a question such as “Which parts need work?” and see matching sections marked with colored labels. Keep several lenses and switch between them without asking again.",
+    title: "AI-assisted smart labels",
+    body: "Ask AI to group and label related parts of a long document, making its structure and important details easier to understand at a glance.",
   },
   {
     icon: Palette,
@@ -157,8 +157,8 @@ function ExtensionPage() {
             <br className="hidden sm:block" /> without leaving VS Code
           </h1>
           <p className="mt-3 max-w-xl text-sm text-muted-foreground sm:text-base">
-            A beautiful preview for everyday reading, plus AI lenses that reveal how a long document
-            is organized, connected, or unfinished.
+            A beautiful preview for everyday reading. AI can also add smart labels that group related
+            sections, making long documents easier to understand.
           </p>
           <div className="mt-6">
             <Button
@@ -180,7 +180,7 @@ function ExtensionPage() {
         <figure className="mt-10 overflow-hidden rounded-2xl border border-border/70 bg-card shadow-xl shadow-foreground/10">
           <img
             src={overviewImage.url}
-            alt="MyMarkdown showing a support report in the Markdown editor and formatted VS Code preview with AI label lenses"
+            alt="MyMarkdown showing a support report in the Markdown editor with a formatted VS Code preview and smart labels"
             className="block h-auto w-full"
             draggable={false}
           />
@@ -203,7 +203,7 @@ function ExtensionPage() {
           <div className="grid gap-8 p-6 sm:p-8 md:grid-cols-[1.05fr_.95fr] md:items-center">
             <div>
               <div className="inline-flex items-center gap-2 rounded-full bg-primary/10 px-3 py-1 text-xs font-medium text-primary">
-                <Tags className="size-3.5" /> AI label lenses
+                <Tags className="size-3.5" /> AI-assisted smart labels
               </div>
               <h2 className="mt-4 text-2xl font-semibold tracking-tight">
                 Ask the document a question
