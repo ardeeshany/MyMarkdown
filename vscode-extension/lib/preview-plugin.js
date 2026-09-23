@@ -295,8 +295,41 @@ function renderHighlights(state) {
  * @param {import("markdown-it")} md
  * @returns {import("markdown-it")} the same instance, so VS Code can chain plugins
  */
-function mymarkdownPlugin(md) {
+/**
+ * Hand the active label lens to media/labels.js, which cannot read files itself.
+ *
+ * The lens is attached to one hidden element at the end of the document, and only when
+ * `env.currentDocument` names a real file — a `markdown.api.render` call on a raw string
+ * has no document to look up and gets nothing added to its output.
+ *
+ * This must run at render time, not as a core rule during parse: VS Code's real preview
+ * engine calls `md.parse()` with `env.currentDocument` always unset, and only supplies it
+ * in the separate env object passed to `renderer.render()` afterwards. A core rule (which
+ * runs during parse) never sees it there, so it is wired into the renderer instead.
+ */
+function markerHtml(env, readLens, escapeHtml) {
+  const uri = env && env.currentDocument;
+  if (!uri || typeof readLens !== "function") return "";
+  let payload = null;
+  try {
+    payload = readLens(uri);
+  } catch {
+    // A sidecar that cannot be read is the same as no sidecar.
+    return "";
+  }
+  const lenses = payload && payload.lenses ? payload.lenses : payload && payload.ranges ? [payload] : [];
+  if (!lenses.length) return "";
+  return '<div id="mymd-labels" hidden data-lens="' + escapeHtml(JSON.stringify(payload)) + '"></div>\n';
+}
+
+/**
+ * @param {import("markdown-it")} md
+ * @param {{readLens?: (uri: unknown) => object | null}} [options] how to find the label
+ *   lens for the document being rendered; omitted outside the extension host.
+ */
+function mymarkdownPlugin(md, options) {
   const escapeHtml = (md.utils && md.utils.escapeHtml) || String;
+  const readLens = options && options.readLens;
 
   try {
     // Footnotes ([^1]) are not part of markdown-it core or VS Code's preview.
@@ -309,6 +342,10 @@ function mymarkdownPlugin(md) {
   md.core.ruler.after("inline", "mymarkdown_task_lists", renderTaskLists);
   md.core.ruler.after("mymarkdown_task_lists", "mymarkdown_alerts", renderAlerts);
   md.core.ruler.after("mymarkdown_alerts", "mymarkdown_highlights", renderHighlights);
+
+  const baseRender = md.renderer.render.bind(md.renderer);
+  md.renderer.render = (tokens, opts, env) =>
+    baseRender(tokens, opts, env) + markerHtml(env, readLens, escapeHtml);
 
   const originalFence = md.renderer.rules.fence;
   md.renderer.rules.fence = function (tokens, idx, options, env, slf) {

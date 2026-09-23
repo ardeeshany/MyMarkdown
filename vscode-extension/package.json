@@ -43,6 +43,32 @@
         "command": "mymarkdown.beautify",
         "title": "MyMarkdown: Beautify Markdown",
         "icon": "$(sparkle)"
+      },
+      {
+        "command": "mymarkdown.suggestLabels",
+        "title": "Suggest Label Lenses",
+        "category": "MyMarkdown",
+        "icon": "$(tag)"
+      },
+      {
+        "command": "mymarkdown.labelDocument",
+        "title": "Label Document…",
+        "category": "MyMarkdown"
+      },
+      {
+        "command": "mymarkdown.switchLens",
+        "title": "Switch Label Lens",
+        "category": "MyMarkdown"
+      },
+      {
+        "command": "mymarkdown.removeLens",
+        "title": "Remove Label Lens",
+        "category": "MyMarkdown"
+      },
+      {
+        "command": "mymarkdown.toggleLabels",
+        "title": "Toggle Labels",
+        "category": "MyMarkdown"
       }
     ],
     "menus": {
@@ -56,6 +82,26 @@
       "commandPalette": [
         {
           "command": "mymarkdown.beautify",
+          "when": "editorLangId == markdown"
+        },
+        {
+          "command": "mymarkdown.suggestLabels",
+          "when": "editorLangId == markdown"
+        },
+        {
+          "command": "mymarkdown.labelDocument",
+          "when": "editorLangId == markdown"
+        },
+        {
+          "command": "mymarkdown.switchLens",
+          "when": "editorLangId == markdown"
+        },
+        {
+          "command": "mymarkdown.removeLens",
+          "when": "editorLangId == markdown"
+        },
+        {
+          "command": "mymarkdown.toggleLabels",
           "when": "editorLangId == markdown"
         }
       ]
@@ -99,11 +145,43 @@
           "type": "boolean",
           "default": false,
           "description": "Register Beautify as the Markdown formatter, so Format Document and editor.formatOnSave run it. Off by default: a second Markdown formatter stops VS Code choosing one on its own, which would break format on save for anyone already using Prettier or markdownlint."
+        },
+        "mymarkdown.labels.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Draw label bars in the Markdown preview for documents that have them."
+        },
+        "mymarkdown.labels.provider": {
+          "type": "string",
+          "enum": [
+            "auto",
+            "languageModel",
+            "cli"
+          ],
+          "default": "auto",
+          "enumDescriptions": [
+            "Use an installed language model if there is one, otherwise the configured command.",
+            "Only use VS Code language model providers, such as GitHub Copilot.",
+            "Only use the command in mymarkdown.labels.cliCommand."
+          ],
+          "description": "Which AI to ask when generating labels."
+        },
+        "mymarkdown.labels.cliCommand": {
+          "type": "string",
+          "default": "",
+          "scope": "machine",
+          "markdownDescription": "Command run to generate labels when no language model provider is used. The request is written to its standard input and JSON is read back from its standard output. For example: `claude -p`."
+        },
+        "mymarkdown.labels.storagePath": {
+          "type": "string",
+          "default": ".mymd",
+          "description": "Folder holding label files, mirroring each document path. Relative to the workspace root."
         }
       }
     },
     "markdown.previewScripts": [
-      "./media/mermaid-preview.bundle.js"
+      "./media/mermaid-preview.bundle.js",
+      "./media/labels.js"
     ]
   }
 }

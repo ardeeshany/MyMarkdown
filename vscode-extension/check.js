@@ -12,6 +12,8 @@ const fs = require("fs");
 const path = require("path");
 const MD = require("./lib/mymarkdown.js");
 const { mymarkdownPlugin } = require("./lib/preview-plugin.js");
+const Labels = require("./lib/labels.js");
+const Runner = require("./lib/label-runner.js");
 
 // The preview is VS Code's own, so the checks below drive the real markdown-it the way
 // VS Code does: our plugin first, then the source-map rule VS Code appends afterwards.
@@ -53,9 +55,27 @@ function codeSpan(html) {
 let passed = 0;
 const failures = [];
 
+// A check may return a promise (driving an async command handler end to end rather than
+// just confirming it is registered); its pass/fail is then only known once that settles,
+// so it goes on `pending` and the final report waits for it below.
+const pending = [];
+
 function check(name, fn) {
   try {
-    fn();
+    const result = fn();
+    if (result && typeof result.then === "function") {
+      pending.push(
+        result.then(
+          () => {
+            passed += 1;
+          },
+          (e) => {
+            failures.push(name + "\n      " + (e && e.message ? e.message : String(e)));
+          },
+        ),
+      );
+      return;
+    }
     passed += 1;
   } catch (e) {
     failures.push(name + "\n      " + (e && e.message ? e.message : String(e)));
@@ -239,16 +259,23 @@ check("Marketplace artwork and preview-state styles are included", () => {
   const css = fs.readFileSync(path.join(__dirname, "media", "preview.css"), "utf8");
   includes(css, "input.mymd-task:checked", "checked task styling");
   includes(css, "blockquote.mymd-alert + blockquote.mymd-alert", "alert spacing");
+  includes(css, "color-scheme: light", "light lens dropdown color scheme");
+  includes(css, "color-scheme: dark", "dark lens dropdown color scheme");
+  includes(css, ".mymd-lens-select option", "lens dropdown option styling");
 });
 
 check("Mermaid preview is packaged as one ordered script", () => {
   const pkg = require("./package.json");
-  const scripts = pkg.contributes && pkg.contributes["markdown.previewScripts"];
-  assert(Array.isArray(scripts) && scripts.length === 1, "expected one preview script");
+  const scripts = (pkg.contributes && pkg.contributes["markdown.previewScripts"]) || [];
+  assert(Array.isArray(scripts) && scripts.length > 0, "expected at least one preview script");
+  // Mermaid's engine and renderer must stay in one file: two entries could load either way round.
   assert(
-    scripts[0] === "./media/mermaid-preview.bundle.js",
-    "the ordered Mermaid bundle is not registered",
+    scripts.filter((file) => /mermaid/.test(file)).join() === "./media/mermaid-preview.bundle.js",
+    "the ordered Mermaid bundle is not registered exactly once",
   );
+  for (const file of scripts) {
+    assert(fs.existsSync(path.join(__dirname, file)), "previewScripts points at a missing file: " + file);
+  }
   const bundle = fs.readFileSync(path.join(__dirname, "media", "mermaid-preview.bundle.js"), "utf8");
   const engine = bundle.indexOf("globalThis");
   const renderer = bundle.indexOf("Renders ```mermaid blocks");
@@ -477,6 +504,17 @@ check("the manifest and the extension host agree", () => {
     TreeItem: class {},
     TreeItemCollapsibleState: { None: 0 },
     TextEditorRevealType: { AtTop: 3 },
+    StatusBarAlignment: { Left: 1, Right: 2 },
+    ProgressLocation: { Notification: 15 },
+    LanguageModelChatMessage: { User: (text) => ({ text }) },
+    Uri: {
+      joinPath: (base, ...parts) => ({
+        fsPath: [base && base.fsPath, ...parts].filter(Boolean).join("/"),
+        toString() {
+          return this.fsPath;
+        },
+      }),
+    },
     EventEmitter: class {
       constructor() {
         this.event = () => off;
@@ -492,7 +530,20 @@ check("the manifest and the extension host agree", () => {
       registerTreeDataProvider: () => off,
       onDidChangeActiveTextEditor: () => off,
       showInformationMessage() {},
+      showWarningMessage() {},
+      showErrorMessage() {},
+      showQuickPick: async () => undefined,
+      showInputBox: async () => undefined,
       setStatusBarMessage() {},
+      withProgress: async (_options, work) => work({ onCancellationRequested: () => off }),
+      createStatusBarItem: () => ({
+        text: "",
+        tooltip: "",
+        command: "",
+        show() {},
+        hide() {},
+        dispose() {},
+      }),
     },
     workspace: {
       getConfiguration: () => ({ get: (_key, fallback) => fallback }),
@@ -502,8 +553,18 @@ check("the manifest and the extension host agree", () => {
       onDidChangeConfiguration: () => off,
       textDocuments: [],
       applyEdit: async () => true,
+      getWorkspaceFolder: () => undefined,
+      fs: {
+        readFile: async () => {
+          throw new Error("no sidecar");
+        },
+        writeFile: async () => {},
+        createDirectory: async () => {},
+        delete: async () => {},
+      },
     },
-    commands: { registerCommand: () => off },
+    commands: { registerCommand: () => off, executeCommand: async () => undefined },
+    lm: { selectChatModels: async () => [] },
   };
   Module._load = (request, ...rest) => (request === "vscode" ? stub : load(request, ...rest));
   let api;
@@ -555,10 +616,449 @@ check("the manifest and the extension host agree", () => {
   );
 });
 
-if (failures.length) {
-  console.error("\n  MyMarkdown checks: " + passed + " passed, " + failures.length + " failed\n");
-  failures.forEach((f) => console.error("    - " + f));
-  console.error("");
-  process.exit(1);
+check("a label sidecar is read back as written", () => {
+  const lens = { name: "How does this break down?", ranges: [
+    { label: "Intro", color: "#2563eb", startLine: 1, endLine: 3 },
+    { label: "Setup", color: "#059669", startLine: 5, endLine: 7 },
+  ] };
+  const doc = "# Title\n\nIntro paragraph.\n\n## Setup\n\nInstall it.\n\n## Usage\n\nRun it.";
+  const file = Labels.writeLabels(doc, [lens], null);
+  assert(file.sourceHash, "the sidecar should record the document hash");
+  const read = Labels.readLabels(file, doc);
+  assert(read.stale === false, "a sidecar written for this text is not stale");
+  assert(read.lenses.length === 1, "expected one lens, got " + read.lenses.length);
+  assert(read.lenses[0].ranges.length === 2, "both ranges should survive");
+  assert(read.lenses[0].ranges[0].anchor, "ranges are stamped with an anchor when written");
+});
+
+check("ranges follow their text when the document moves", () => {
+  const doc = "# Title\n\nIntro paragraph.\n\n## Setup\n\nInstall it.\n\n## Usage\n\nRun it.";
+  const file = Labels.writeLabels(doc, [{ name: "L", ranges: [
+    { label: "Usage", color: "#8341be", startLine: 9, endLine: 11 },
+  ] }], null);
+  // Four lines added at the top: the Usage section is now lower down.
+  const moved = "x\n\ny\n\n" + doc;
+  const read = Labels.readLabels(file, moved);
+  assert(read.stale === true, "the hash should no longer match");
+  const range = read.lenses[0].ranges[0];
+  assert(range.startLine === 13, "expected the range to move to line 13, got " + range.startLine);
+  assert(range.endLine === 15, "and to keep its span, got " + range.endLine);
+});
+
+check("a range whose text is gone is dropped, the rest of the lens survives", () => {
+  const doc = "# Title\n\nIntro paragraph.\n\n## Setup\n\nInstall it.\n\n## Usage\n\nRun it.";
+  const file = Labels.writeLabels(doc, [{ name: "L", ranges: [
+    { label: "Setup", color: "#059669", startLine: 5, endLine: 7 },
+    { label: "Usage", color: "#8341be", startLine: 9, endLine: 11 },
+  ] }], null);
+  const withoutSetup = doc.replace("## Setup\n\nInstall it.\n\n", "");
+  const read = Labels.readLabels(file, withoutSetup);
+  assert(read.lenses.length === 1, "the lens should still be there");
+  const labels = read.lenses[0].ranges.map((r) => r.label);
+  assert(labels.join(",") === "Usage", "expected only Usage to survive, got " + labels.join(","));
+});
+
+check("the reader is the authority on a sidecar it did not write", () => {
+  const doc = "# Title\n\nIntro paragraph.\n\n## Setup\n\nInstall it.\n\n## Usage\n\nRun it.";
+  const hostile = { sourceHash: Labels.sha256(doc), lenses: [{ name: "L", ranges: [
+    { label: "Way too many words for a label", color: "not-a-colour", startLine: 900, endLine: -4 },
+    { label: "Overlap", color: "#111111", startLine: 1, endLine: 8 },
+    { label: "Overlap", color: "#222222", startLine: 3, endLine: 11 },
+    { label: "", color: "#333333", startLine: 1, endLine: 2 },
+  ] }] };
+  const ranges = Labels.readLabels(hostile, doc).lenses[0].ranges;
+  for (const range of ranges) {
+    assert(range.label.split(" ").length <= 2, "labels are cut to two words: " + range.label);
+    assert(/^#[0-9a-f]{6}$/i.test(range.color), "colours are validated: " + range.color);
+    assert(range.startLine >= 1 && range.endLine <= 11, "lines stay inside the document");
+    assert(range.startLine <= range.endLine, "inverted ranges are corrected");
+  }
+  for (let i = 1; i < ranges.length; i += 1) {
+    assert(ranges[i].startLine > ranges[i - 1].endLine, "ranges must not overlap");
+  }
+  const overlaps = ranges.filter((r) => r.label === "Overlap");
+  if (overlaps.length > 1) {
+    assert(overlaps[0].color === overlaps[1].color, "one colour per label");
+  }
+});
+
+check("the sidecar path mirrors the document path under one folder", () => {
+  assert(Labels.sidecarPath("docs/guide.md", ".mymd") === ".mymd/docs/guide.md.json",
+    "got " + Labels.sidecarPath("docs/guide.md", ".mymd"));
+  assert(Labels.sidecarPath("../outside.md", ".mymd") === ".mymd/outside.md.json",
+    "a path climbing out of the workspace is pinned back inside");
+});
+
+check("a moved end-anchor line does not swell a range over its neighbours", () => {
+  const seven = ["a1", "a2", "END MARKER", "b1", "b2", "c1", "c2"].join("\n");
+  const file = Labels.writeLabels(seven, [{ name: "L", ranges: [
+    { label: "a", color: "#111111", startLine: 1, endLine: 3 },
+    { label: "b", color: "#222222", startLine: 4, endLine: 5 },
+    { label: "c", color: "#333333", startLine: 6, endLine: 7 },
+  ] }], null);
+  // "END MARKER" moves to the end of the file: naively searching forward for it from a's
+  // start would stretch a's range over b and c entirely.
+  const movedEnd = ["a1", "a2", "b1", "b2", "c1", "c2", "END MARKER"].join("\n");
+  const ranges = Labels.readLabels(file, movedEnd).lenses[0].ranges;
+  const byLabel = Object.fromEntries(ranges.map((r) => [r.label, r]));
+  assert(ranges.length === 3, "all three ranges should survive, got " + ranges.length);
+  assert(byLabel.a.startLine === 1 && byLabel.a.endLine === 2, "a should shrink to its own two lines, got " + JSON.stringify(byLabel.a));
+  assert(byLabel.b.startLine === 3 && byLabel.b.endLine === 4, "b should keep its own lines, got " + JSON.stringify(byLabel.b));
+  assert(byLabel.c.startLine === 5 && byLabel.c.endLine === 6, "c should keep its own lines, got " + JSON.stringify(byLabel.c));
+});
+
+check("a range anchored on a repeated heading follows its own distinct body", () => {
+  // Six identical "## Notes" headings; only the body text tells them apart.
+  const rep = Array.from({ length: 6 }, (_, i) => ["## Notes", "body " + i, ""].join("\n")).join("\n");
+  const lines = rep.split("\n");
+  const headingLine = lines.findIndex((l) => l === "body 2"); // 0-based body index == 1-based heading line
+  const file = Labels.writeLabels(rep, [{ name: "L", ranges: [
+    { label: "Third", color: "#111111", startLine: headingLine, endLine: headingLine + 1 },
+  ] }], null);
+  // Four lines added at the top: every "## Notes" copy shifts down by four.
+  const shifted = "x\ny\nz\nw\n" + rep;
+  const wantHeading = shifted.split("\n").findIndex((l) => l === "body 2");
+  const range = Labels.readLabels(file, shifted).lenses[0]?.ranges?.[0];
+  assert(range, "the range should not be dropped - only one copy has this body");
+  assert(range.startLine === wantHeading, "expected line " + wantHeading + ", got " + range.startLine);
+  assert(range.endLine === wantHeading + 1, "expected the body line to follow, got " + range.endLine);
+});
+
+check("two candidates the document cannot tell apart are dropped, not guessed", () => {
+  const lines = [
+    "## Same", "SAME BODY", "",
+    "mid1", "mid2", "mid3", "mid4", "mid5",
+    "## Same", "SAME BODY", "",
+  ];
+  // Stored exactly halfway between the two identical copies below - both are an equally
+  // good guess, so neither is trusted.
+  const range = { label: "X", color: "#111111", startLine: 5, endLine: 6, anchor: "## same", endAnchor: "same body" };
+  const moved = Labels.reanchorRanges([range], lines);
+  assert(moved.length === 0, "an unresolvable tie should drop the range, got " + JSON.stringify(moved));
+});
+
+check("a skill-written sidecar with no sourceHash or anchors still yields its lenses", () => {
+  // Exactly the shape SKILL.md instructs an authoring agent to write: no sourceHash, no
+  // anchor/endAnchor on any range.
+  const doc = "# Title\n\nIntro paragraph.\n\n## Setup\n\nInstall it.";
+  const skillWritten = { version: 1, lenses: [{
+    name: "How does this content break down?",
+    generatedBy: "skill",
+    generatedAt: "2026-01-01T00:00:00Z",
+    ranges: [
+      { label: "Intro", color: "#2563eb", startLine: 1, endLine: 3 },
+      { label: "Setup", color: "#059669", startLine: 5, endLine: 6 },
+    ],
+  }] };
+  const read = Labels.readLabels(skillWritten, doc);
+  assert(read.lenses.length === 1, "the skill's lens should not be discarded, got " + read.lenses.length);
+  assert(read.lenses[0].ranges.length === 2, "both of its ranges should survive, got " + read.lenses[0].ranges.length);
+});
+
+check("the active lens reaches the preview, and only for a real document", () => {
+  if (!MarkdownIt) return;
+  const lens = { name: "L", ranges: [{ label: "Intro", color: "#2563eb", startLine: 1, endLine: 3 }] };
+  const md = mymarkdownPlugin(new MarkdownIt({ html: true }), { readLens: () => ({ active: "L", lenses: [lens] }) });
+  const src = "# Title\n\nIntro.\n";
+
+  // VS Code's real engine calls parse() with env.currentDocument always unset, and only
+  // supplies it in the *separate* env object handed to render() afterward - so the two
+  // calls must use different env objects here too, or this test cannot catch a marker
+  // that only a core rule (which runs during parse) could produce.
+  const tokens = md.parse(src, {});
+  const withDoc = md.renderer.render(tokens, md.options, { currentDocument: { path: "/x.md" } });
+  includes(withDoc, 'id="mymd-labels"', "the marker for the preview script");
+  includes(withDoc, "Intro", "the lens content");
+  includes(withDoc, "lenses", "the marker carries all lenses for in-preview switching");
+  assert(withDoc.indexOf('id="mymd-labels"') > withDoc.indexOf("<h1"), "the marker goes after the document");
+  // markdown.api.render passes no document, so nothing may be added to its output.
+  const noDoc = md.renderer.render(tokens, md.options, {});
+  assert(noDoc.indexOf("mymd-labels") === -1, "a render with no document must not carry a marker");
+});
+
+check("a hostile label cannot break out of the data-lens attribute", () => {
+  if (!MarkdownIt) return;
+  const hostile = {
+    name: "L",
+    ranges: [{ label: '"><img src=x onerror=alert(1)>&</div>', color: "#2563eb", startLine: 1, endLine: 1 }],
+  };
+  const md = mymarkdownPlugin(new MarkdownIt({ html: true }), { readLens: () => ({ active: "L", lenses: [hostile] }) });
+  const tokens = md.parse("# Title\n", {});
+  const html = md.renderer.render(tokens, md.options, { currentDocument: { path: "/x.md" } });
+
+  assert(html.indexOf("<img") === -1, "an unescaped label must not inject a live element");
+  assert(!/<\/div>\s*<img/.test(html), "the label text must not be able to close the marker early");
+
+  const match = /data-lens="([^"]*)"/.exec(html);
+  assert(match, "the attribute must be found by a naive double-quote-terminated match too");
+  const decoded = match[1]
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&amp;/g, "&");
+  assert(
+    JSON.parse(decoded).lenses[0].ranges[0].label === hostile.ranges[0].label,
+    "escaping must round-trip the label losslessly",
+  );
+});
+
+check("a model's reply is mined for JSON however it is wrapped", () => {
+  const wrapped = 'Sure! Here you go:\n\n```json\n{"items":[{"label":"A","color":"#111111","startLine":1,"endLine":2}]}\n```\n\nHope that helps.';
+  const ranges = Runner.parseRanges(wrapped);
+  assert(ranges.length === 1, "expected one range out of a fenced reply");
+  const braced = '{"items":[{"label":"Brace } inside","color":"#111111","startLine":1,"endLine":2}]}';
+  assert(Runner.parseRanges(braced).length === 1, "a brace inside a string must not end the object");
+  assert(Runner.parseRanges("no json here at all").length === 0, "a reply with no JSON yields nothing");
+});
+
+check("suggestions are held to three short, distinct questions", () => {
+  const reply = JSON.stringify({ suggestions: [
+    { label: "How does this content break down?" },
+    { label: "How does this content break down?" },
+    { label: "This question is far too long to be useful as a chip label" },
+    { label: "Which parts need work?" },
+    { label: "What repeats?" },
+    { label: "What is unfinished?" },
+  ] });
+  const out = Runner.parseSuggestions(reply);
+  assert(out.length === 3, "expected three suggestions, got " + out.length);
+  assert(new Set(out).size === 3, "duplicates are dropped");
+  for (const question of out) {
+    assert(question.split(" ").length <= 8, "over-long questions are dropped whole: " + question);
+  }
+});
+
+/**
+ * A minimal, stateful stub for the two label-management flows added after the rest of
+ * this file's big shared stub was written: a config store `.get()`/`.update()` actually
+ * round-trip through, and a command registry that keeps the real handlers instead of
+ * discarding them, so a check can invoke `mymarkdown.toggleLabels` etc. directly rather
+ * than only confirming it is *declared*.
+ */
+function driveLabelCommands(sidecarByPath, activeDocument) {
+  const path_ = require("path");
+  const Module = require("module");
+  const load = Module._load;
+  const off = { dispose() {} };
+  const configStore = { "labels.enabled": true };
+  const commandHandlers = {};
+  const quickPickQueue = [];
+  const written = [];
+  let deleted = false;
+
+  const stub = {
+    Range: class {},
+    Position: class {},
+    Selection: class {},
+    TextEdit: { replace: () => ({}) },
+    Diagnostic: class {},
+    WorkspaceEdit: class {},
+    EndOfLine: { LF: 1, CRLF: 2 },
+    DiagnosticSeverity: { Warning: 1, Information: 2 },
+    ConfigurationTarget: { Global: 1, Workspace: 2, WorkspaceFolder: 3 },
+    ThemeIcon: class {},
+    ThemeColor: class {},
+    TreeItem: class {},
+    TreeItemCollapsibleState: { None: 0 },
+    TextEditorRevealType: { AtTop: 3 },
+    StatusBarAlignment: { Left: 1, Right: 2 },
+    ProgressLocation: { Notification: 15 },
+    LanguageModelChatMessage: { User: (text) => ({ text }) },
+    Uri: {
+      joinPath: (base, ...parts) => ({
+        fsPath: [base && base.fsPath, ...parts].filter(Boolean).join("/"),
+        toString() {
+          return this.fsPath;
+        },
+      }),
+    },
+    EventEmitter: class {
+      constructor() {
+        this.event = () => off;
+      }
+      fire() {}
+    },
+    languages: {
+      createDiagnosticCollection: () => ({ set() {}, delete() {}, clear() {}, dispose() {} }),
+      registerDocumentFormattingEditProvider: () => off,
+    },
+    window: {
+      activeTextEditor: activeDocument ? { document: activeDocument } : undefined,
+      registerTreeDataProvider: () => off,
+      onDidChangeActiveTextEditor: () => off,
+      showInformationMessage() {},
+      showWarningMessage() {},
+      showErrorMessage() {},
+      // Each call consumes the next queued answer, in the order the code under test asks -
+      // the same shape as a person clicking through a chain of quick picks by hand.
+      showQuickPick: async () => quickPickQueue.shift(),
+      showInputBox: async () => undefined,
+      setStatusBarMessage() {},
+      withProgress: async (_options, work) => work({ onCancellationRequested: () => off }),
+      createStatusBarItem: () => ({ text: "", tooltip: "", command: "", show() {}, hide() {}, dispose() {} }),
+    },
+    workspace: {
+      getConfiguration: () => ({
+        get: (key, fallback) => (key in configStore ? configStore[key] : fallback),
+        update: async (key, value) => {
+          configStore[key] = value;
+        },
+      }),
+      onDidChangeTextDocument: () => off,
+      onDidOpenTextDocument: () => off,
+      onDidCloseTextDocument: () => off,
+      onDidChangeConfiguration: () => off,
+      textDocuments: [],
+      applyEdit: async () => true,
+      getWorkspaceFolder: () => ({ uri: { fsPath: "/ws" } }),
+      fs: {
+        readFile: async (uri) => {
+          const body = sidecarByPath[uri.fsPath];
+          if (body === undefined) throw new Error("no sidecar");
+          return Buffer.from(JSON.stringify(body), "utf8");
+        },
+        writeFile: async (uri, contents) => {
+          written.push({ path: uri.fsPath, body: JSON.parse(contents.toString("utf8")) });
+        },
+        createDirectory: async () => {},
+        delete: async () => {
+          deleted = true;
+        },
+      },
+    },
+    commands: {
+      registerCommand: (name, handler) => {
+        commandHandlers[name] = handler;
+        return off;
+      },
+      executeCommand: async () => undefined,
+    },
+    lm: { selectChatModels: async () => [] },
+  };
+
+  Module._load = (request, ...rest) => (request === "vscode" ? stub : load(request, ...rest));
+  let handlers;
+  try {
+    const entry = path_.join(__dirname, "extension.js");
+    delete require.cache[require.resolve(entry)];
+    const extension = require(entry);
+    extension.activate({ subscriptions: [] });
+    handlers = commandHandlers;
+  } finally {
+    Module._load = load;
+  }
+
+  return {
+    handlers,
+    configStore,
+    queueQuickPick: (...answers) => quickPickQueue.push(...answers),
+    written,
+    deleted: () => deleted,
+  };
 }
-console.log("  MyMarkdown checks: " + passed + " passed");
+
+check("toggling labels flips the setting both ways and is reachable with no document open", () => {
+  const host = driveLabelCommands({});
+  assert(host.configStore["labels.enabled"] === true, "labels start enabled");
+  return host.handlers["mymarkdown.toggleLabels"]()
+    .then(() => {
+      assert(host.configStore["labels.enabled"] === false, "one toggle disables");
+      return host.handlers["mymarkdown.toggleLabels"]();
+    })
+    .then(() => {
+      assert(host.configStore["labels.enabled"] === true, "a second toggle re-enables");
+    });
+});
+
+function fakeMarkdownDocument(fsPath, text) {
+  return {
+    uri: { fsPath, toString: () => "file://" + fsPath },
+    languageId: "markdown",
+    isClosed: false,
+    version: 1,
+    getText: () => text,
+  };
+}
+
+check("removeLens deletes only the picked lens and keeps the rest", () => {
+  const doc = "# A\n\nabc\n\n# B\n\ndef\n";
+  const before = Labels.writeLabels(
+    doc,
+    [
+      { name: "First", ranges: [{ label: "One", color: "#111111", startLine: 1, endLine: 3 }] },
+      { name: "Second", ranges: [{ label: "Two", color: "#222222", startLine: 5, endLine: 7 }] },
+    ],
+    null,
+  );
+  const document = fakeMarkdownDocument("/ws/doc.md", doc);
+  const host = driveLabelCommands({ "/ws/.mymd/doc.md.json": before }, document);
+  host.queueQuickPick("First");
+  return host.handlers["mymarkdown.removeLens"]().then(() => {
+    assert(host.written.length === 1, "expected one write, got " + host.written.length);
+    const names = host.written[0].body.lenses.map((l) => l.name);
+    assert(names.join(",") === "Second", "First should be gone, Second should remain: " + names);
+    assert(!host.deleted(), "the sidecar file itself should not be deleted while a lens remains");
+  });
+});
+
+check("removeLens deletes the sidecar file rather than writing an empty one when nothing is left", () => {
+  const doc = "# A\n\nabc\n";
+  const before = Labels.writeLabels(
+    doc,
+    [{ name: "Only", ranges: [{ label: "One", color: "#111111", startLine: 1, endLine: 3 }] }],
+    null,
+  );
+  const document = fakeMarkdownDocument("/ws/doc.md", doc);
+  const host = driveLabelCommands({ "/ws/.mymd/doc.md.json": before }, document);
+  host.queueQuickPick("Only");
+  return host.handlers["mymarkdown.removeLens"]().then(() => {
+    assert(host.deleted(), "the sidecar file should be removed, not left holding an empty lens list");
+    assert(host.written.length === 0, "nothing should be written once the last lens is gone");
+  });
+});
+
+check("switchLens's own \"Delete a lens...\" item reaches the same deletion path", () => {
+  const doc = "# A\n\nabc\n\n# B\n\ndef\n";
+  const before = Labels.writeLabels(
+    doc,
+    [
+      { name: "First", ranges: [{ label: "One", color: "#111111", startLine: 1, endLine: 3 }] },
+      { name: "Second", ranges: [{ label: "Two", color: "#222222", startLine: 5, endLine: 7 }] },
+    ],
+    null,
+  );
+  const document = fakeMarkdownDocument("/ws/doc.md", doc);
+  const host = driveLabelCommands({ "/ws/.mymd/doc.md.json": before }, document);
+  // First answer picks the picker's delete item; second answer picks which lens.
+  host.queueQuickPick({ label: "$(trash) Delete a lens…" }, "Second");
+  return host.handlers["mymarkdown.switchLens"]().then(() => {
+    assert(host.written.length === 1, "expected one write, got " + host.written.length);
+    const names = host.written[0].body.lenses.map((l) => l.name);
+    assert(names.join(",") === "First", "Second should be gone, First should remain: " + names);
+  });
+});
+
+check("switchLens's own toggle item disables labels without a separate command", () => {
+  const doc = "# A\n\nabc\n";
+  const before = Labels.writeLabels(
+    doc,
+    [{ name: "Only", ranges: [{ label: "One", color: "#111111", startLine: 1, endLine: 3 }] }],
+    null,
+  );
+  const document = fakeMarkdownDocument("/ws/doc.md", doc);
+  const host = driveLabelCommands({ "/ws/.mymd/doc.md.json": before }, document);
+  host.queueQuickPick({ label: "$(circle-slash) Disable labels completely" });
+  return host.handlers["mymarkdown.switchLens"]().then(() => {
+    assert(host.configStore["labels.enabled"] === false, "the picker's toggle item should flip the setting");
+  });
+});
+
+Promise.all(pending).then(() => {
+  if (failures.length) {
+    console.error("\n  MyMarkdown checks: " + passed + " passed, " + failures.length + " failed\n");
+    failures.forEach((f) => console.error("    - " + f));
+    console.error("");
+    process.exit(1);
+  }
+  console.log("  MyMarkdown checks: " + passed + " passed");
+});
