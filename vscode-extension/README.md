@@ -80,6 +80,8 @@ expected JSON.
 
 Labels use the AI you already have: a language model provider such as GitHub Copilot, or a
 command you point the extension at. **No API key is stored or sent by this extension.**
+Your Markdown stays local unless you explicitly generate AI labels, in which case the
+document is sent to your selected AI provider.
 
 Labels are saved beside your workspace, so they are still there tomorrow. Each one
 remembers the text it covers, so editing elsewhere in the document leaves it on the right
