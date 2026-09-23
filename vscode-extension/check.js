@@ -245,7 +245,7 @@ check("the preview renders task lists", () => {
 check("Marketplace artwork and preview-state styles are included", () => {
   const pkg = require("./package.json");
   assert(pkg.icon === "media/icon.png", "the Marketplace icon is not registered");
-  for (const file of ["icon.png", "preview-dark.png", "json-light.png"]) {
+  for (const file of ["icon.png", "overview.webp"]) {
     assert(fs.existsSync(path.join(__dirname, "media", file)), file + " is missing");
   }
   // The Marketplace only accepts a square icon of at least 128px.
