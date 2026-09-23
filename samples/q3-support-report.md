@@ -18,13 +18,9 @@ Two incidents account for most of the miss:
 1. **NL-1842** — checkout retries piled up after a payments timeout on 14 August.
 2. **NL-1901** — the status page stayed green while the EU read replica lagged on 2 September.
 
-The forecast going into the quarter was ~~a 95% resolution-within-one-day rate~~. The actual rate was **91.4%**. The gap is concentrated in billing, not in how-to questions.
-
 > [!IMPORTANT]
 > Do not treat the headline volume number as healthy growth. About 380 of the new conversations are repeats of NL-1842. Strip those out and volume is roughly flat.
 
-> [!TIP]
-> A new reader can stop after this section, then jump to [Open work](#5-open-work). The middle sections are the evidence.
 
 What changed for customers, in one line: checkout failures are visible again, and the EU status page now follows replica lag instead of only the primary.[^status]
 
