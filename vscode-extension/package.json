@@ -2,7 +2,7 @@
   "name": "mymarkdown",
   "displayName": "MyMarkdown",
   "description": "Beautiful Markdown preview with colorful headings, formatted JSON, beautify, and a clickable table of contents.",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "publisher": "mymarkdown",
   "license": "MIT",
   "homepage": "https://mymarkdown.site",
