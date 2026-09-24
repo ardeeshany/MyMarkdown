@@ -85,6 +85,32 @@ Labels are saved beside your workspace, so they are still there tomorrow. Each o
 remembers the text it covers, so editing elsewhere in the document leaves it on the right
 section, and a label whose text you delete quietly disappears.
 
+### Labels from your coding agent
+
+Coding agents can label the Markdown they write, so the labels are there the first time
+you open a document. The [MyMarkdown repository](https://github.com/ardeeshany/mymarkdown)
+ships a `markdown-labels` skill and a small hook for Claude Code, GitHub Copilot (CLI and
+VS Code agent mode) and Codex. When an agent saves a document of 400 or more words with at
+least two headings and no labels yet, the hook tells it to run the skill. The skill writes
+three lenses to `.mymd/`, the hook ties each label to its text so it survives later edits,
+and the open preview picks them up as soon as they are saved.
+
+To add it to your own project, copy these files from the repository. You need Node.js on
+your `PATH`.
+
+| Agent | Files | Turning it on |
+| --- | --- | --- |
+| Claude Code | `.claude/settings.json`, `.claude/skills/markdown-labels/` | Trust the folder when Claude Code asks. |
+| Cursor's agent | Same as Claude Code, plus `.agents/skills/markdown-labels/` | Nothing more on macOS and Linux: Cursor reads Claude Code's hooks unless an admin has turned that off. |
+| Copilot CLI | `.github/hooks/markdown-labels.json`, `.agents/skills/markdown-labels/` | Trust the folder when Copilot asks. |
+| VS Code agent mode | `.github/hooks/markdown-labels.json`, `.agents/skills/markdown-labels/` | Nothing more: agent mode reads `.github/hooks`. |
+| Codex | `.codex/hooks.json`, `.agents/skills/markdown-labels/` | Trust the project, then approve the hook in `/hooks`. Start Codex from the project root. |
+
+Every agent also needs the hook script itself, `.agents/hooks/markdown-labels.cjs`. If you
+already have a `.claude/settings.json`, merge its `hooks` entry into yours rather than
+replacing the file. The hook and skill always use `.mymd`, whatever
+`mymarkdown.labels.storagePath` is set to.
+
 ## Settings
 
 ### `mymarkdown.lint`
