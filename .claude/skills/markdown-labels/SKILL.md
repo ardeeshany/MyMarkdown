@@ -89,7 +89,9 @@ claims the ranges match text they were never checked against.
 
 Do not write `anchor` or `endAnchor` for your ranges either. This repo's markdown-labels
 hook stamps them from the document as soon as the file is saved, and they are what keep
-each range on its section after later edits.
+each range on its section after later edits. Save the file with your file-writing or
+patch tool (Write, Edit, create, apply_patch and the like), not a shell command: the hook
+only sees those tools.
 
 If the file already exists, keep the lenses in it whose names you are not replacing,
 exactly as they are, anchors included.

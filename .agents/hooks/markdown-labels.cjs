@@ -37,7 +37,7 @@ const ROOT = path.resolve(__dirname, "..", "..");
 // out on purpose: opening an old document is not a reason to label it.
 const WRITE_TOOLS = new Set([
   "Write", "Edit", "MultiEdit", // Claude Code
-  "create", "edit", // Copilot CLI
+  "create", "edit", "str_replace_editor", "str_replace", // Copilot CLI
   "create_file", "replace_string_in_file", "multi_replace_string_in_file", "insert_edit_into_file", // VS Code
   "apply_patch", // Codex, VS Code
 ]);
@@ -71,8 +71,9 @@ function anchorsFor(lines, startLine, endLine) {
 function writtenFiles(input, cwd) {
   const found = [input.file_path, input.path, input.filePath];
   for (const r of Array.isArray(input.replacements) ? input.replacements : []) found.push(r?.filePath);
-  // apply_patch keeps its paths in the patch text: tool_input.input in VS Code, .command in Codex.
-  const patch = String(input.input ?? input.command ?? "");
+  // apply_patch keeps its paths in the patch text: tool_input.input in VS Code, .command in
+  // Codex, .patch (or the bare string) in Copilot CLI.
+  const patch = String(input.input ?? input.patch ?? input.command ?? "");
   for (const m of patch.matchAll(/^\*\*\* (?:Add File|Update File|Move to): (.+)$/gm)) found.push(m[1].trim());
   return [...new Set(found.filter((f) => typeof f === "string" && f).map((f) => path.resolve(cwd, f)))];
 }
@@ -128,7 +129,9 @@ function nudge(file, relative) {
     return null; // Deleted or moved since the write; nothing to label.
   }
   const words = text.trim() ? text.trim().split(/\s+/).length : 0;
-  const headings = (text.match(/^ {0,3}#{1,6}\s/gm) || []).length;
+  // A "# comment" in a fenced shell block is not a heading.
+  const prose = text.replace(/^ {0,3}(`{3,}|~{3,})[^\n]*\n[\s\S]*?^ {0,3}\1[^\n]*$/gm, "");
+  const headings = (prose.match(/^ {0,3}#{1,6}\s/gm) || []).length;
   if (words < MIN_WORDS || headings < MIN_HEADINGS) return null;
   if (isLabelled(path.join(ROOT, STORAGE, relative + ".json"), text)) return null;
   const shown = relative.split(path.sep).join("/");
@@ -143,9 +146,12 @@ function nudge(file, relative) {
 function main(payload) {
   // Copilot CLI, and VS Code with chat.useClaudeHooks on, run Claude's hooks as well as
   // their own. Their own entry in .github/hooks speaks for them, so this copy stays quiet.
+  // Told apart by the payload, not the environment: Copilot's Claude-format payload carries
+  // tool_result (Claude Code sends tool_response, Cursor tool_output), while the COPILOT_CLI
+  // variable is inherited by anything started from a Copilot shell, Claude Code included.
   if (
     process.argv.includes("--claude-settings") &&
-    (process.env.COPILOT_CLI === "1" || !process.env.CLAUDE_PROJECT_DIR)
+    ("tool_result" in payload || !process.env.CLAUDE_PROJECT_DIR)
   ) {
     return;
   }
@@ -156,8 +162,17 @@ function main(payload) {
   const tool = copilot ? payload.toolName : payload.tool_name;
   if (!WRITE_TOOLS.has(tool)) return;
   let input = copilot ? payload.toolArgs : payload.tool_input;
-  if (typeof input === "string") input = JSON.parse(input);
+  // Arguments may arrive JSON-encoded, or as a bare patch (Copilot's apply_patch).
+  if (typeof input === "string") {
+    try {
+      input = JSON.parse(input);
+    } catch {
+      // Not JSON: keep it as patch text.
+    }
+  }
+  if (typeof input === "string") input = { input };
   if (!input || typeof input !== "object") return;
+  if (tool === "str_replace_editor" && input.command === "view") return;
 
   const notes = [];
   for (const file of writtenFiles(input, payload.cwd || process.cwd())) {

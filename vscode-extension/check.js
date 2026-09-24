@@ -752,6 +752,18 @@ check("a moved end-anchor line does not swell a range over its neighbours", () =
   assert(byLabel.c.startLine === 5 && byLabel.c.endLine === 6, "c should keep its own lines, got " + JSON.stringify(byLabel.c));
 });
 
+check("a range ending on a closing fence is not cut short at an earlier fence inside it", () => {
+  const doc = ["## Install", "", "```bash", "npm ci", "```", "", "```bash", "npm test", "```", "", "## Next"].join("\n");
+  const file = Labels.writeLabels(doc, [{ name: "L", ranges: [{ label: "Setup", color: "#111111", startLine: 1, endLine: 9 }] }], null);
+  // No hash, as the hook leaves a skill-written sidecar, so the range is always re-anchored:
+  // its closing ``` also appears on line 5, and matching that first gave 1..5.
+  delete file.sourceHash;
+  const range = Labels.readLabels(file, doc).lenses[0].ranges[0];
+  assert(range.startLine === 1 && range.endLine === 9, "the range should keep 1..9, got " + range.startLine + ".." + range.endLine);
+  const moved = Labels.readLabels(file, "Preface.\n\n" + doc).lenses[0].ranges[0];
+  assert(moved.startLine === 3 && moved.endLine === 11, "and move whole after an edit above it, got " + moved.startLine + ".." + moved.endLine);
+});
+
 check("a range anchored on a repeated heading follows its own distinct body", () => {
   // Six identical "## Notes" headings; only the body text tells them apart.
   const rep = Array.from({ length: 6 }, (_, i) => ["## Notes", "body " + i, ""].join("\n")).join("\n");
@@ -1189,6 +1201,60 @@ check("changing labels.storagePath re-points the watcher and rereads labels from
     });
 });
 
+check("storagePath values like './labels/' still give a watcher that can match", () => {
+  const host = driveLabelCommands({});
+  host.changeConfig("labels.storagePath", "./labels/");
+  const glob = host.watchers[host.watchers.length - 1].glob;
+  assert(glob === "**/labels/**", "the glob should be normalised like the sidecar path, got " + glob);
+  host.changeConfig("labels.storagePath", "notes[old]");
+  const escaped = host.watchers[host.watchers.length - 1].glob;
+  assert(escaped === "**/notes[[]old[]]/**", "glob characters should be escaped, got " + escaped);
+});
+
+check("a folder-only watcher event (a new sidecar subfolder, a deleted .mymd) reloads the documents under it", () => {
+  const doc = "# A\n\nabc\n";
+  const sidecars = {};
+  const host = driveLabelCommands(sidecars, fakeMarkdownDocument("/ws/docs/doc.md", doc));
+  return settle()
+    .then(() => {
+      sidecars["/ws/.mymd/docs/doc.md.json"] = Labels.writeLabels(
+        doc,
+        [{ name: "Parts", ranges: [{ label: "One", color: "#111111", startLine: 1, endLine: 3 }] }],
+        null,
+      );
+      // VS Code often reports only the new folder, not the file inside it.
+      host.watchers[0].handlers.create(sidecarUri("/ws/.mymd/docs"));
+      return settle();
+    })
+    .then(() => {
+      assert(host.status().text === "$(tag) Parts", "a sidecar in a new folder should show, got " + host.status().text);
+      delete sidecars["/ws/.mymd/docs/doc.md.json"];
+      host.watchers[0].handlers.delete(sidecarUri("/ws/.mymd"));
+      return settle();
+    })
+    .then(() => {
+      assert(host.status().text === "$(tag) Label", "deleting the whole folder should clear the labels, got " + host.status().text);
+    });
+});
+
+check("a sidecar change to a lens other than the active one still re-renders the preview", () => {
+  const doc = "# A\n\nabc\n";
+  const lens = (name) => ({ name, ranges: [{ label: "One", color: "#111111", startLine: 1, endLine: 3 }] });
+  const sidecars = { "/ws/.mymd/doc.md.json": Labels.writeLabels(doc, [lens("First")], null) };
+  const host = driveLabelCommands(sidecars, fakeMarkdownDocument("/ws/doc.md", doc));
+  return settle()
+    .then(() => {
+      // An agent adds a second lens; the first, active one is untouched.
+      sidecars["/ws/.mymd/doc.md.json"] = Labels.writeLabels(doc, [lens("First"), lens("Second")], null);
+      host.refreshes.length = 0;
+      host.watchers[0].handlers.change(sidecarUri("/ws/.mymd/doc.md.json"));
+      return settle();
+    })
+    .then(() => {
+      assert(host.refreshes.length > 0, "the preview's lens dropdown needs the new lens, so it must render again");
+    });
+});
+
 // The agent hook, run the way each agent runs it: a copy dropped into a scratch repo (it
 // finds its repo from its own location) and fed that agent's payload shape on stdin. The
 // shapes are trimmed from payloads captured from Claude Code, Copilot CLI and Codex, and
@@ -1224,9 +1290,19 @@ check("label hook: each agent's write gets the nudge, in the format that agent r
   const repo = hookRepo();
   try {
     const claude = { env: { CLAUDE_PROJECT_DIR: repo.root }, args: ["--claude-settings"] };
+    const patch = "*** Begin Patch\n*** Update File: docs/big.md\n@@\n-a\n+b\n*** End Patch";
     const cases = [
-      ["Claude Code Write", { tool_name: "Write", tool_input: { file_path: repo.doc, content: "…" } }, claude],
+      ["Claude Code Write", { tool_name: "Write", tool_input: { file_path: repo.doc, content: "…" }, tool_response: {} }, claude],
+      // COPILOT_CLI is inherited by anything started from a Copilot shell; Claude Code's own
+      // hook must not mistake itself for Copilot's second run.
+      [
+        "Claude Code started from a Copilot shell",
+        { tool_name: "Edit", tool_input: { file_path: repo.doc }, tool_response: {} },
+        { env: { CLAUDE_PROJECT_DIR: repo.root, COPILOT_CLI: "1" }, args: ["--claude-settings"] },
+      ],
       ["Copilot CLI edit", { toolName: "edit", toolArgs: { path: repo.doc, old_str: "a", new_str: "b" } }, { env: { COPILOT_CLI: "1" } }],
+      ["Copilot CLI str_replace_editor", { toolName: "str_replace_editor", toolArgs: { command: "create", path: repo.doc, file_text: "…" } }, {}],
+      ["Copilot CLI apply_patch as a bare patch", { toolName: "apply_patch", toolArgs: patch }, {}],
       ["VS Code create_file", { tool_name: "create_file", tool_input: { filePath: repo.doc, content: "…" } }, {}],
       [
         "VS Code multi_replace_string_in_file",
@@ -1254,13 +1330,14 @@ check("label hook: reads, and a second agent running Claude's hooks, stay quiet"
   const repo = hookRepo();
   try {
     const quiet = [
-      ["Claude Code Read", { tool_name: "Read", tool_input: { file_path: repo.doc } }, { env: { CLAUDE_PROJECT_DIR: repo.root }, args: ["--claude-settings"] }],
+      ["Claude Code Read", { tool_name: "Read", tool_input: { file_path: repo.doc }, tool_response: {} }, { env: { CLAUDE_PROJECT_DIR: repo.root }, args: ["--claude-settings"] }],
+      ["Copilot CLI str_replace_editor view", { toolName: "str_replace_editor", toolArgs: { command: "view", path: repo.doc } }, {}],
       ["Copilot CLI view", { toolName: "view", toolArgs: { path: repo.doc } }, { env: { COPILOT_CLI: "1" } }],
       // Copilot CLI also runs .claude/settings.json (it sets CLAUDE_PROJECT_DIR too) but drops
       // hookSpecificOutput; its .github/hooks entry already spoke.
       [
         "Copilot CLI via .claude/settings.json",
-        { tool_name: "Write", tool_input: { path: repo.doc, file_text: "…" } },
+        { tool_name: "Write", tool_input: { path: repo.doc, file_text: "…" }, tool_result: {} },
         { env: { COPILOT_CLI: "1", CLAUDE_PROJECT_DIR: repo.root }, args: ["--claude-settings"] },
       ],
       ["VS Code via chat.useClaudeHooks", { tool_name: "create_file", tool_input: { filePath: repo.doc } }, { args: ["--claude-settings"] }],
@@ -1269,6 +1346,11 @@ check("label hook: reads, and a second agent running Claude's hooks, stay quiet"
       const out = repo.run({ cwd: repo.root, ...payload }, opts);
       assert(out === null, name + " should print nothing, got " + JSON.stringify(out));
     }
+    // One real heading; the "# ..." lines are shell comments inside a fence.
+    const oneHeading = path.join(repo.root, "docs", "one-heading.md");
+    fs.writeFileSync(oneHeading, "# Notes\n\n" + "word ".repeat(450) + "\n\n```bash\n# install\nnpm ci\n# test\nnpm test\n```\n");
+    const out = repo.run({ cwd: repo.root, tool_name: "create_file", tool_input: { filePath: oneHeading } });
+    assert(out === null, "comments in a code fence are not headings, got " + JSON.stringify(out));
   } finally {
     repo.cleanup();
   }
@@ -1296,7 +1378,7 @@ check("label hook: a skill-written sidecar gets anchors on save, follows its tex
     // Two lines added above the section push it down two lines.
     const edited = "Preface.\n\n" + text;
     fs.writeFileSync(repo.doc, edited);
-    const out = repo.run({ tool_name: "Edit", tool_input: { file_path: repo.doc }, cwd: repo.root }, { env: { CLAUDE_PROJECT_DIR: repo.root }, args: ["--claude-settings"] });
+    const out = repo.run({ tool_name: "Edit", tool_input: { file_path: repo.doc }, tool_response: {}, cwd: repo.root }, { env: { CLAUDE_PROJECT_DIR: repo.root }, args: ["--claude-settings"] });
     assert(out === null, "an edit to a labelled document should not re-nag: " + JSON.stringify(out));
     const range = Labels.readLabels(JSON.parse(fs.readFileSync(sidecar, "utf8")), edited).lenses[0].ranges[0];
     assert(range.startLine === start + 2, "the label should follow its section to line " + (start + 2) + ", got " + range.startLine);
