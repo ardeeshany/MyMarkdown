@@ -172,7 +172,11 @@
 
     var el = block.el;
     var sourceLines = block.end - block.start + 1;
-    var shown = ((el.textContent || "").replace(/\n$/, "").match(/\n/g) || []).length + 1;
+    // Code text ends with a newline that closes its last line; anywhere else a trailing
+    // newline is a real line break (before an image alone on the last line, say).
+    var text = el.textContent || "";
+    if (/^(CODE|PRE)$/.test(el.tagName)) text = text.replace(/\n$/, "");
+    var shown = (text.match(/\n/g) || []).length + 1;
     // A fence's ``` lines are in its extent but not its text: two of them, or one for a
     // fence left open at the end of the document. Promoted JSON has none.
     var delimiters = el.tagName === "CODE" ? sourceLines - shown : 0;
@@ -452,7 +456,13 @@
     focusKey = keyOf(event.target);
   });
   document.addEventListener("focusout", function (event) {
-    if (event.target.isConnected) focusKey = keyOf(event.relatedTarget);
+    // Chrome fires this for a node it is removing while the node is still attached; only
+    // once the removal is done can focus leaving be told apart from the node going away.
+    var el = event.target;
+    var next = keyOf(event.relatedTarget);
+    queueMicrotask(function () {
+      if (el.isConnected) focusKey = next;
+    });
   });
   function restoreFocus() {
     if (!focusKey || (document.activeElement && document.activeElement !== document.body)) return;
@@ -464,6 +474,8 @@
       candidates[i].focus({ preventScroll: true });
       return;
     }
+    // Gone for good (another lens, labels off): forget it, so it cannot take focus later.
+    focusKey = null;
   }
 
   /** The page size the last paint left, so a resize report of that same size is skipped. */

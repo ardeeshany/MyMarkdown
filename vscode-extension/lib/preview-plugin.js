@@ -85,7 +85,10 @@ function stampBlockExtents(state) {
     // map[1] is 0-based exclusive, which is the 1-based inclusive last line. Lists and list
     // items also claim the blank lines after them; those belong to no block.
     let end = Math.max(start, token.map[1]);
-    while (end > start && !String(lines[end - 1] ?? "").trim()) end -= 1;
+    // Inside a quote, a line of nothing but ">" is as blank as an empty one. Not in code or
+    // raw HTML, where such a line is content.
+    const blank = /^(fence|code_block|html_block)$/.test(token.type) ? /^\s*$/ : /^[\s>]*$/;
+    while (end > start && blank.test(String(lines[end - 1] ?? ""))) end -= 1;
     token.attrSet("data-mymd-start", String(start));
     token.attrSet("data-mymd-end", String(end));
   }

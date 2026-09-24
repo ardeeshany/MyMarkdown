@@ -253,6 +253,11 @@ check("every block carries its exact source lines for the label bars", () => {
       "", //                       20
       "> [!NOTE]", //              21
       "> Body.", //                22
+      "", //                       23
+      "> - quoted one", //         24
+      "> - quoted two", //         25
+      ">", //                      26
+      "> After.", //               27
     ].join("\n") + "\n",
   );
   const spans = (tag, start, end) =>
@@ -268,6 +273,7 @@ check("every block carries its exact source lines for the label bars", () => {
   assert(spans("div", 17, 19), "a Mermaid diagram keeps its lines though it drops data-line");
   assert(spans("p", 21, 21), "a callout title sits on the [!NOTE] line");
   assert(spans("p", 22, 22), "the callout body starts on the line after it");
+  assert(spans("li", 25, 25), "a quoted list's last item does not take the quote's bare > line");
 });
 
 check("loose JSON in prose is promoted, without shifting later lines", () => {
@@ -762,6 +768,18 @@ check("a range ending on a closing fence is not cut short at an earlier fence in
   assert(range.startLine === 1 && range.endLine === 9, "the range should keep 1..9, got " + range.startLine + ".." + range.endLine);
   const moved = Labels.readLabels(file, "Preface.\n\n" + doc).lenses[0].ranges[0];
   assert(moved.startLine === 3 && moved.endLine === 11, "and move whole after an edit above it, got " + moved.startLine + ".." + moved.endLine);
+});
+
+check("a range that shrank is not stretched over the next section's identical closing line", () => {
+  const install = ["## Install", "p1", "p2", "p3", "p4", "p5", "p6", "```bash", "npm ci", "```"];
+  const rest = ["", "## Test", "```bash", "npm test", "```", "", "## End"];
+  const file = Labels.writeLabels([...install, ...rest].join("\n"), [{ name: "L", ranges: [{ label: "Install", color: "#111111", startLine: 1, endLine: 10 }] }], null);
+  // Four lines of prose deleted inside the range: its real end moved up by four, and the
+  // Test section's own closing ``` now sits nearer the old span than that.
+  const shrunk = ["## Install", "p5", "p6", "```bash", "npm ci", "```", ...rest].join("\n");
+  const range = Labels.readLabels(file, shrunk).lenses[0]?.ranges?.[0];
+  assert(range, "the range should survive");
+  assert(range.endLine === 6, "the range should end on Install's own closing ```, line 6, got " + range.startLine + ".." + range.endLine);
 });
 
 check("a range anchored on a repeated heading follows its own distinct body", () => {

@@ -727,12 +727,14 @@ function activate(context) {
       rememberActiveMarkdown();
       tocProvider.refresh();
       refreshDiagnostics(currentMarkdownDocument());
-      // Draw from the cache at once, then check the disk: the watcher misses rewrites inside
-      // a sidecar subfolder created after VS Code started watching, and switching to a tab
-      // is when its labels are about to be looked at.
+      // Reread from disk rather than trust the cache: the watcher misses rewrites inside a
+      // sidecar subfolder created after VS Code started watching, and switching to a tab is
+      // when its labels are about to be looked at. Straight away, not on the edit timer,
+      // which would fire for tabs already left behind when switching quickly.
       const document = currentMarkdownDocument();
+      const entry = document && lensCache.get(document.uri.toString());
+      if (entry) entry.version = undefined;
       void refreshLabels(document);
-      if (document) rereadSidecar(document);
     }),
     vscode.workspace.onDidOpenTextDocument((document) => refreshDiagnostics(document)),
     vscode.workspace.onDidCloseTextDocument((document) => {
