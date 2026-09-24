@@ -175,24 +175,48 @@ let sidecarWatcher;
  */
 function watchSidecars() {
   sidecarWatcher?.dispose();
+  // The setting as a glob: sidecarUri's Uri.joinPath already copes with "./labels",
+  // "labels/" or "." on the file side, so normalise the same way here and escape glob
+  // characters, or the watcher silently matches nothing.
+  const folder = storageFolder()
+    .split(/[\\/]+/)
+    .filter((part) => part && part !== ".")
+    .map((part) => part.replace(/[[\]{}*?]/g, "[$&]"))
+    .join("/");
+  // The folder itself as well as the files in it: VS Code reports deleting the whole
+  // folder, and often creating a new subfolder with a sidecar in it, as one folder event.
   // ponytail: one glob covers every workspace folder; it also matches same-named folders
   // deeper in a tree, which reloadSidecar ignores because no open document maps there.
-  sidecarWatcher = vscode.workspace.createFileSystemWatcher(`**/${storageFolder()}/**/*.json`);
+  sidecarWatcher = vscode.workspace.createFileSystemWatcher(folder ? `**/${folder}/**` : "**/*.json");
   sidecarWatcher.onDidCreate(reloadSidecar);
   sidecarWatcher.onDidChange(reloadSidecar);
   sidecarWatcher.onDidDelete(reloadSidecar);
 }
 
-/** Reread a changed sidecar for whichever open document it belongs to. */
+/** A URI as a comparable key; macOS and Windows file systems ignore case. */
+function uriKey(uri) {
+  const key = uri.toString();
+  return process.platform === "linux" ? key : key.toLowerCase();
+}
+
+/** Send a document's lenses back to disk, drawing the old ones until the reread lands. */
+function rereadSidecar(document) {
+  // Keeping the entry (rather than deleting it) means a writer that fires several events
+  // for one save does not make the bars flicker off in between.
+  const entry = lensCache.get(document.uri.toString());
+  if (entry) entry.version = undefined;
+  scheduleLabelRefresh(document);
+}
+
+/** Reread a changed sidecar, or every sidecar under a changed folder, for the open documents. */
 function reloadSidecar(uri) {
-  const changed = uri.toString();
+  const changed = uriKey(uri);
   for (const document of vscode.workspace.textDocuments) {
-    if (document.languageId !== "markdown" || sidecarUri(document)?.toString() !== changed) continue;
-    // Send lensesFor back to disk, but keep drawing the old lens until the reread lands:
-    // a writer can fire several events for one save, and bars should not flicker off.
-    const entry = lensCache.get(document.uri.toString());
-    if (entry) entry.version = undefined;
-    scheduleLabelRefresh(document);
+    if (document.languageId !== "markdown") continue;
+    const sidecar = sidecarUri(document);
+    if (!sidecar) continue;
+    const key = uriKey(sidecar);
+    if (key === changed || key.startsWith(changed + "/")) rereadSidecar(document);
   }
 }
 
@@ -299,10 +323,13 @@ function refreshLabelStatus() {
   labelStatus.show();
 }
 
-/** Identifies what the preview would currently draw for a document, or null for nothing. */
+/**
+ * Identifies everything the preview embeds for a document (the active lens and every other
+ * one its dropdown offers), or null for nothing.
+ */
 function activeLensSignature(document) {
-  const lens = activeLensFor(document.uri);
-  return lens ? document.uri.toString() + "|" + JSON.stringify(lens) : null;
+  const payload = labelPayloadFor(document.uri);
+  return payload ? document.uri.toString() + "|" + JSON.stringify(payload) : null;
 }
 
 /** The signature last seen when the preview was told to refresh for labels. */
@@ -668,7 +695,12 @@ function activate(context) {
       rememberActiveMarkdown();
       tocProvider.refresh();
       refreshDiagnostics(currentMarkdownDocument());
-      void refreshLabels(currentMarkdownDocument());
+      // Draw from the cache at once, then check the disk: the watcher misses rewrites inside
+      // a sidecar subfolder created after VS Code started watching, and switching to a tab
+      // is when its labels are about to be looked at.
+      const document = currentMarkdownDocument();
+      void refreshLabels(document);
+      if (document) rereadSidecar(document);
     }),
     vscode.workspace.onDidOpenTextDocument((document) => refreshDiagnostics(document)),
     vscode.workspace.onDidCloseTextDocument((document) => {
@@ -736,8 +768,9 @@ function activate(context) {
       if (event.affectsConfiguration("mymarkdown.labels.storagePath")) {
         // Every cached lens came from the old folder, and the watcher is still pointed at it.
         watchSidecars();
-        lensCache.clear();
-        void refreshLabels(currentMarkdownDocument());
+        for (const document of vscode.workspace.textDocuments) {
+          if (document.languageId === "markdown") rereadSidecar(document);
+        }
       }
     }),
   );

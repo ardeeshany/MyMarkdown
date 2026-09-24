@@ -1143,7 +1143,7 @@ check("a sidecar written outside the extension (by an agent) shows up without ed
   const sidecars = {};
   const host = driveLabelCommands(sidecars, fakeMarkdownDocument("/ws/doc.md", doc));
   const watcher = host.watchers[0];
-  assert(watcher && watcher.glob === "**/.mymd/**/*.json", "the sidecar folder should be watched, got " + (watcher && watcher.glob));
+  assert(watcher && watcher.glob === "**/.mymd/**", "the sidecar folder should be watched, got " + (watcher && watcher.glob));
   return settle()
     .then(() => {
       assert(host.status().text === "$(tag) Label", "no labels before the sidecar exists, got " + host.status().text);
@@ -1184,7 +1184,7 @@ check("changing labels.storagePath re-points the watcher and rereads labels from
     })
     .then(() => {
       assert(host.watchers[0].disposed, "the watcher on the old folder should be disposed");
-      assert(host.watchers[1] && host.watchers[1].glob === "**/.labels/**/*.json", "a watcher should cover the new folder");
+      assert(host.watchers[1] && host.watchers[1].glob === "**/.labels/**", "a watcher should cover the new folder");
       assert(host.status().text === "$(tag) New", "labels should come from the new folder, got " + host.status().text);
     });
 });
