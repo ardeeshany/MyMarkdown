@@ -48,6 +48,8 @@
   }
 
   var MAPPED = "[data-mymd-start]";
+  var HTML_END =
+    MAPPED + ", .code-line, .footnotes-sep, .katex-block, #" + MARKER_ID + ", #" + LAYER_ID + ", #" + CHIPS_ID;
 
   /** Every block the plugin mapped to its source lines, in document order. */
   function mappedBlocks(root) {
@@ -74,10 +76,13 @@
     }
     var box = el.getBoundingClientRect();
     if (box.height) return { top: box.top, bottom: box.bottom };
-    // VS Code draws an HTML block as an empty mapped marker followed by the raw HTML.
+    // VS Code draws an HTML block as an empty mapped marker followed by the raw HTML. The
+    // raw HTML ends at the next mapped block, or at whatever follows the last one (VS Code's
+    // end-of-document line, the footnotes, a math block, this script's own elements);
+    // without that stop, HTML at the end of a document would claim the whole page.
     var top = Infinity;
     var bottom = -Infinity;
-    for (var next = el.nextElementSibling; next && !next.matches(MAPPED); next = next.nextElementSibling) {
+    for (var next = el.nextElementSibling; next && !next.matches(HTML_END); next = next.nextElementSibling) {
       var part = next.getBoundingClientRect();
       if (!part.height) continue;
       top = Math.min(top, part.top);
@@ -107,10 +112,12 @@
     var ended = false;
     for (; node && !ended; node = walker.nextNode()) {
       var text = node.nodeValue || "";
-      for (var i = 0; i < text.length; i += 1) {
-        if (text.charAt(i) !== "\n") continue;
+      for (var i = text.indexOf("\n"); i !== -1; i = text.indexOf("\n", i + 1)) {
         if (line === last) {
-          range.setEnd(node, i);
+          // A newline opening a text node follows a <br> or an inline element; ending at
+          // offset 0 of that node would pull in an empty box on the next row.
+          if (i === 0) range.setEndBefore(node);
+          else range.setEnd(node, i);
           ended = true;
           break;
         }
@@ -120,16 +127,23 @@
           started = true;
         }
       }
-      if (!ended && started) range.setEnd(node, text.length);
     }
     if (!started) return null;
+    // The last line runs to the end of the block, taking in an image or link that ends it.
+    if (!ended) range.setEnd(el, el.childNodes.length);
+    // Code text boxes are taller than the code's line pitch, so neighbouring lines' boxes
+    // overlap; trim each to its line box so adjacent one-line bars meet instead.
+    var lineHeight = /^(CODE|PRE)$/.test(el.tagName)
+      ? parseFloat(getComputedStyle((el.tagName === "PRE" && el.firstElementChild) || el).lineHeight)
+      : 0;
     var rects = range.getClientRects();
     var top = Infinity;
     var bottom = -Infinity;
     for (var r = 0; r < rects.length; r += 1) {
       if (!rects[r].height) continue;
-      top = Math.min(top, rects[r].top);
-      bottom = Math.max(bottom, rects[r].bottom);
+      var trim = lineHeight ? Math.max(0, (rects[r].height - lineHeight) / 2) : 0;
+      top = Math.min(top, rects[r].top + trim);
+      bottom = Math.max(bottom, rects[r].bottom - trim);
     }
     return top === Infinity ? null : { top: top, bottom: bottom };
   }
@@ -156,12 +170,29 @@
       return box;
     }
 
-    var fenced = block.el.tagName === "CODE";
-    var contentStart = fenced ? block.start + 1 : block.start;
-    var contentEnd = fenced ? block.end - 1 : block.end;
+    var el = block.el;
+    var sourceLines = block.end - block.start + 1;
+    var shown = ((el.textContent || "").replace(/\n$/, "").match(/\n/g) || []).length + 1;
+    // A fence's ``` lines are in its extent but not its text: two of them, or one for a
+    // fence left open at the end of the document. Promoted JSON has none.
+    var delimiters = el.tagName === "CODE" ? sourceLines - shown : 0;
+    // Anything else shows as many text lines as it has source lines, unless rendering joined
+    // some (a code span broken across lines, a list item whose marker line is empty). Then
+    // text lines no longer name source lines, and sharing the block out beats wrong rows.
+    if (delimiters < 0 || delimiters > 2 || (el.tagName !== "CODE" && sourceLines !== shown)) {
+      return slice(box, block.start, block.end, first, last);
+    }
+    var contentStart = delimiters ? block.start + 1 : block.start;
+    var contentEnd = contentStart + shown - 1;
     var from = Math.max(first, contentStart);
     var to = Math.min(last, contentEnd);
-    var lines = from <= to ? textLines(block.el, from - contentStart, to - contentStart) : null;
+    if (from > to) {
+      // Only a fence's own ``` line: the padding of the <pre> above or below the code.
+      var opening = last < contentStart;
+      var edge = textLines(el, opening ? 0 : shown - 1, opening ? 0 : shown - 1);
+      if (edge) return opening ? { top: box.top, bottom: edge.top } : { top: edge.bottom, bottom: box.bottom };
+    }
+    var lines = from <= to ? textLines(el, from - contentStart, to - contentStart) : null;
     if (!lines) return slice(box, block.start, block.end, first, last);
     // A range that takes in a fence's own ``` lines reaches the edge of the <pre>.
     return {
@@ -321,9 +352,9 @@
     hintTimer = window.setTimeout(function () {
       hintTimer = null;
       state.hint = null;
-      paint();
+      repaint();
     }, 4000);
-    paint();
+    repaint();
   }
 
   /** Scroll to a label's next occurrence, wrapping at the end, the way the site's chips do. */
@@ -367,10 +398,15 @@
     var blocks = mappedBlocks(root);
     var bars = [];
 
+    // Measure every range before adding any bar: reading layout after each write would
+    // force the browser to lay the page out again once per range.
+    var boxes = [];
+    for (var m = 0; m < lens.ranges.length; m += 1) boxes.push(measure(lens.ranges[m], blocks, baseTop));
+
     host.textContent = "";
     for (var i = 0; i < lens.ranges.length; i += 1) {
       var range = lens.ranges[i];
-      var box = measure(range, blocks, baseTop);
+      var box = boxes[i];
       if (!box) continue;
 
       var key = i + ":" + range.label + ":" + range.startLine;
@@ -383,6 +419,7 @@
       bar.title = range.label;
       bar.setAttribute("aria-label", range.label);
       bar.dataset.label = range.label;
+      bar.dataset.key = key;
 
       var fill = document.createElement("span");
       fill.className = "mymd-label-fill";
@@ -404,12 +441,51 @@
     state.bars = bars;
   }
 
+  // Chips, the lens picker and bars are rebuilt on every paint, and VS Code's own updates
+  // remove them, so keyboard focus on one would drop to the page. Remember which one had
+  // it (the element being removed does not count as focus moving away) and give it back.
+  var focusKey = null;
+  function keyOf(el) {
+    if (!el || !el.closest || !el.closest("#" + CHIPS_ID + ", #" + LAYER_ID)) return null;
+    return el.className + "|" + (el.dataset.key || el.dataset.label || "");
+  }
+  document.addEventListener("focusin", function (event) {
+    focusKey = keyOf(event.target);
+  });
+  document.addEventListener("focusout", function (event) {
+    if (event.target.isConnected) focusKey = keyOf(event.relatedTarget);
+  });
+  function restoreFocus() {
+    if (!focusKey || (document.activeElement && document.activeElement !== document.body)) return;
+    var candidates = document.querySelectorAll(
+      "#" + CHIPS_ID + " button, #" + CHIPS_ID + " select, #" + LAYER_ID + " button",
+    );
+    for (var i = 0; i < candidates.length; i += 1) {
+      if (keyOf(candidates[i]) !== focusKey) continue;
+      candidates[i].focus({ preventScroll: true });
+      return;
+    }
+  }
+
+  /** The page size the last paint left, so a resize report of that same size is skipped. */
+  var painted = { width: -1, height: -1 };
+
+  function repaint() {
+    paint();
+    // Putting the chip row and bar layer back is itself a DOM mutation; left queued, it
+    // would schedule a second, identical paint for every update.
+    observer.takeRecords();
+    var size = document.body.getBoundingClientRect();
+    painted = { width: size.width, height: size.height };
+    restoreFocus();
+  }
+
   var frame = null;
   function schedule() {
     if (frame) return;
     frame = requestAnimationFrame(function () {
       frame = null;
-      paint();
+      repaint();
     });
   }
 
@@ -444,7 +520,7 @@
     state.hint = null;
     state.activeLensName = select.value;
     state.activeKey = null;
-    paint();
+    repaint();
   });
 
   // The preview swaps its content in place when the document changes, so redraw on any
@@ -463,7 +539,7 @@
   });
 
   function start() {
-    paint();
+    repaint();
     observer.observe(document.body, {
       childList: true,
       subtree: true,
@@ -478,8 +554,21 @@
     if (document.fonts && document.fonts.ready) document.fonts.ready.then(schedule);
     // Images, fonts, Mermaid and math settle whenever they settle, and move everything
     // below them without touching the DOM; the page changing size is the one signal.
-    // Painting cannot feed back into this: the bar layer is absolutely positioned.
-    if (window.ResizeObserver) new ResizeObserver(schedule).observe(document.body);
+    // Painting cannot loop through this (the bar layer is absolutely positioned), but the
+    // chip row appearing does resize the page, and that paint has already been done.
+    if (window.ResizeObserver) {
+      new ResizeObserver(function (entries) {
+        var size = entries[0].borderBoxSize && entries[0].borderBoxSize[0];
+        if (
+          size &&
+          Math.abs(size.inlineSize - painted.width) < 0.5 &&
+          Math.abs(size.blockSize - painted.height) < 0.5
+        ) {
+          return;
+        }
+        schedule();
+      }).observe(document.body);
+    }
   }
 
   if (document.readyState === "loading") {

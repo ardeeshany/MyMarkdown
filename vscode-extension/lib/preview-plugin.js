@@ -268,10 +268,12 @@ function renderAlerts(state) {
     const markerLine = paragraph.map ? paragraph.map[0] : -1;
     if (!first.content) {
       children.shift();
-      if (children[0] && children[0].type === "softbreak") children.shift();
-      // The "[!NOTE]" line is now drawn as the title, so the paragraph starts on the next
-      // line; left alone, every line of it would be placed one line too high.
-      if (paragraph.map && paragraph.map[1] > paragraph.map[0] + 1) {
+      // "[!NOTE]" alone on its line: that line is now drawn as the title, so the paragraph
+      // starts on the next one; left alone, every line of it would be placed a line too
+      // high. Inline markup after the marker ("[!NOTE] **Bold**") keeps the paragraph there.
+      const alone = children[0] && /^(soft|hard)break$/.test(children[0].type);
+      if (alone) children.shift();
+      if (alone && paragraph.map && paragraph.map[1] > paragraph.map[0] + 1) {
         paragraph.map = [paragraph.map[0] + 1, paragraph.map[1]];
       }
     }

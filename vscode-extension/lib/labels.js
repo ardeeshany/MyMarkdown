@@ -99,13 +99,18 @@ function locateRange(keys, range) {
   // The closing line is searched forward from the opening one and no further than the span
   // it used to have (plus slack), so a line that moved to the end of the file cannot stretch
   // the range over everything in between.
+  // Among the lines matching the closing anchor, the one nearest where the range's own span
+  // puts it: a closing line like ``` or --- usually repeats inside the range too, and taking
+  // the first match would cut the range short at it.
   const endFor = (start) => {
     if (!range.endAnchor) return start + span;
     const limit = Math.min(keys.length - 1, start + span + END_SLACK);
+    let best = -1;
     for (let j = start; j <= limit; j += 1) {
-      if (keys[j] === range.endAnchor) return j;
+      if (keys[j] !== range.endAnchor) continue;
+      if (best === -1 || Math.abs(j - start - span) < Math.abs(best - start - span)) best = j;
     }
-    return -1;
+    return best;
   };
 
   // Only one place the opening line could be: there is no ambiguity to resolve, so it is
