@@ -291,11 +291,43 @@ function activeLensFor(uri) {
   return lens || null;
 }
 
+/** Documents whose labels are being read because a preview asked for them first. */
+const loadingForPreview = new Set();
+
+/**
+ * A preview can render a document before any editor for it has been active (VS Code
+ * restoring a preview on startup, a preview opened on its own), and the cache is otherwise
+ * only filled from the active editor. Read the labels now and render again if there are any.
+ */
+async function loadForPreview(uri) {
+  const key = uri.toString();
+  if (loadingForPreview.has(key)) return;
+  loadingForPreview.add(key);
+  try {
+    const document =
+      vscode.workspace.textDocuments.find((open) => open.uri.toString() === key) ||
+      (await vscode.workspace.openTextDocument(uri));
+    // With no editor to go on, the status bar and label commands follow the preview.
+    if (!activeMarkdownEditor() && !currentMarkdownDocument()) lastMarkdownDocument = document;
+    const lenses = await lensesFor(document);
+    refreshLabelStatus();
+    if (lenses.length) await vscode.commands.executeCommand("markdown.preview.refresh").then(undefined, () => {});
+  } catch {
+    // Nothing readable behind this preview: it simply shows no labels.
+  } finally {
+    loadingForPreview.delete(key);
+  }
+}
+
 function labelPayloadFor(uri) {
   if (!config().get("labels.enabled", true)) return null;
   const key = uri.toString();
   const entry = lensCache.get(key);
-  if (!entry || !entry.lenses.length) return null;
+  if (!entry) {
+    void loadForPreview(uri);
+    return null;
+  }
+  if (!entry.lenses.length) return null;
   if (activeLens.get(key) === "") return null;
   const lens = activeLensFor(uri);
   return { active: lens ? lens.name : "", lenses: entry.lenses };

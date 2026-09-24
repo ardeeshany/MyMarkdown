@@ -892,7 +892,7 @@ check("suggestions are held to three short, distinct questions", () => {
  * discarding them, so a check can invoke `mymarkdown.toggleLabels` etc. directly rather
  * than only confirming it is *declared*.
  */
-function driveLabelCommands(sidecarByPath, activeDocument) {
+function driveLabelCommands(sidecarByPath, activeDocument, openDocuments) {
   const path_ = require("path");
   const Module = require("module");
   const load = Module._load;
@@ -991,7 +991,10 @@ function driveLabelCommands(sidecarByPath, activeDocument) {
           },
         };
       },
-      textDocuments: activeDocument ? [activeDocument] : [],
+      textDocuments: activeDocument ? [activeDocument] : openDocuments || [],
+      openTextDocument: async (uri) => {
+        throw new Error("not open: " + uri);
+      },
       applyEdit: async () => true,
       getWorkspaceFolder: () => ({ uri: { fsPath: "/ws" } }),
       fs: {
@@ -1023,11 +1026,12 @@ function driveLabelCommands(sidecarByPath, activeDocument) {
 
   Module._load = (request, ...rest) => (request === "vscode" ? stub : load(request, ...rest));
   let handlers;
+  let api;
   try {
     const entry = path_.join(__dirname, "extension.js");
     delete require.cache[require.resolve(entry)];
     const extension = require(entry);
-    extension.activate({ subscriptions: [] });
+    api = extension.activate({ subscriptions: [] });
     handlers = commandHandlers;
   } finally {
     Module._load = load;
@@ -1035,6 +1039,7 @@ function driveLabelCommands(sidecarByPath, activeDocument) {
 
   return {
     handlers,
+    api,
     configStore,
     queueQuickPick: (...answers) => quickPickQueue.push(...answers),
     written,
@@ -1235,6 +1240,28 @@ check("a folder-only watcher event (a new sidecar subfolder, a deleted .mymd) re
     .then(() => {
       assert(host.status().text === "$(tag) Label", "deleting the whole folder should clear the labels, got " + host.status().text);
     });
+});
+
+check("a preview restored on startup, with no editor for its document, still gets its labels", () => {
+  const doc = "# A\n\nabc\n";
+  const document = fakeMarkdownDocument("/ws/doc.md", doc);
+  const sidecars = {
+    "/ws/.mymd/doc.md.json": Labels.writeLabels(
+      doc,
+      [{ name: "Parts", ranges: [{ label: "One", color: "#111111", startLine: 1, endLine: 3 }] }],
+      null,
+    ),
+  };
+  // The document is open (the preview opened it) but no editor has ever been active.
+  const host = driveLabelCommands(sidecars, undefined, [document]);
+  const engine = host.api.extendMarkdownIt(new MarkdownIt());
+  const render = () => engine.render(doc, { currentDocument: document.uri });
+  render();
+  return settle().then(() => {
+    assert(host.refreshes.length > 0, "the preview should be told to render again once its labels are read");
+    includes(render(), 'id="mymd-labels"', "the preview's next render");
+    assert(host.status().text === "$(tag) Parts", "the status bar should follow the preview, got " + host.status().text);
+  });
 });
 
 check("a sidecar change to a lens other than the active one still re-renders the preview", () => {
