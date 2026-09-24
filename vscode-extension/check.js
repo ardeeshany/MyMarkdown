@@ -553,6 +553,7 @@ check("the manifest and the extension host agree", () => {
       onDidOpenTextDocument: () => off,
       onDidCloseTextDocument: () => off,
       onDidChangeConfiguration: () => off,
+      createFileSystemWatcher: () => ({ onDidCreate: () => off, onDidChange: () => off, onDidDelete: () => off, dispose() {} }),
       textDocuments: [],
       applyEdit: async () => true,
       getWorkspaceFolder: () => undefined,
@@ -846,6 +847,10 @@ function driveLabelCommands(sidecarByPath, activeDocument) {
   const commandHandlers = {};
   const quickPickQueue = [];
   const written = [];
+  const refreshes = [];
+  const watchers = [];
+  const configListeners = [];
+  let statusItem;
   let deleted = false;
 
   const stub = {
@@ -897,7 +902,8 @@ function driveLabelCommands(sidecarByPath, activeDocument) {
       showInputBox: async () => undefined,
       setStatusBarMessage() {},
       withProgress: async (_options, work) => work({ onCancellationRequested: () => off }),
-      createStatusBarItem: () => ({ text: "", tooltip: "", command: "", show() {}, hide() {}, dispose() {} }),
+      createStatusBarItem: () =>
+        (statusItem = { text: "", tooltip: "", command: "", show() {}, hide() {}, dispose() {} }),
     },
     workspace: {
       getConfiguration: () => ({
@@ -909,8 +915,29 @@ function driveLabelCommands(sidecarByPath, activeDocument) {
       onDidChangeTextDocument: () => off,
       onDidOpenTextDocument: () => off,
       onDidCloseTextDocument: () => off,
-      onDidChangeConfiguration: () => off,
-      textDocuments: [],
+      onDidChangeConfiguration: (listener) => {
+        configListeners.push(listener);
+        return off;
+      },
+      // Records each watcher's glob and handlers, so a check can play the part of a file
+      // written on disk behind the extension's back.
+      createFileSystemWatcher: (glob) => {
+        const watcher = { glob, disposed: false, handlers: {} };
+        watchers.push(watcher);
+        const on = (kind) => (handler) => {
+          watcher.handlers[kind] = handler;
+          return off;
+        };
+        return {
+          onDidCreate: on("create"),
+          onDidChange: on("change"),
+          onDidDelete: on("delete"),
+          dispose() {
+            watcher.disposed = true;
+          },
+        };
+      },
+      textDocuments: activeDocument ? [activeDocument] : [],
       applyEdit: async () => true,
       getWorkspaceFolder: () => ({ uri: { fsPath: "/ws" } }),
       fs: {
@@ -933,7 +960,9 @@ function driveLabelCommands(sidecarByPath, activeDocument) {
         commandHandlers[name] = handler;
         return off;
       },
-      executeCommand: async () => undefined,
+      executeCommand: async (name) => {
+        if (name === "markdown.preview.refresh") refreshes.push(name);
+      },
     },
     lm: { selectChatModels: async () => [] },
   };
@@ -956,8 +985,18 @@ function driveLabelCommands(sidecarByPath, activeDocument) {
     queueQuickPick: (...answers) => quickPickQueue.push(...answers),
     written,
     deleted: () => deleted,
+    refreshes,
+    watchers,
+    status: () => statusItem,
+    changeConfig: (key, value) => {
+      configStore[key] = value;
+      for (const listener of configListeners) listener({ affectsConfiguration: (name) => name === "mymarkdown." + key });
+    },
   };
 }
+
+/** Long enough for the extension's 300 ms label refresh to fire and its disk read to land. */
+const settle = () => new Promise((resolve) => setTimeout(resolve, 400));
 
 check("toggling labels flips the setting both ways and is reachable with no document open", () => {
   const host = driveLabelCommands({});
@@ -1053,6 +1092,59 @@ check("switchLens's own toggle item disables labels without a separate command",
   return host.handlers["mymarkdown.switchLens"]().then(() => {
     assert(host.configStore["labels.enabled"] === false, "the picker's toggle item should flip the setting");
   });
+});
+
+const sidecarUri = (fsPath) => ({ fsPath, toString: () => fsPath });
+
+check("a sidecar written outside the extension (by an agent) shows up without editing the document", () => {
+  const doc = "# A\n\nabc\n";
+  const sidecars = {};
+  const host = driveLabelCommands(sidecars, fakeMarkdownDocument("/ws/doc.md", doc));
+  const watcher = host.watchers[0];
+  assert(watcher && watcher.glob === "**/.mymd/**/*.json", "the sidecar folder should be watched, got " + (watcher && watcher.glob));
+  return settle()
+    .then(() => {
+      assert(host.status().text === "$(tag) Label", "no labels before the sidecar exists, got " + host.status().text);
+      sidecars["/ws/.mymd/doc.md.json"] = Labels.writeLabels(
+        doc,
+        [{ name: "Parts", ranges: [{ label: "One", color: "#111111", startLine: 1, endLine: 3 }] }],
+        null,
+      );
+      host.refreshes.length = 0;
+      watcher.handlers.create(sidecarUri("/ws/.mymd/doc.md.json"));
+      return settle();
+    })
+    .then(() => {
+      assert(host.status().text === "$(tag) Parts", "the new lens should be picked up, got " + host.status().text);
+      assert(host.refreshes.length > 0, "the preview should be told to render again");
+      delete sidecars["/ws/.mymd/doc.md.json"];
+      watcher.handlers.delete(sidecarUri("/ws/.mymd/doc.md.json"));
+      return settle();
+    })
+    .then(() => {
+      assert(host.status().text === "$(tag) Label", "a deleted sidecar should take its labels with it, got " + host.status().text);
+    });
+});
+
+check("changing labels.storagePath re-points the watcher and rereads labels from the new folder", () => {
+  const doc = "# A\n\nabc\n";
+  const lens = (name) =>
+    Labels.writeLabels(doc, [{ name, ranges: [{ label: "One", color: "#111111", startLine: 1, endLine: 3 }] }], null);
+  const host = driveLabelCommands(
+    { "/ws/.mymd/doc.md.json": lens("Old"), "/ws/.labels/doc.md.json": lens("New") },
+    fakeMarkdownDocument("/ws/doc.md", doc),
+  );
+  return settle()
+    .then(() => {
+      assert(host.status().text === "$(tag) Old", "starts on the default folder, got " + host.status().text);
+      host.changeConfig("labels.storagePath", ".labels");
+      return settle();
+    })
+    .then(() => {
+      assert(host.watchers[0].disposed, "the watcher on the old folder should be disposed");
+      assert(host.watchers[1] && host.watchers[1].glob === "**/.labels/**/*.json", "a watcher should cover the new folder");
+      assert(host.status().text === "$(tag) New", "labels should come from the new folder, got " + host.status().text);
+    });
 });
 
 // The agent hook, run the way each agent runs it: a copy dropped into a scratch repo (it

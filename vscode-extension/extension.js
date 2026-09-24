@@ -164,6 +164,38 @@ function storageFolder() {
   return String(config().get("labels.storagePath", ".mymd")) || ".mymd";
 }
 
+/** @type {vscode.FileSystemWatcher | undefined} */
+let sidecarWatcher;
+
+/**
+ * Watch the sidecar folder, so labels written outside the extension (by the authoring
+ * skill, a coding agent, git, another window) reach the preview without the document
+ * having to change first. The cache is otherwise keyed by document version, which a
+ * sidecar write never bumps.
+ */
+function watchSidecars() {
+  sidecarWatcher?.dispose();
+  // ponytail: one glob covers every workspace folder; it also matches same-named folders
+  // deeper in a tree, which reloadSidecar ignores because no open document maps there.
+  sidecarWatcher = vscode.workspace.createFileSystemWatcher(`**/${storageFolder()}/**/*.json`);
+  sidecarWatcher.onDidCreate(reloadSidecar);
+  sidecarWatcher.onDidChange(reloadSidecar);
+  sidecarWatcher.onDidDelete(reloadSidecar);
+}
+
+/** Reread a changed sidecar for whichever open document it belongs to. */
+function reloadSidecar(uri) {
+  const changed = uri.toString();
+  for (const document of vscode.workspace.textDocuments) {
+    if (document.languageId !== "markdown" || sidecarUri(document)?.toString() !== changed) continue;
+    // Send lensesFor back to disk, but keep drawing the old lens until the reread lands:
+    // a writer can fire several events for one save, and bars should not flicker off.
+    const entry = lensCache.get(document.uri.toString());
+    if (entry) entry.version = undefined;
+    scheduleLabelRefresh(document);
+  }
+}
+
 /** Where a document's sidecar lives: one hidden folder mirroring the workspace tree. */
 function sidecarUri(document) {
   const folder = vscode.workspace.getWorkspaceFolder(document.uri);
@@ -658,9 +690,12 @@ function activate(context) {
         lensCache.clear();
         activeLens.clear();
         labelStatus = undefined;
+        sidecarWatcher?.dispose();
+        sidecarWatcher = undefined;
       },
     },
   );
+  watchSidecars();
 
   // Off by default: a second Markdown formatter would stop VS Code choosing one at all,
   // silently breaking format on save for anyone already using Prettier or markdownlint.
@@ -697,6 +732,12 @@ function activate(context) {
         // revisited: otherwise turning it off leaves stale problems everywhere but here.
         if (diagnostics) diagnostics.clear();
         for (const document of vscode.workspace.textDocuments) refreshDiagnostics(document);
+      }
+      if (event.affectsConfiguration("mymarkdown.labels.storagePath")) {
+        // Every cached lens came from the old folder, and the watcher is still pointed at it.
+        watchSidecars();
+        lensCache.clear();
+        void refreshLabels(currentMarkdownDocument());
       }
     }),
   );
