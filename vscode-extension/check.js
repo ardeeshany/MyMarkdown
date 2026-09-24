@@ -9,7 +9,9 @@
 "use strict";
 
 const fs = require("fs");
+const os = require("os");
 const path = require("path");
+const { spawnSync } = require("child_process");
 const MD = require("./lib/mymarkdown.js");
 const { mymarkdownPlugin } = require("./lib/preview-plugin.js");
 const Labels = require("./lib/labels.js");
@@ -1051,6 +1053,137 @@ check("switchLens's own toggle item disables labels without a separate command",
   return host.handlers["mymarkdown.switchLens"]().then(() => {
     assert(host.configStore["labels.enabled"] === false, "the picker's toggle item should flip the setting");
   });
+});
+
+// The agent hook, run the way each agent runs it: a copy dropped into a scratch repo (it
+// finds its repo from its own location) and fed that agent's payload shape on stdin. The
+// shapes are trimmed from payloads captured from Claude Code, Copilot CLI and Codex, and
+// from VS Code's tool schemas.
+const REPO = path.join(__dirname, "..");
+
+function hookRepo() {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "mymd-hook-"));
+  const script = path.join(root, ".agents", "hooks", "markdown-labels.cjs");
+  fs.mkdirSync(path.dirname(script), { recursive: true });
+  fs.copyFileSync(path.join(REPO, ".agents", "hooks", "markdown-labels.cjs"), script);
+  fs.mkdirSync(path.join(root, "docs"));
+  const doc = path.join(root, "docs", "big.md");
+  const parts = [1, 2, 3].map((n) => `## Part ${n}\n\n${"word ".repeat(150).trim()}\n`);
+  fs.writeFileSync(doc, "# Guide\n\n" + parts.join("\n"));
+
+  const run = (payload, { args = [], env = {} } = {}) => {
+    const inherited = { ...process.env };
+    delete inherited.COPILOT_CLI;
+    delete inherited.CLAUDE_PROJECT_DIR;
+    const result = spawnSync(process.execPath, [script, ...args], {
+      input: JSON.stringify(payload),
+      env: { ...inherited, ...env },
+      encoding: "utf8",
+    });
+    assert(result.status === 0, "the hook must always exit 0, got " + result.status + ": " + result.stderr);
+    return result.stdout ? JSON.parse(result.stdout) : null;
+  };
+  return { root, doc, run, cleanup: () => fs.rmSync(root, { recursive: true, force: true }) };
+}
+
+check("label hook: each agent's write gets the nudge, in the format that agent reads", () => {
+  const repo = hookRepo();
+  try {
+    const claude = { env: { CLAUDE_PROJECT_DIR: repo.root }, args: ["--claude-settings"] };
+    const cases = [
+      ["Claude Code Write", { tool_name: "Write", tool_input: { file_path: repo.doc, content: "…" } }, claude],
+      ["Copilot CLI edit", { toolName: "edit", toolArgs: { path: repo.doc, old_str: "a", new_str: "b" } }, { env: { COPILOT_CLI: "1" } }],
+      ["VS Code create_file", { tool_name: "create_file", tool_input: { filePath: repo.doc, content: "…" } }, {}],
+      [
+        "VS Code multi_replace_string_in_file",
+        { tool_name: "multi_replace_string_in_file", tool_input: { replacements: [{ filePath: repo.doc, oldString: "a", newString: "b" }] } },
+        {},
+      ],
+      // Codex sends patch text with paths relative to its cwd, here a subfolder of the repo.
+      [
+        "Codex apply_patch",
+        { tool_name: "apply_patch", tool_input: { command: "*** Begin Patch\n*** Update File: big.md\n@@\n-a\n+b\n*** End Patch" }, cwd: path.join(repo.root, "docs") },
+        {},
+      ],
+    ];
+    for (const [name, payload, opts] of cases) {
+      const out = repo.run({ hook_event_name: "PostToolUse", cwd: repo.root, ...payload }, opts);
+      const context = "toolName" in payload ? out?.additionalContext : out?.hookSpecificOutput?.additionalContext;
+      assert(context && context.includes("docs/big.md is now") && context.includes("markdown-labels skill"), name + " got " + JSON.stringify(out));
+    }
+  } finally {
+    repo.cleanup();
+  }
+});
+
+check("label hook: reads, and a second agent running Claude's hooks, stay quiet", () => {
+  const repo = hookRepo();
+  try {
+    const quiet = [
+      ["Claude Code Read", { tool_name: "Read", tool_input: { file_path: repo.doc } }, { env: { CLAUDE_PROJECT_DIR: repo.root }, args: ["--claude-settings"] }],
+      ["Copilot CLI view", { toolName: "view", toolArgs: { path: repo.doc } }, { env: { COPILOT_CLI: "1" } }],
+      // Copilot CLI also runs .claude/settings.json (it sets CLAUDE_PROJECT_DIR too) but drops
+      // hookSpecificOutput; its .github/hooks entry already spoke.
+      [
+        "Copilot CLI via .claude/settings.json",
+        { tool_name: "Write", tool_input: { path: repo.doc, file_text: "…" } },
+        { env: { COPILOT_CLI: "1", CLAUDE_PROJECT_DIR: repo.root }, args: ["--claude-settings"] },
+      ],
+      ["VS Code via chat.useClaudeHooks", { tool_name: "create_file", tool_input: { filePath: repo.doc } }, { args: ["--claude-settings"] }],
+    ];
+    for (const [name, payload, opts] of quiet) {
+      const out = repo.run({ cwd: repo.root, ...payload }, opts);
+      assert(out === null, name + " should print nothing, got " + JSON.stringify(out));
+    }
+  } finally {
+    repo.cleanup();
+  }
+});
+
+check("label hook: a skill-written sidecar gets anchors on save, follows its text, and ends the nudge", () => {
+  const repo = hookRepo();
+  try {
+    const text = fs.readFileSync(repo.doc, "utf8");
+    const lines = text.split("\n");
+    const start = lines.indexOf("## Part 2") + 1;
+    // Exactly what the skill writes: no sourceHash, no anchors.
+    const sidecar = path.join(repo.root, ".mymd", "docs", "big.md.json");
+    fs.mkdirSync(path.dirname(sidecar), { recursive: true });
+    fs.writeFileSync(
+      sidecar,
+      JSON.stringify({ version: 1, lenses: [{ name: "Parts", generatedBy: "skill", ranges: [{ label: "Two", color: "#059669", startLine: start, endLine: start + 2 }] }] }),
+    );
+    const saved = repo.run({ tool_name: "apply_patch", tool_input: { command: "*** Begin Patch\n*** Add File: .mymd/docs/big.md.json\n+…\n*** End Patch" }, cwd: repo.root });
+    assert(saved === null, "saving a sidecar is not itself worth a nudge: " + JSON.stringify(saved));
+    const stamped = JSON.parse(fs.readFileSync(sidecar, "utf8")).lenses[0].ranges[0];
+    const expected = Labels.anchorsFor(lines, start, start + 2);
+    assert(stamped.anchor === expected.anchor && stamped.endAnchor === expected.endAnchor, "anchors must match the extension's: " + JSON.stringify(stamped));
+
+    // Two lines added above the section push it down two lines.
+    const edited = "Preface.\n\n" + text;
+    fs.writeFileSync(repo.doc, edited);
+    const out = repo.run({ tool_name: "Edit", tool_input: { file_path: repo.doc }, cwd: repo.root }, { env: { CLAUDE_PROJECT_DIR: repo.root }, args: ["--claude-settings"] });
+    assert(out === null, "an edit to a labelled document should not re-nag: " + JSON.stringify(out));
+    const range = Labels.readLabels(JSON.parse(fs.readFileSync(sidecar, "utf8")), edited).lenses[0].ranges[0];
+    assert(range.startLine === start + 2, "the label should follow its section to line " + (start + 2) + ", got " + range.startLine);
+  } finally {
+    repo.cleanup();
+  }
+});
+
+check("label hook wiring: every agent points at the one script, and both skill copies match", () => {
+  const read = (file) => fs.readFileSync(path.join(REPO, file), "utf8");
+  const claude = JSON.parse(read(".claude/settings.json")).hooks.PostToolUse[0].hooks[0].command;
+  const copilot = JSON.parse(read(".github/hooks/markdown-labels.json")).hooks.postToolUse[0];
+  const codex = JSON.parse(read(".codex/hooks.json")).hooks.PostToolUse[0].hooks[0].command;
+  for (const [name, command] of [["Claude Code", claude], ["Copilot bash", copilot.bash], ["Copilot powershell", copilot.powershell], ["Codex", codex]]) {
+    includes(command, ".agents/hooks/markdown-labels.cjs", name + " command");
+  }
+  includes(claude, "--claude-settings", "Claude Code command");
+  assert(
+    read(".claude/skills/markdown-labels/SKILL.md") === read(".agents/skills/markdown-labels/SKILL.md"),
+    ".claude/skills/markdown-labels/SKILL.md has drifted from .agents/skills/markdown-labels/SKILL.md",
+  );
 });
 
 Promise.all(pending).then(() => {

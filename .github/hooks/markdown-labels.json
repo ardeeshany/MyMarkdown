@@ -1,0 +1,13 @@
+{
+  "version": 1,
+  "hooks": {
+    "postToolUse": [
+      {
+        "type": "command",
+        "bash": "node \"${COPILOT_PROJECT_DIR:-.}/.agents/hooks/markdown-labels.cjs\"",
+        "powershell": "node .agents/hooks/markdown-labels.cjs",
+        "timeoutSec": 15
+      }
+    ]
+  }
+}

@@ -6,7 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/markdown-labels.cjs\""
+            "command": "node \"${CLAUDE_PROJECT_DIR:-.}/.agents/hooks/markdown-labels.cjs\" --claude-settings"
           }
         ]
       }

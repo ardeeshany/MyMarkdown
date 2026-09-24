@@ -1,0 +1,16 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "apply_patch|Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node .agents/hooks/markdown-labels.cjs",
+            "timeout": 15
+          }
+        ]
+      }
+    ]
+  }
+}
