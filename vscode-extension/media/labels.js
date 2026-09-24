@@ -281,7 +281,6 @@
     var select = document.createElement("select");
     select.className = "mymd-lens-select";
     select.setAttribute("aria-label", "Switch label lens");
-    select.disabled = payload.lenses.length < 2;
     for (var optionIndex = 0; optionIndex < payload.lenses.length; optionIndex += 1) {
       var optionLens = payload.lenses[optionIndex];
       var option = document.createElement("option");
