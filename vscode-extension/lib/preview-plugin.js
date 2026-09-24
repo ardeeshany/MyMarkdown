@@ -67,6 +67,38 @@ function countLines(text) {
 }
 
 /**
+ * Stamp every block with the exact source lines it covers, 1-based and inclusive, for
+ * media/labels.js to place label bars by. VS Code's `data-line` gives only a block's first
+ * line, and its end cannot be recovered from the rendered text: markdown-it puts a newline
+ * between tags, so a four-item list or a table reads as many more lines than it has.
+ *
+ * Separate attributes rather than a second `data-line`, so VS Code's scroll sync is left
+ * alone and the blocks that deliberately drop `data-line` (a reflowed JSON fence, a drawn
+ * Mermaid diagram) can still be measured as whole blocks. Runs last among our rules, so
+ * it sees the tokens our other rules created or moved.
+ */
+function stampBlockExtents(state) {
+  const lines = state.src.split("\n");
+  for (const token of state.tokens) {
+    if (!token.map || token.type === "inline" || token.nesting === -1) continue;
+    const start = token.map[0] + 1;
+    // map[1] is 0-based exclusive, which is the 1-based inclusive last line. Lists and list
+    // items also claim the blank lines after them; those belong to no block.
+    let end = Math.max(start, token.map[1]);
+    while (end > start && !String(lines[end - 1] ?? "").trim()) end -= 1;
+    token.attrSet("data-mymd-start", String(start));
+    token.attrSet("data-mymd-end", String(end));
+  }
+}
+
+/** The extent attributes for renderers that write their own opening tag. */
+function extentAttributes(token) {
+  const start = token.attrGet && token.attrGet("data-mymd-start");
+  const end = token.attrGet && token.attrGet("data-mymd-end");
+  return start && end ? ' data-mymd-start="' + start + '" data-mymd-end="' + end + '"' : "";
+}
+
+/**
  * The preview derives a code block's last source line from the newlines in its
  * rendered text, so source mapping is only truthful while the display has as
  * many lines as the source. Laying JSON out one field per line usually adds
@@ -102,7 +134,9 @@ function codeAttributes(token, escapeHtml, keepsSourceMapping) {
 function renderMermaidFence(token, escapeHtml) {
   const source = token.content || "";
   return (
-    '<div class="mymd-mermaid" data-mermaid="' +
+    '<div class="mymd-mermaid"' +
+    extentAttributes(token) +
+    ' data-mermaid="' +
     escapeHtml(source) +
     '"><pre class="mymd-mermaid-src">' +
     escapeHtml(source) +
@@ -230,16 +264,27 @@ function renderAlerts(state) {
 
     first.content = first.content.replace(ALERT_RE, "");
     inline.content = inline.content.replace(ALERT_RE, "");
+    const paragraph = tokens[i - 1];
+    const markerLine = paragraph.map ? paragraph.map[0] : -1;
     if (!first.content) {
       children.shift();
       if (children[0] && children[0].type === "softbreak") children.shift();
+      // The "[!NOTE]" line is now drawn as the title, so the paragraph starts on the next
+      // line; left alone, every line of it would be placed one line too high.
+      if (paragraph.map && paragraph.map[1] > paragraph.map[0] + 1) {
+        paragraph.map = [paragraph.map[0] + 1, paragraph.map[1]];
+      }
     }
 
     const quote = tokens[i - 2];
     quote.attrJoin("class", "mymd-alert mymd-alert-" + kind);
     const title = new state.Token("html_block", "", 0);
+    const titleLines =
+      markerLine >= 0
+        ? ' data-mymd-start="' + (markerLine + 1) + '" data-mymd-end="' + (markerLine + 1) + '"'
+        : "";
     title.content =
-      '<p class="mymd-alert-title">' + (ALERT_LABELS[kind] || kind) + "</p>\n";
+      '<p class="mymd-alert-title"' + titleLines + ">" + (ALERT_LABELS[kind] || kind) + "</p>\n";
     tokens.splice(i - 1, 0, title);
     i += 1;
   }
@@ -342,6 +387,7 @@ function mymarkdownPlugin(md, options) {
   md.core.ruler.after("inline", "mymarkdown_task_lists", renderTaskLists);
   md.core.ruler.after("mymarkdown_task_lists", "mymarkdown_alerts", renderAlerts);
   md.core.ruler.after("mymarkdown_alerts", "mymarkdown_highlights", renderHighlights);
+  md.core.ruler.push("mymarkdown_block_extents", stampBlockExtents);
 
   const baseRender = md.renderer.render.bind(md.renderer);
   md.renderer.render = (tokens, opts, env) =>

@@ -4,11 +4,11 @@
  * mymarkdown.site draws them beside the rendered document. The extension embeds the lens
  * as JSON in a hidden element; everything here is measurement and painting.
  *
- * Positions come from the `data-line` attributes VS Code stamps on every mapped block, so
- * a bar is placed by where its lines actually ended up on screen rather than by guessing.
- * Blocks that deliberately carry no mapping — a reflowed JSON fence, a drawn Mermaid
- * diagram — simply do not contribute, and a range covering one is bounded by its mapped
- * neighbours instead.
+ * Positions come from the exact source lines the preview plugin stamps on every block
+ * (data-mymd-start / data-mymd-end, 1-based and inclusive), so a bar is placed by where
+ * its lines actually ended up on screen rather than by guessing. VS Code's own data-line
+ * gives only a block's first line, and counting newlines in the rendered text to find
+ * the last one overcounts every list, quote and table.
  */
 (function () {
   "use strict";
@@ -47,49 +47,143 @@
     return document.querySelector(".markdown-body") || document.body;
   }
 
-  /**
-   * The source line a mapped block starts at. markdown-it's `data-line` is `token.map[0]`,
-   * which is 0-based; every line number in the sidecar format (and thus every range here)
-   * is 1-based, so this is where the two get reconciled.
-   */
-  function sourceLineOf(node) {
-    return Number(node.getAttribute("data-line")) + 1;
-  }
+  var MAPPED = "[data-mymd-start]";
 
-  /** Every block the preview has mapped back to a source line, in document order. */
+  /** Every block the plugin mapped to its source lines, in document order. */
   function mappedBlocks(root) {
     var blocks = [];
-    var nodes = root.querySelectorAll("[data-line]");
+    var nodes = root.querySelectorAll(MAPPED);
     for (var i = 0; i < nodes.length; i += 1) {
       var node = nodes[i];
       if (node.closest("#" + LAYER_ID)) continue;
-      var start = sourceLineOf(node);
-      if (!isFinite(start)) continue;
-      var text = node.textContent || "";
-      var span = (text.match(/\n/g) || []).length;
-      blocks.push({ el: node, start: start, end: start + span });
+      // Footnote definitions are drawn at the foot of the page but keep their source lines:
+      // measured there, a range holding one would stretch to the end of the document.
+      if (node.closest(".footnotes")) continue;
+      var start = Number(node.getAttribute("data-mymd-start"));
+      var end = Number(node.getAttribute("data-mymd-end"));
+      if (!isFinite(start) || !isFinite(end)) continue;
+      blocks.push({ el: node, start: start, end: end, child: node.querySelector(MAPPED) });
     }
     return blocks;
   }
 
+  /** A block's full box. A fence's ``` lines are the padding of its <pre>, not its <code>. */
+  function outerBox(el) {
+    if (el.tagName === "CODE" && el.parentElement && el.parentElement.tagName === "PRE") {
+      el = el.parentElement;
+    }
+    var box = el.getBoundingClientRect();
+    if (box.height) return { top: box.top, bottom: box.bottom };
+    // VS Code draws an HTML block as an empty mapped marker followed by the raw HTML.
+    var top = Infinity;
+    var bottom = -Infinity;
+    for (var next = el.nextElementSibling; next && !next.matches(MAPPED); next = next.nextElementSibling) {
+      var part = next.getBoundingClientRect();
+      if (!part.height) continue;
+      top = Math.min(top, part.top);
+      bottom = Math.max(bottom, part.bottom);
+    }
+    return top === Infinity ? null : { top: top, bottom: bottom };
+  }
+
+  /** The slice of `box` that lines first..last take, sharing its height out evenly. */
+  function slice(box, start, end, first, last) {
+    var per = (box.bottom - box.top) / Math.max(1, end - start + 1);
+    return { top: box.top + (first - start) * per, bottom: box.top + (last - start + 1) * per };
+  }
+
   /**
-   * Map a range's source lines onto pixels. A block that only partly overlaps the range
-   * contributes the matching slice of its own height, so a bar can start mid-paragraph.
+   * Where text lines first..last (0-based, split at the newlines in the element's text)
+   * actually sit on screen, wrapping included. Null when those lines have nothing drawn.
    */
+  function textLines(el, first, last) {
+    var walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+    var range = document.createRange();
+    var line = 0;
+    var started = first === 0;
+    var node = walker.nextNode();
+    if (!node) return null;
+    if (started) range.setStart(node, 0);
+    var ended = false;
+    for (; node && !ended; node = walker.nextNode()) {
+      var text = node.nodeValue || "";
+      for (var i = 0; i < text.length; i += 1) {
+        if (text.charAt(i) !== "\n") continue;
+        if (line === last) {
+          range.setEnd(node, i);
+          ended = true;
+          break;
+        }
+        line += 1;
+        if (line === first) {
+          range.setStart(node, i + 1);
+          started = true;
+        }
+      }
+      if (!ended && started) range.setEnd(node, text.length);
+    }
+    if (!started) return null;
+    var rects = range.getClientRects();
+    var top = Infinity;
+    var bottom = -Infinity;
+    for (var r = 0; r < rects.length; r += 1) {
+      if (!rects[r].height) continue;
+      top = Math.min(top, rects[r].top);
+      bottom = Math.max(bottom, rects[r].bottom);
+    }
+    return top === Infinity ? null : { top: top, bottom: bottom };
+  }
+
+  /** The part of a block a range covers only some of the lines of. */
+  function partOf(block, range, box) {
+    var first = Math.max(block.start, range.startLine);
+    var last = Math.min(block.end, range.endLine);
+    // A list, quote or table holding other mapped blocks owns only the lines before its
+    // first one (a list item's own text, say); the blocks inside place themselves.
+    if (block.child) {
+      var childStart = Number(block.child.getAttribute("data-mymd-start"));
+      var headEnd = Math.min(last, childStart - 1);
+      if (headEnd < first) return null;
+      var childBox = outerBox(block.child);
+      var head = { top: box.top, bottom: childBox ? childBox.top : box.bottom };
+      return slice(head, block.start, childStart - 1, first, headEnd);
+    }
+    // Some blocks are drawn as one piece that does not follow its source line by line: a
+    // reflowed JSON fence or Mermaid diagram (they drop data-line), raw HTML (an empty
+    // marker), a two-line setext heading. A range touching any of their lines takes all of it.
+    // ponytail: two ranges splitting one such block would both draw over all of it.
+    if (!block.el.hasAttribute("data-line") || !block.el.hasChildNodes() || /^H[1-6]$/.test(block.el.tagName)) {
+      return box;
+    }
+
+    var fenced = block.el.tagName === "CODE";
+    var contentStart = fenced ? block.start + 1 : block.start;
+    var contentEnd = fenced ? block.end - 1 : block.end;
+    var from = Math.max(first, contentStart);
+    var to = Math.min(last, contentEnd);
+    var lines = from <= to ? textLines(block.el, from - contentStart, to - contentStart) : null;
+    if (!lines) return slice(box, block.start, block.end, first, last);
+    // A range that takes in a fence's own ``` lines reaches the edge of the <pre>.
+    return {
+      top: first < contentStart ? box.top : lines.top,
+      bottom: last > contentEnd ? box.bottom : lines.bottom,
+    };
+  }
+
+  /** Map a range's source lines onto pixels, relative to the preview root. */
   function measure(range, blocks, baseTop) {
     var top = Infinity;
     var bottom = -Infinity;
     for (var i = 0; i < blocks.length; i += 1) {
       var block = blocks[i];
       if (block.end < range.startLine || block.start > range.endLine) continue;
-      var box = block.el.getBoundingClientRect();
-      if (!box.height) continue;
-      var span = Math.max(1, block.end - block.start + 1);
-      var ownedStart = Math.max(block.start, range.startLine);
-      var ownedEnd = Math.min(block.end, range.endLine);
-      var blockTop = box.top - baseTop;
-      top = Math.min(top, blockTop + ((ownedStart - block.start) / span) * box.height);
-      bottom = Math.max(bottom, blockTop + ((ownedEnd - block.start + 1) / span) * box.height);
+      var box = outerBox(block.el);
+      if (!box) continue;
+      var whole = range.startLine <= block.start && block.end <= range.endLine;
+      var part = whole ? box : partOf(block, range, box);
+      if (!part) continue;
+      top = Math.min(top, part.top - baseTop);
+      bottom = Math.max(bottom, part.bottom - baseTop);
     }
     if (top === Infinity) return null;
     return { top: top, height: Math.max(4, bottom - top) };
@@ -354,7 +448,9 @@
   });
 
   // The preview swaps its content in place when the document changes, so redraw on any
-  // mutation of the body rather than only on load.
+  // mutation of the body rather than only on load. Attribute changes count for two cases:
+  // a rewritten sidecar arrives as a new data-lens on the marker, and <details> opening
+  // moves everything below it.
   var observer = new MutationObserver(function (records) {
     for (var i = 0; i < records.length; i += 1) {
       var target = records[i].target;
@@ -368,12 +464,22 @@
 
   function start() {
     paint();
-    observer.observe(document.body, { childList: true, subtree: true, characterData: true });
+    observer.observe(document.body, {
+      childList: true,
+      subtree: true,
+      characterData: true,
+      attributes: true,
+      attributeFilter: ["data-lens", "open"],
+    });
     window.addEventListener("resize", schedule, { passive: true });
+    // Fired by VS Code's preview after every content update, including edits that only
+    // shift line numbers and so change no text the observer above would see.
+    window.addEventListener("vscode.markdown.updateContent", schedule);
     if (document.fonts && document.fonts.ready) document.fonts.ready.then(schedule);
-    // Images and Mermaid diagrams settle after first paint and move everything below them.
-    window.setTimeout(schedule, 300);
-    window.setTimeout(schedule, 1200);
+    // Images, fonts, Mermaid and math settle whenever they settle, and move everything
+    // below them without touching the DOM; the page changing size is the one signal.
+    // Painting cannot feed back into this: the bar layer is absolutely positioned.
+    if (window.ResizeObserver) new ResizeObserver(schedule).observe(document.body);
   }
 
   if (document.readyState === "loading") {

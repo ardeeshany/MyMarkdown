@@ -228,11 +228,53 @@ check("a JSON block only claims source lines it really covers", () => {
   includes(expanded, '<span class="tok-key">', "it is still coloured");
 });
 
+check("every block carries its exact source lines for the label bars", () => {
+  const html = preview().render(
+    [
+      "# Title", //                1
+      "", //                       2
+      "- one", //                  3
+      "- two", //                  4
+      "", //                       5
+      "| a | b |", //              6
+      "|---|---|", //              7
+      "| 1 | 2 |", //              8
+      "", //                       9
+      "> quote line one", //       10
+      "> quote line two", //       11
+      "", //                       12
+      "```js", //                  13
+      "x", //                      14
+      "```", //                    15
+      "", //                       16
+      "```mermaid", //             17
+      "graph TD", //               18
+      "```", //                    19
+      "", //                       20
+      "> [!NOTE]", //              21
+      "> Body.", //                22
+    ].join("\n") + "\n",
+  );
+  const spans = (tag, start, end) =>
+    new RegExp("<" + tag + '[^>]*data-mymd-start="' + start + '" data-mymd-end="' + end + '"').test(html);
+  // Counting newlines in the rendered text gave the list 3..6 and the table 6..20 or so.
+  assert(spans("h1", 1, 1), "heading");
+  assert(spans("ul", 3, 4), "a list ends on its last item, not the blank line after it");
+  assert(spans("li", 4, 4), "the last item ends on its own line");
+  assert(spans("table", 6, 8), "table");
+  assert(spans("tr", 8, 8), "table row");
+  assert(spans("blockquote", 10, 11), "quote");
+  assert(spans("code", 13, 15), "a fence covers its own ``` lines");
+  assert(spans("div", 17, 19), "a Mermaid diagram keeps its lines though it drops data-line");
+  assert(spans("p", 21, 21), "a callout title sits on the [!NOTE] line");
+  assert(spans("p", 22, 22), "the callout body starts on the line after it");
+});
+
 check("loose JSON in prose is promoted, without shifting later lines", () => {
   const md = preview();
   const html = md.render('Response:\n\n{"ok":true,"n":3}\n\nDone.\n');
   includes(html, '<pre class="mymd-json">', "a bare JSON paragraph becomes a block");
-  includes(html, '<p data-line="4"', "the paragraph after it keeps its own line");
+  assert(/<p [^>]*data-line="4"/.test(html), "the paragraph after it keeps its own line");
   includes(md.render('The default is `{"retries":3}` here.\n'), "mymd-json-inline", "inline JSON");
   assert(md.render("Run `npm run build` now.\n").indexOf("mymd-json") === -1, "plain inline code");
 });
