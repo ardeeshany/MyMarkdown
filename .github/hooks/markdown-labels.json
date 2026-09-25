@@ -1,0 +1,13 @@
+{
+  "version": 1,
+  "hooks": {
+    "postToolUse": [
+      {
+        "type": "command",
+        "bash": "node -e \"let p=require('path'),f=require('fs'),d=process.env.CLAUDE_PROJECT_DIR||process.cwd(),h;while(!f.existsSync(h=p.join(d,'.agents/hooks/markdown-labels.cjs'))&&p.dirname(d)!==d)d=p.dirname(d);f.existsSync(h)&&require(h)\"",
+        "powershell": "node -e \"let p=require('path'),f=require('fs'),d=process.env.CLAUDE_PROJECT_DIR||process.cwd(),h;while(!f.existsSync(h=p.join(d,'.agents/hooks/markdown-labels.cjs'))&&p.dirname(d)!==d)d=p.dirname(d);f.existsSync(h)&&require(h)\"",
+        "timeoutSec": 15
+      }
+    ]
+  }
+}

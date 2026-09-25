@@ -164,6 +164,62 @@ function storageFolder() {
   return String(config().get("labels.storagePath", ".mymd")) || ".mymd";
 }
 
+/** @type {vscode.FileSystemWatcher | undefined} */
+let sidecarWatcher;
+
+/**
+ * Watch the sidecar folder, so labels written outside the extension (by the authoring
+ * skill, a coding agent, git, another window) reach the preview without the document
+ * having to change first. The cache is otherwise keyed by document version, which a
+ * sidecar write never bumps.
+ */
+function watchSidecars() {
+  sidecarWatcher?.dispose();
+  // The setting as a glob: sidecarUri's Uri.joinPath already copes with "./labels",
+  // "labels/" or "." on the file side, so normalise the same way here and escape glob
+  // characters, or the watcher silently matches nothing.
+  const folder = storageFolder()
+    .split(/[\\/]+/)
+    .filter((part) => part && part !== ".")
+    .map((part) => part.replace(/[[\]{}*?]/g, "[$&]"))
+    .join("/");
+  // The folder itself as well as the files in it: VS Code reports deleting the whole
+  // folder, and often creating a new subfolder with a sidecar in it, as one folder event.
+  // One glob covers every workspace folder. It also matches same-named folders deeper in a
+  // tree, which reloadSidecar ignores: no open document maps there.
+  sidecarWatcher = vscode.workspace.createFileSystemWatcher(folder ? `**/${folder}/**` : "**/*.json");
+  sidecarWatcher.onDidCreate(reloadSidecar);
+  sidecarWatcher.onDidChange(reloadSidecar);
+  sidecarWatcher.onDidDelete(reloadSidecar);
+}
+
+/** A URI as a comparable key; macOS and Windows file systems ignore case. */
+function uriKey(uri) {
+  const key = uri.toString();
+  return process.platform === "linux" ? key : key.toLowerCase();
+}
+
+/** Send a document's lenses back to disk, drawing the old ones until the reread lands. */
+function rereadSidecar(document) {
+  // Keeping the entry (rather than deleting it) means a writer that fires several events
+  // for one save does not make the bars flicker off in between.
+  const entry = lensCache.get(document.uri.toString());
+  if (entry) entry.version = undefined;
+  scheduleLabelRefresh(document);
+}
+
+/** Reread a changed sidecar, or every sidecar under a changed folder, for the open documents. */
+function reloadSidecar(uri) {
+  const changed = uriKey(uri);
+  for (const document of vscode.workspace.textDocuments) {
+    if (document.languageId !== "markdown") continue;
+    const sidecar = sidecarUri(document);
+    if (!sidecar) continue;
+    const key = uriKey(sidecar);
+    if (key === changed || key.startsWith(changed + "/")) rereadSidecar(document);
+  }
+}
+
 /** Where a document's sidecar lives: one hidden folder mirroring the workspace tree. */
 function sidecarUri(document) {
   const folder = vscode.workspace.getWorkspaceFolder(document.uri);
@@ -235,11 +291,43 @@ function activeLensFor(uri) {
   return lens || null;
 }
 
+/** Documents whose labels are being read because a preview asked for them first. */
+const loadingForPreview = new Set();
+
+/**
+ * A preview can render a document before any editor for it has been active (VS Code
+ * restoring a preview on startup, a preview opened on its own), and the cache is otherwise
+ * only filled from the active editor. Read the labels now and render again if there are any.
+ */
+async function loadForPreview(uri) {
+  const key = uri.toString();
+  if (loadingForPreview.has(key)) return;
+  loadingForPreview.add(key);
+  try {
+    const document =
+      vscode.workspace.textDocuments.find((open) => open.uri.toString() === key) ||
+      (await vscode.workspace.openTextDocument(uri));
+    // With no editor to go on, the status bar and label commands follow the preview.
+    if (!activeMarkdownEditor() && !currentMarkdownDocument()) lastMarkdownDocument = document;
+    const lenses = await lensesFor(document);
+    refreshLabelStatus();
+    if (lenses.length) await vscode.commands.executeCommand("markdown.preview.refresh").then(undefined, () => {});
+  } catch {
+    // Nothing readable behind this preview: it simply shows no labels.
+  } finally {
+    loadingForPreview.delete(key);
+  }
+}
+
 function labelPayloadFor(uri) {
   if (!config().get("labels.enabled", true)) return null;
   const key = uri.toString();
   const entry = lensCache.get(key);
-  if (!entry || !entry.lenses.length) return null;
+  if (!entry) {
+    void loadForPreview(uri);
+    return null;
+  }
+  if (!entry.lenses.length) return null;
   if (activeLens.get(key) === "") return null;
   const lens = activeLensFor(uri);
   return { active: lens ? lens.name : "", lenses: entry.lenses };
@@ -267,22 +355,30 @@ function refreshLabelStatus() {
   labelStatus.show();
 }
 
-/** Identifies what the preview would currently draw for a document, or null for nothing. */
+/**
+ * Identifies everything the preview embeds for a document (the active lens and every other
+ * one its dropdown offers), or null for nothing.
+ */
 function activeLensSignature(document) {
-  const lens = activeLensFor(document.uri);
-  return lens ? document.uri.toString() + "|" + JSON.stringify(lens) : null;
+  const payload = labelPayloadFor(document.uri);
+  return payload ? document.uri.toString() + "|" + JSON.stringify(payload) : null;
 }
 
-/** The signature last seen when the preview was told to refresh for labels. */
-let lastActiveLensSignature;
+/**
+ * Per document, the signature last seen when the preview was told to refresh for labels.
+ * Kept per document: one shared value made a sidecar change in a background tab, or a
+ * switch between two labelled documents, re-render every preview.
+ */
+const lastSignatures = new Map();
 
 async function refreshLabels(document) {
   if (!document) return;
   await lensesFor(document);
   refreshLabelStatus();
+  const key = document.uri.toString();
   const signature = activeLensSignature(document);
-  if (signature === lastActiveLensSignature) return;
-  lastActiveLensSignature = signature;
+  if (signature === (lastSignatures.get(key) ?? null)) return;
+  lastSignatures.set(key, signature);
   // The lens is embedded during rendering, so the preview has to render again to pick it up.
   // Only worth doing when what it would draw actually changed — this runs on every tab
   // switch, and clearing VS Code's whole markdown token cache for no reason is not free.
@@ -471,6 +567,84 @@ async function toggleLabelsEnabled() {
   if (document) await refreshLabels(document);
 }
 
+/**
+ * Copy the label hook and skill into a workspace folder, so coding agents working there
+ * label the Markdown they write. The same install as `npx mymarkdown-hooks init`.
+ */
+async function installAgentHooks() {
+  const open = vscode.workspace.workspaceFolders || [];
+  const folders = open.filter((folder) => folder.uri.scheme === "file");
+  if (!folders.length) {
+    vscode.window.showWarningMessage(
+      open.length
+        ? "MyMarkdown: the label hooks can only be installed into a folder on disk."
+        : "MyMarkdown: open a project folder first; the hooks are installed into it.",
+    );
+    return;
+  }
+  const picked =
+    folders.length === 1
+      ? { folder: folders[0] }
+      : await vscode.window.showQuickPick(
+          folders.map((folder) => ({ label: folder.name, description: folder.uri.fsPath, folder })),
+          { placeHolder: "Install the label hooks into which folder?" },
+        );
+  if (!picked) return;
+  const { folder } = picked;
+
+  // Required at call time, like the AI instructions: a packaging slip here must not stop
+  // the rest of the extension loading.
+  const Hooks = require("./agent-hooks/install.js");
+  let results;
+  try {
+    results = Hooks.installAgentHooks(folder.uri.fsPath);
+    // A result with a reason stays as it is even when forced (a hook of the user's own that
+    // runs the script), so offering to replace it would promise a change that cannot happen.
+    const differing = results.filter((result) => result.status === "differs" && !result.reason);
+    if (differing.length) {
+      const replace = await vscode.window.showWarningMessage(
+        `MyMarkdown: ${differing.map((result) => result.file).join(", ")} in ${folder.name} ` +
+          "differ from this version (you may have edited them, or they are from an older release). Replace them?",
+        { modal: true },
+        "Replace",
+      );
+      if (replace === "Replace") results = Hooks.installAgentHooks(folder.uri.fsPath, { force: true });
+    }
+  } catch (error) {
+    vscode.window.showErrorMessage("MyMarkdown: could not install the label hooks — " + (error?.message || error));
+    return;
+  }
+
+  const count = (status) => results.filter((result) => result.status === status).length;
+  const broken = Hooks.brokenResults(results);
+  if (broken.length) {
+    vscode.window.showWarningMessage(
+      `MyMarkdown: could not set up ${broken.map((result) => `${result.file} (${result.reason})`).join(", ")} ` +
+        `in ${folder.name}. The agents that read them will not run the hook until you fix that and run this command again.`,
+    );
+    return;
+  }
+  const leftAlone = results.filter((result) => result.status === "differs");
+  const kept = leftAlone.length
+    ? " Left as they are: " +
+      leftAlone.map((result) => result.file + (result.reason ? ` (${result.reason})` : "")).join(", ") +
+      "."
+    : "";
+  const changed = count("created") + count("merged") + count("updated");
+  if (!changed) {
+    if (!leftAlone.length) {
+      vscode.window.showInformationMessage(`MyMarkdown: the label hooks in ${folder.name} are already up to date.`);
+    } else if (leftAlone.some((result) => result.reason)) {
+      vscode.window.showWarningMessage(`MyMarkdown: nothing was installed in ${folder.name}.${kept}`);
+    }
+    return;
+  }
+  vscode.window.showInformationMessage(
+    `MyMarkdown: label hooks installed in ${folder.name}.${kept} New Claude Code, Copilot and Cursor ` +
+      "sessions there pick them up; Codex asks you to approve the hook once, in /hooks.",
+  );
+}
+
 /** Shared by the standalone remove command and the picker inside switchLens. */
 async function pickAndDeleteLens(document, lenses) {
   const picked = await vscode.window.showQuickPick(
@@ -618,6 +792,7 @@ function activate(context) {
     vscode.commands.registerCommand("mymarkdown.switchLens", () => switchLens()),
     vscode.commands.registerCommand("mymarkdown.removeLens", () => removeLens()),
     vscode.commands.registerCommand("mymarkdown.toggleLabels", () => toggleLabelsEnabled()),
+    vscode.commands.registerCommand("mymarkdown.installAgentHooks", () => installAgentHooks()),
     vscode.commands.registerCommand("mymarkdown.revealLine", (line) => {
       const editor = activeMarkdownEditor();
       if (!editor) return;
@@ -636,7 +811,14 @@ function activate(context) {
       rememberActiveMarkdown();
       tocProvider.refresh();
       refreshDiagnostics(currentMarkdownDocument());
-      void refreshLabels(currentMarkdownDocument());
+      // Reread from disk rather than trust the cache: the watcher misses rewrites inside a
+      // sidecar subfolder created after VS Code started watching, and switching to a tab is
+      // when its labels are about to be looked at. Straight away, not on the edit timer,
+      // which would fire for tabs already left behind when switching quickly.
+      const document = currentMarkdownDocument();
+      const entry = document && lensCache.get(document.uri.toString());
+      if (entry) entry.version = undefined;
+      void refreshLabels(document);
     }),
     vscode.workspace.onDidOpenTextDocument((document) => refreshDiagnostics(document)),
     vscode.workspace.onDidCloseTextDocument((document) => {
@@ -647,6 +829,7 @@ function activate(context) {
       diagnostics?.delete(document.uri);
       lensCache.delete(document.uri.toString());
       activeLens.delete(document.uri.toString());
+      lastSignatures.delete(document.uri.toString());
     }),
     {
       dispose: () => {
@@ -657,10 +840,14 @@ function activate(context) {
         diagnostics = undefined;
         lensCache.clear();
         activeLens.clear();
+        lastSignatures.clear();
         labelStatus = undefined;
+        sidecarWatcher?.dispose();
+        sidecarWatcher = undefined;
       },
     },
   );
+  watchSidecars();
 
   // Off by default: a second Markdown formatter would stop VS Code choosing one at all,
   // silently breaking format on save for anyone already using Prettier or markdownlint.
@@ -697,6 +884,13 @@ function activate(context) {
         // revisited: otherwise turning it off leaves stale problems everywhere but here.
         if (diagnostics) diagnostics.clear();
         for (const document of vscode.workspace.textDocuments) refreshDiagnostics(document);
+      }
+      if (event.affectsConfiguration("mymarkdown.labels.storagePath")) {
+        // Every cached lens came from the old folder, and the watcher is still pointed at it.
+        watchSidecars();
+        for (const document of vscode.workspace.textDocuments) {
+          if (document.languageId === "markdown") rereadSidecar(document);
+        }
       }
     }),
   );
