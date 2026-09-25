@@ -567,9 +567,14 @@ async function toggleLabelsEnabled() {
  * label the Markdown they write. The same install as `npx mymarkdown-hooks init`.
  */
 async function installAgentHooks() {
-  const folders = (vscode.workspace.workspaceFolders || []).filter((folder) => folder.uri.scheme === "file");
+  const open = vscode.workspace.workspaceFolders || [];
+  const folders = open.filter((folder) => folder.uri.scheme === "file");
   if (!folders.length) {
-    vscode.window.showWarningMessage("MyMarkdown: open a project folder first; the hooks are installed into it.");
+    vscode.window.showWarningMessage(
+      open.length
+        ? "MyMarkdown: the label hooks can only be installed into a folder on disk."
+        : "MyMarkdown: open a project folder first; the hooks are installed into it.",
+    );
     return;
   }
   const picked =
@@ -604,17 +609,17 @@ async function installAgentHooks() {
   }
 
   const count = (status) => results.filter((result) => result.status === status).length;
-  const broken = results.filter((result) => result.status === "invalid" || result.status === "failed");
+  const broken = Hooks.brokenResults(results);
   if (broken.length) {
     vscode.window.showWarningMessage(
-      "MyMarkdown: could not update " +
-        broken.map((result) => `${result.file} (${result.reason})`).join(", ") +
-        ". Fix it and run this command again.",
+      `MyMarkdown: could not set up ${broken.map((result) => `${result.file} (${result.reason})`).join(", ")} ` +
+        `in ${folder.name}. The agents that read them will not run the hook until you fix that and run this command again.`,
     );
+    return;
   }
   const changed = count("created") + count("merged") + count("updated");
   if (!changed) {
-    if (!broken.length && !count("differs")) {
+    if (!count("differs")) {
       vscode.window.showInformationMessage(`MyMarkdown: the label hooks in ${folder.name} are already up to date.`);
     }
     return;

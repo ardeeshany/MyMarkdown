@@ -111,7 +111,7 @@
         },
         {
           "command": "mymarkdown.installAgentHooks",
-          "when": "workspaceFolderCount > 0"
+          "when": "workspaceFolderCount > 0 && !virtualWorkspace"
         }
       ]
     },

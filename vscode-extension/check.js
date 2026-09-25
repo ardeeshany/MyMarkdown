@@ -1584,17 +1584,154 @@ check("agent hooks installer: a config it cannot read is reported and left alone
   }
 });
 
-check("agent hooks installer: refuses the home folder, where these paths are every agent's global config", () => {
-  let error;
+/** Run `fn` with a throwaway home folder, so a broken guard can never write into the real one. */
+function withFakeHome(fn) {
+  const home = scratchProject();
+  const saved = { HOME: process.env.HOME, USERPROFILE: process.env.USERPROFILE };
+  process.env.HOME = process.env.USERPROFILE = home.root;
   try {
-    Hooks.installAgentHooks(os.homedir());
-  } catch (e) {
-    error = e;
+    return fn(home, { ...process.env, HOME: home.root, USERPROFILE: home.root });
+  } finally {
+    for (const [key, value] of Object.entries(saved)) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+    home.cleanup();
   }
-  assert(error && /home folder/.test(error.message), "installing into ~ must be refused, got " + (error && error.message));
-  // The CLI outside any git repo falls back to the folder it runs in: from ~ that is refused too.
-  const run = spawnSync(process.execPath, [HOOK_CLI, "init"], { cwd: os.homedir(), encoding: "utf8" });
-  assert(run.status === 1 && /home folder/.test(run.stderr), "the CLI in ~ should refuse: " + run.stderr);
+}
+
+check("agent hooks installer: refuses the home folder, however it is reached", () => {
+  withFakeHome((home, env) => {
+    const refused = (root) => {
+      try {
+        Hooks.installAgentHooks(root);
+      } catch (error) {
+        return /home folder/.test(error.message);
+      }
+      return false;
+    };
+    assert(refused(home.root), "the home folder itself must be refused");
+    assert(refused(home.root + path.sep), "with a trailing separator too");
+    // Through a symlink: the spelling differs, the folder is the same (like a lower-case
+    // drive letter from VS Code on Windows).
+    const link = path.join(os.tmpdir(), "mymd-homelink-" + process.pid);
+    fs.symlinkSync(home.root, link);
+    try {
+      assert(refused(link), "a symlink to the home folder must be refused");
+    } finally {
+      fs.unlinkSync(link);
+    }
+    // The CLI outside any git repo falls back to the folder it runs in: from ~ that is refused.
+    const run = spawnSync(process.execPath, [HOOK_CLI, "init"], { cwd: home.root, env, encoding: "utf8" });
+    assert(run.status === 1 && /home folder/.test(run.stderr), "the CLI in ~ should refuse: " + run.stderr);
+    assert(!fs.existsSync(home.file(".claude/settings.json")) && !fs.existsSync(home.file(".codex")), "nothing written");
+
+    // A dotfiles repository in ~ is not the project for a folder under it that has none.
+    fs.mkdirSync(home.file(".git"));
+    fs.mkdirSync(home.file("notes"));
+    const notes = spawnSync(process.execPath, [HOOK_CLI, "init"], { cwd: home.file("notes"), env, encoding: "utf8" });
+    assert(notes.status === 0, "a folder under a dotfiles repo should install: " + notes.stderr);
+    assert(fs.existsSync(home.file("notes/.agents/hooks/markdown-labels.cjs")), "into the folder it was run from");
+  });
+});
+
+check("agent hooks installer: never writes through a symlink out of the project", () => {
+  const project = scratchProject();
+  const outside = scratchProject();
+  try {
+    // A symlinked folder (.claude shared with ~/.claude, say).
+    fs.symlinkSync(outside.root, project.file(".claude"));
+    const results = statuses(Hooks.installAgentHooks(project.root));
+    assert(results[".claude/settings.json"] === "failed" && results[".claude/skills/markdown-labels/SKILL.md"] === "failed", JSON.stringify(results));
+    assert(results[".codex/hooks.json"] === "created", "the rest still installs: " + JSON.stringify(results));
+    // A dangling symlink at a target would otherwise create its target, wherever that is.
+    fs.rmSync(project.file(".agents"), { recursive: true });
+    fs.mkdirSync(project.file(".agents/hooks"), { recursive: true });
+    fs.symlinkSync(outside.file("made-by-installer.cjs"), project.file(".agents/hooks/markdown-labels.cjs"));
+    const dangling = statuses(Hooks.installAgentHooks(project.root));
+    assert(dangling[".agents/hooks/markdown-labels.cjs"] === "failed", JSON.stringify(dangling));
+    assert(fs.readdirSync(outside.root).length === 0, "nothing may appear outside the project: " + fs.readdirSync(outside.root));
+  } finally {
+    project.cleanup();
+    outside.cleanup();
+  }
+});
+
+check("agent hooks installer: a failed write leaves the old file whole", () => {
+  const project = scratchProject();
+  const original = JSON.stringify({ permissions: { deny: ["Read(.env)"] } }, null, 2) + "\n";
+  project.put(".claude/settings.json", original);
+  // Disk full midway through the settings file: half the text lands, then the write fails.
+  const realWrite = fs.writeFileSync;
+  fs.writeFileSync = (file, text, ...rest) => {
+    if (!String(file).includes("settings.json")) return realWrite(file, text, ...rest);
+    realWrite(file, String(text).slice(0, 10), ...rest);
+    throw Object.assign(new Error("ENOSPC: no space left on device"), { code: "ENOSPC" });
+  };
+  try {
+    const results = statuses(Hooks.installAgentHooks(project.root));
+    assert(results[".claude/settings.json"] === "failed", JSON.stringify(results));
+  } finally {
+    fs.writeFileSync = realWrite;
+  }
+  try {
+    assert(project.read(".claude/settings.json") === original, "the user's settings must survive a failed write");
+    assert(!fs.readdirSync(project.file(".claude")).some((name) => name.endsWith(".tmp")), "no temporary file is left behind");
+  } finally {
+    project.cleanup();
+  }
+});
+
+check("agent hooks installer: configs are not pointed at a hook script that could not be written", () => {
+  const project = scratchProject();
+  try {
+    project.put(".agents", "a file where the folder should be\n");
+    const results = statuses(Hooks.installAgentHooks(project.root));
+    assert(results[".agents/hooks/markdown-labels.cjs"] === "failed", JSON.stringify(results));
+    for (const config of [".claude/settings.json", ".github/hooks/markdown-labels.json", ".codex/hooks.json"]) {
+      assert(results[config] === "skipped" && !fs.existsSync(project.file(config)), config + " must not register a missing script");
+    }
+    const run = spawnSync(process.execPath, [HOOK_CLI, "init", project.root], { encoding: "utf8" });
+    assert(run.status === 1 && !run.stdout.includes("pick the hook up"), "no success line when the hook is not active: " + run.stdout);
+  } finally {
+    project.cleanup();
+  }
+});
+
+check("agent hooks installer: replacing clears every copy of our entry, and leaves hooks that only mention it", () => {
+  const project = scratchProject();
+  try {
+    Hooks.installAgentHooks(project.root);
+    const current = JSON.parse(project.read(".claude/settings.json")).hooks.PostToolUse[0];
+    const old = { matcher: "Write|Edit", hooks: [{ type: "command", command: 'node "$CLAUDE_PROJECT_DIR/.claude/hooks/markdown-labels.cjs"' }] };
+    const settings = (groups) => project.put(".claude/settings.json", JSON.stringify({ hooks: { PostToolUse: groups } }) + "\n");
+    const groups = () => JSON.parse(project.read(".claude/settings.json")).hooks.PostToolUse;
+
+    settings([current, old]);
+    assert(statuses(Hooks.installAgentHooks(project.root))[".claude/settings.json"] === "differs", "a second, older copy is not 'unchanged'");
+    Hooks.installAgentHooks(project.root, { force: true });
+    assert(groups().length === 1 && JSON.stringify(groups()[0]) === JSON.stringify(current), "forced: exactly one, current: " + JSON.stringify(groups()));
+
+    const lint = { matcher: "Write", hooks: [{ type: "command", command: "npx eslint --fix .agents/hooks/markdown-labels.cjs" }] };
+    settings([lint]);
+    const forced = Hooks.installAgentHooks(project.root, { force: true }).find((result) => result.file === ".claude/settings.json");
+    assert(forced.status === "differs" && /its own way/.test(forced.reason), "a hook that mentions the script is theirs: " + JSON.stringify(forced));
+    assert(JSON.stringify(groups()) === JSON.stringify([lint]), "and it is left exactly as it was");
+  } finally {
+    project.cleanup();
+  }
+});
+
+check("agent hooks installer: Windows line endings are not a difference", () => {
+  const project = scratchProject();
+  try {
+    Hooks.installAgentHooks(project.root);
+    for (const target of Hooks.TARGETS) project.put(target.dest, project.read(target.dest).replace(/\n/g, "\r\n"));
+    const results = Hooks.installAgentHooks(project.root);
+    assert(results.every((result) => result.status === "unchanged"), "a CRLF checkout is up to date: " + JSON.stringify(results));
+  } finally {
+    project.cleanup();
+  }
 });
 
 check("the repo's own agent files are exactly what the installer ships", () => {
@@ -1644,6 +1781,11 @@ check("the mymarkdown-hooks npm package ships everything the installer reads, an
   assert(fs.readFileSync(HOOK_CLI, "utf8").startsWith("#!/usr/bin/env node\n"), "the bin needs a node shebang");
   for (const needed of ["cli.js", "install.js", "files/"]) assert(pkg.files.includes(needed), "package files should include " + needed);
   for (const target of Hooks.TARGETS) assert(fs.existsSync(path.join(__dirname, "agent-hooks", "files", target.from)), target.from);
+  // npm packs a LICENSE from the package folder itself, and a symlink is not followed.
+  assert(
+    fs.readFileSync(path.join(__dirname, "agent-hooks", "LICENSE"), "utf8") === fs.readFileSync(path.join(__dirname, "LICENSE"), "utf8"),
+    "agent-hooks/LICENSE should be a copy of the extension's LICENSE",
+  );
   const ignored = fs.readFileSync(path.join(__dirname, ".vscodeignore"), "utf8").split("\n").map((line) => line.trim());
   assert(!ignored.some((line) => line.startsWith("agent-hooks")), ".vscodeignore must not drop agent-hooks: the command needs it");
 });
@@ -1683,6 +1825,22 @@ check("Install Label Hooks command: installs into the open folder, and replaces 
     .then(() => {
       assert(fs.existsSync(other.file(".codex/hooks.json")), "installed into the folder picked");
       includes(host.messages.pop().text, "installed in other", "the confirmation names it");
+      // A config it cannot update: a warning that says what to fix, and no claim of success.
+      host.messages.length = 0;
+      host.vscode.workspace.workspaceFolders = [folder(other, "other")];
+      other.put(".claude/settings.json", "{ not json");
+      return run();
+    })
+    .then(() => {
+      assert(host.messages.length === 1 && host.messages[0].kind === "warning", "only a warning: " + JSON.stringify(host.messages));
+      includes(host.messages[0].text, ".claude/settings.json (not valid JSON)", "the warning");
+      // Folders open, none on disk (a virtual workspace).
+      host.messages.length = 0;
+      host.vscode.workspace.workspaceFolders = [{ name: "vfs", uri: { fsPath: "/x", scheme: "vscode-vfs" } }];
+      return run();
+    })
+    .then(() => {
+      includes(host.messages.pop().text, "only be installed into a folder on disk", "a virtual workspace");
     })
     .finally(() => {
       project.cleanup();

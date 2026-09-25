@@ -4,8 +4,9 @@
 "use strict";
 
 const fs = require("fs");
+const os = require("os");
 const path = require("path");
-const { installAgentHooks } = require("./install.js");
+const { installAgentHooks, brokenResults, sameFolder } = require("./install.js");
 
 const USAGE = `Usage: mymarkdown-hooks init [project-dir] [--force]
 
@@ -15,15 +16,18 @@ Codex) to label the Markdown they write, for the MyMarkdown VS Code extension.
 With no project-dir it installs at the top of the git repository you are in, or in the
 current folder outside one. Existing files are never overwritten: the hook entry is merged
 into .claude/settings.json and .codex/hooks.json, and a file that differs is left alone.
+After an update, run it again with --force to bring the files up to date.
 
   --force   also replace files and entries that differ from this version
-            (ones you edited, or ones from an older release)
+            (ones from an older release, and ones you edited)
 `;
 
 /** The top of the git repository `dir` is in, or `dir` itself outside one: agents run hooks
- * from the project root, so that is where the files belong. */
+ * from the project root, so that is where the files belong. A repository in the home folder
+ * (dotfiles) does not count: it holds every project on the machine, not one. */
 function projectRoot(dir) {
   for (let at = path.resolve(dir); ; at = path.dirname(at)) {
+    if (sameFolder(at, os.homedir())) return path.resolve(dir);
     if (fs.existsSync(path.join(at, ".git"))) return at;
     if (path.dirname(at) === at) return path.resolve(dir);
   }
@@ -63,10 +67,13 @@ function main(argv) {
         "left as they are. Run again with --force to replace them.\n",
     );
   }
-  if (count("invalid")) {
-    process.stdout.write("Fix the files marked invalid so they are valid JSON, then run this again.\n");
-  }
-  if (count("created") + count("merged") + count("updated")) {
+  const broken = brokenResults(results).length;
+  if (broken) {
+    process.stdout.write(
+      "The agents that read the files marked invalid, skipped or failed will not run the hook\n" +
+        "until you fix what is noted next to them and run this again.\n",
+    );
+  } else if (count("created") + count("merged") + count("updated")) {
     process.stdout.write(
       "New Claude Code, Copilot and Cursor sessions in this project pick the hook up. Codex needs\n" +
         "the project trusted and the hook approved once, in /hooks.\n",
@@ -74,7 +81,7 @@ function main(argv) {
   } else if (count("unchanged") === results.length) {
     process.stdout.write("Already up to date.\n");
   }
-  return count("invalid") + count("failed") ? 1 : 0;
+  return broken ? 1 : 0;
 }
 
 process.exitCode = main(process.argv.slice(2));

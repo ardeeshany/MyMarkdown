@@ -21,7 +21,8 @@ folder outside one), for Claude Code, GitHub Copilot CLI and VS Code agent mode,
 
 Nothing you have is overwritten. The hook entry is merged into an existing `.claude/settings.json`
 or `.codex/hooks.json`, and a file that differs from this version is left alone unless you pass
-`--force`. Run it again after an update to bring the files up to date.
+`--force`. After an update, run it again with `--force` to bring the files up to date; that also
+replaces any edits you made to them.
 
 Needs Node.js 18 or later. Codex also asks you to trust the project and approve the hook once, in
 `/hooks`. The same install is one command inside VS Code: **MyMarkdown: Install Label Hooks for

@@ -102,14 +102,18 @@ The hook and skill live in each project, so set them up once per project, either
 - From a terminal anywhere inside the project, with no editor needed, run
   `npx mymarkdown-hooks init`.
 
-Both add the same six files at the project root: the hook
-(`.agents/hooks/markdown-labels.cjs`), the skill (in `.agents/skills/` and
-`.claude/skills/`), and one small config entry each for Claude Code and Cursor
-(`.claude/settings.json`), Copilot (`.github/hooks/markdown-labels.json`) and Codex
-(`.codex/hooks.json`). Nothing you already have is overwritten. The hook entry is merged
-into an existing `.claude/settings.json` or `.codex/hooks.json`, and a file you have edited
-is only replaced if you confirm (or pass `--force`). Run either again after an update to
-bring the files up to date. You need Node.js on your `PATH`.
+Both add the same six files: the hook (`.agents/hooks/markdown-labels.cjs`), the skill
+(in `.agents/skills/` and `.claude/skills/`), and one small config entry each for Claude
+Code and Cursor (`.claude/settings.json`), Copilot (`.github/hooks/markdown-labels.json`)
+and Codex (`.codex/hooks.json`). The command installs into the folder open in VS Code;
+`npx` installs at the top of the git repository you run it in. Either way, that should be
+the folder you start your agents from.
+
+Nothing you already have is overwritten. The hook entry is merged into an existing
+`.claude/settings.json` or `.codex/hooks.json`, and a file that differs is only replaced
+if you confirm. After an update, run the command again and choose **Replace**, or run
+`npx mymarkdown-hooks init --force`; either replaces any edits you made to these files.
+You need Node.js on your `PATH`.
 
 Then each agent may need one step of its own:
 
