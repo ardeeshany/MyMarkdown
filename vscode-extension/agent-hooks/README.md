@@ -10,8 +10,10 @@ lenses to `.mymd/` for the preview to draw.
 npx mymarkdown-hooks init
 ```
 
-Run it anywhere inside a project. It installs at the top of the git repository (or in the current
-folder outside one), for Claude Code, GitHub Copilot CLI and VS Code agent mode, Cursor and Codex:
+Run it anywhere inside a git repository, or at the root of a project that is not one. It installs at
+the top of the git repository (or in the current folder outside one), for Claude Code, GitHub
+Copilot CLI and VS Code agent mode, Cursor and Codex. That should be the folder you open in VS Code
+and start your agents from:
 
 - `.agents/hooks/markdown-labels.cjs` — the hook, shared by every agent
 - `.agents/skills/markdown-labels/SKILL.md` and `.claude/skills/markdown-labels/SKILL.md` — the skill

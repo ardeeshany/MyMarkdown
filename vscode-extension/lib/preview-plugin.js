@@ -72,10 +72,13 @@ function countLines(text) {
  * line, and its end cannot be recovered from the rendered text: markdown-it puts a newline
  * between tags, so a four-item list or a table reads as many more lines than it has.
  *
- * Separate attributes rather than a second `data-line`, so VS Code's scroll sync is left
- * alone and the blocks that deliberately drop `data-line` (a reflowed JSON fence, a drawn
- * Mermaid diagram) can still be measured as whole blocks. Runs last among our rules, so
- * it sees the tokens our other rules created or moved.
+ * The stamp is `data-mymd-span`, the number of lines after the first; the first is VS Code's
+ * own `data-line` plus one. Relative on purpose: when an edit shifts every line below it,
+ * VS Code's preview update only copies the new `data-line` onto blocks that are otherwise
+ * equal, and an absolute line number of our own would make every one of them differ. The
+ * blocks that deliberately drop `data-line` (a reflowed JSON fence, a drawn Mermaid diagram,
+ * a callout title) carry an absolute `data-mymd-start` instead, so they are still measured.
+ * Runs last among our rules, so it sees the tokens our other rules created or moved.
  */
 function stampBlockExtents(state) {
   const lines = state.src.split("\n");
@@ -89,16 +92,15 @@ function stampBlockExtents(state) {
     // raw HTML, where such a line is content.
     const blank = /^(fence|code_block|html_block)$/.test(token.type) ? /^\s*$/ : /^[\s>]*$/;
     while (end > start && blank.test(String(lines[end - 1] ?? ""))) end -= 1;
-    token.attrSet("data-mymd-start", String(start));
-    token.attrSet("data-mymd-end", String(end));
+    token.attrSet("data-mymd-span", String(end - start));
   }
 }
 
-/** The extent attributes for renderers that write their own opening tag. */
+/** The extent attributes for a renderer that writes its own tag and no `data-line`. */
 function extentAttributes(token) {
-  const start = token.attrGet && token.attrGet("data-mymd-start");
-  const end = token.attrGet && token.attrGet("data-mymd-end");
-  return start && end ? ' data-mymd-start="' + start + '" data-mymd-end="' + end + '"' : "";
+  const span = token.attrGet && token.attrGet("data-mymd-span");
+  if (!token.map || span === null || span === undefined) return "";
+  return ' data-mymd-start="' + (token.map[0] + 1) + '" data-mymd-span="' + span + '"';
 }
 
 /**
@@ -124,6 +126,10 @@ function codeAttributes(token, escapeHtml, keepsSourceMapping) {
         if (kept.length) attrs[i][1] = kept.join(" ");
         else attrs.splice(i, 1);
       }
+    }
+    // With no data-line left, the label bars need the block's first line spelled out.
+    if (token.map && attrs.some((pair) => pair[0] === "data-mymd-span")) {
+      attrs.push(["data-mymd-start", String(token.map[0] + 1)]);
     }
   }
   return attrs.map((pair) => " " + pair[0] + '="' + escapeHtml(String(pair[1])) + '"').join("");
@@ -286,7 +292,7 @@ function renderAlerts(state) {
     const title = new state.Token("html_block", "", 0);
     const titleLines =
       markerLine >= 0
-        ? ' data-mymd-start="' + (markerLine + 1) + '" data-mymd-end="' + (markerLine + 1) + '"'
+        ? ' data-mymd-start="' + (markerLine + 1) + '" data-mymd-span="0"'
         : "";
     title.content =
       '<p class="mymd-alert-title"' + titleLines + ">" + (ALERT_LABELS[kind] || kind) + "</p>\n";

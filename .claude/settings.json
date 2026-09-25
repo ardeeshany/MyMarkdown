@@ -6,7 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"${CLAUDE_PROJECT_DIR:-.}/.agents/hooks/markdown-labels.cjs\" --claude-settings"
+            "command": "node -e \"process.argv.push('--claude-settings');let p=require('path'),f=require('fs'),d=process.env.CLAUDE_PROJECT_DIR||process.cwd(),h;while(!f.existsSync(h=p.join(d,'.agents/hooks/markdown-labels.cjs'))&&p.dirname(d)!==d)d=p.dirname(d);f.existsSync(h)&&require(h)\""
           }
         ]
       }

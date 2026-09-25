@@ -185,8 +185,8 @@ function watchSidecars() {
     .join("/");
   // The folder itself as well as the files in it: VS Code reports deleting the whole
   // folder, and often creating a new subfolder with a sidecar in it, as one folder event.
-  // ponytail: one glob covers every workspace folder; it also matches same-named folders
-  // deeper in a tree, which reloadSidecar ignores because no open document maps there.
+  // One glob covers every workspace folder. It also matches same-named folders deeper in a
+  // tree, which reloadSidecar ignores: no open document maps there.
   sidecarWatcher = vscode.workspace.createFileSystemWatcher(folder ? `**/${folder}/**` : "**/*.json");
   sidecarWatcher.onDidCreate(reloadSidecar);
   sidecarWatcher.onDidChange(reloadSidecar);
@@ -364,16 +364,21 @@ function activeLensSignature(document) {
   return payload ? document.uri.toString() + "|" + JSON.stringify(payload) : null;
 }
 
-/** The signature last seen when the preview was told to refresh for labels. */
-let lastActiveLensSignature;
+/**
+ * Per document, the signature last seen when the preview was told to refresh for labels.
+ * Kept per document: one shared value made a sidecar change in a background tab, or a
+ * switch between two labelled documents, re-render every preview.
+ */
+const lastSignatures = new Map();
 
 async function refreshLabels(document) {
   if (!document) return;
   await lensesFor(document);
   refreshLabelStatus();
+  const key = document.uri.toString();
   const signature = activeLensSignature(document);
-  if (signature === lastActiveLensSignature) return;
-  lastActiveLensSignature = signature;
+  if (signature === (lastSignatures.get(key) ?? null)) return;
+  lastSignatures.set(key, signature);
   // The lens is embedded during rendering, so the preview has to render again to pick it up.
   // Only worth doing when what it would draw actually changed — this runs on every tab
   // switch, and clearing VS Code's whole markdown token cache for no reason is not free.
@@ -593,7 +598,9 @@ async function installAgentHooks() {
   let results;
   try {
     results = Hooks.installAgentHooks(folder.uri.fsPath);
-    const differing = results.filter((result) => result.status === "differs");
+    // A result with a reason stays as it is even when forced (a hook of the user's own that
+    // runs the script), so offering to replace it would promise a change that cannot happen.
+    const differing = results.filter((result) => result.status === "differs" && !result.reason);
     if (differing.length) {
       const replace = await vscode.window.showWarningMessage(
         `MyMarkdown: ${differing.map((result) => result.file).join(", ")} in ${folder.name} ` +
@@ -617,14 +624,21 @@ async function installAgentHooks() {
     );
     return;
   }
+  const leftAlone = results.filter((result) => result.status === "differs");
+  const kept = leftAlone.length
+    ? " Left as they are: " +
+      leftAlone.map((result) => result.file + (result.reason ? ` (${result.reason})` : "")).join(", ") +
+      "."
+    : "";
   const changed = count("created") + count("merged") + count("updated");
   if (!changed) {
-    if (!count("differs")) {
+    if (!leftAlone.length) {
       vscode.window.showInformationMessage(`MyMarkdown: the label hooks in ${folder.name} are already up to date.`);
+    } else if (leftAlone.some((result) => result.reason)) {
+      vscode.window.showWarningMessage(`MyMarkdown: nothing was installed in ${folder.name}.${kept}`);
     }
     return;
   }
-  const kept = count("differs") ? ` ${count("differs")} that differ were left as they are.` : "";
   vscode.window.showInformationMessage(
     `MyMarkdown: label hooks installed in ${folder.name}.${kept} New Claude Code, Copilot and Cursor ` +
       "sessions there pick them up; Codex asks you to approve the hook once, in /hooks.",
@@ -815,6 +829,7 @@ function activate(context) {
       diagnostics?.delete(document.uri);
       lensCache.delete(document.uri.toString());
       activeLens.delete(document.uri.toString());
+      lastSignatures.delete(document.uri.toString());
     }),
     {
       dispose: () => {
@@ -825,6 +840,7 @@ function activate(context) {
         diagnostics = undefined;
         lensCache.clear();
         activeLens.clear();
+        lastSignatures.clear();
         labelStatus = undefined;
         sidecarWatcher?.dispose();
         sidecarWatcher = undefined;

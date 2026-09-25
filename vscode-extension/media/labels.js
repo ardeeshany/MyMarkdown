@@ -4,11 +4,11 @@
  * mymarkdown.site draws them beside the rendered document. The extension embeds the lens
  * as JSON in a hidden element; everything here is measurement and painting.
  *
- * Positions come from the exact source lines the preview plugin stamps on every block
- * (data-mymd-start / data-mymd-end, 1-based and inclusive), so a bar is placed by where
- * its lines actually ended up on screen rather than by guessing. VS Code's own data-line
- * gives only a block's first line, and counting newlines in the rendered text to find
- * the last one overcounts every list, quote and table.
+ * Positions come from the exact source lines of every block: its first line from VS Code's
+ * data-line (or the preview plugin's data-mymd-start, where a block has none) and how many
+ * lines follow from the plugin's data-mymd-span. So a bar is placed by where its lines
+ * actually ended up on screen rather than by guessing; counting newlines in the rendered
+ * text to find a block's last line overcounts every list, quote and table.
  */
 (function () {
   "use strict";
@@ -47,9 +47,17 @@
     return document.querySelector(".markdown-body") || document.body;
   }
 
-  var MAPPED = "[data-mymd-start]";
+  var MAPPED = "[data-mymd-span]";
   var HTML_END =
     MAPPED + ", .code-line, .footnotes-sep, .katex-block, #" + MARKER_ID + ", #" + LAYER_ID + ", #" + CHIPS_ID;
+
+  /** A block's first source line, 1-based. data-line is VS Code's, 0-based. */
+  function startOf(el) {
+    var own = el.getAttribute("data-mymd-start");
+    if (own !== null) return Number(own);
+    var line = el.getAttribute("data-line");
+    return line === null ? NaN : Number(line) + 1;
+  }
 
   /** Every block the plugin mapped to its source lines, in document order. */
   function mappedBlocks(root) {
@@ -61,8 +69,8 @@
       // Footnote definitions are drawn at the foot of the page but keep their source lines:
       // measured there, a range holding one would stretch to the end of the document.
       if (node.closest(".footnotes")) continue;
-      var start = Number(node.getAttribute("data-mymd-start"));
-      var end = Number(node.getAttribute("data-mymd-end"));
+      var start = startOf(node);
+      var end = start + Number(node.getAttribute("data-mymd-span"));
       if (!isFinite(start) || !isFinite(end)) continue;
       blocks.push({ el: node, start: start, end: end, child: node.querySelector(MAPPED) });
     }
@@ -155,7 +163,7 @@
     // A list, quote or table holding other mapped blocks owns only the lines before its
     // first one (a list item's own text, say); the blocks inside place themselves.
     if (block.child) {
-      var childStart = Number(block.child.getAttribute("data-mymd-start"));
+      var childStart = startOf(block.child);
       var headEnd = Math.min(last, childStart - 1);
       if (headEnd < first) return null;
       var childBox = outerBox(block.child);
@@ -165,7 +173,7 @@
     // Some blocks are drawn as one piece that does not follow its source line by line: a
     // reflowed JSON fence or Mermaid diagram (they drop data-line), raw HTML (an empty
     // marker), a two-line setext heading. A range touching any of their lines takes all of it.
-    // ponytail: two ranges splitting one such block would both draw over all of it.
+    // Two ranges splitting one such block would both draw over all of it.
     if (!block.el.hasAttribute("data-line") || !block.el.hasChildNodes() || /^H[1-6]$/.test(block.el.tagName)) {
       return box;
     }

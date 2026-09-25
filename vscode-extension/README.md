@@ -99,15 +99,16 @@ The hook and skill live in each project, so set them up once per project, either
 
 - In VS Code, open the project and run **MyMarkdown: Install Label Hooks for Coding
   Agents**.
-- From a terminal anywhere inside the project, with no editor needed, run
-  `npx mymarkdown-hooks init`.
+- From a terminal at the project root (or anywhere inside it, if it is a git repository),
+  with no editor needed, run `npx mymarkdown-hooks init`.
 
 Both add the same six files: the hook (`.agents/hooks/markdown-labels.cjs`), the skill
 (in `.agents/skills/` and `.claude/skills/`), and one small config entry each for Claude
 Code and Cursor (`.claude/settings.json`), Copilot (`.github/hooks/markdown-labels.json`)
 and Codex (`.codex/hooks.json`). The command installs into the folder open in VS Code;
-`npx` installs at the top of the git repository you run it in. Either way, that should be
-the folder you start your agents from.
+`npx` installs at the top of the git repository you run it in. Labels show up when that
+folder is also the one you open in VS Code and start your agents from (Copilot CLI always
+reads the top of the git repository).
 
 Nothing you already have is overwritten. The hook entry is merged into an existing
 `.claude/settings.json` or `.codex/hooks.json`, and a file that differs is only replaced
@@ -120,7 +121,7 @@ Then each agent may need one step of its own:
 | Agent | Turning it on |
 | --- | --- |
 | Claude Code | Trust the folder when Claude Code asks. |
-| Cursor's agent | Nothing more on macOS and Linux: Cursor reads Claude Code's hooks unless an admin has turned that off. |
+| Cursor's agent | Nothing more: Cursor reads Claude Code's hooks unless an admin has turned that off. |
 | Copilot CLI | Trust the folder when Copilot asks. |
 | VS Code agent mode | Nothing more: agent mode reads `.github/hooks`. |
 | Codex | Trust the project, then approve the hook in `/hooks`. Start Codex from the project root. |

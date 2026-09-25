@@ -33,12 +33,22 @@ const TARGETS = [
 ];
 
 /**
- * A hook entry we wrote: node running the script, and nothing else. A command that only
- * mentions the script (a linter over it, a wrapper chaining more commands) is the user's.
+ * Every hook command this project has written: the templates' own, and the ones earlier
+ * releases wrote (replaced when the user confirms). Anything else that mentions the script,
+ * a linter over it or a wrapper around it, is the user's and is never removed.
  */
-const RUNS_OURS = /(^|\s)node\s+["']?[^"'\s]*markdown-labels\.cjs["']?(\s+--[\w-]+)*\s*$/;
-const isOurs = (hook) => RUNS_OURS.test(String(hook?.command ?? ""));
-const mentionsOurs = (hook) => String(hook?.command ?? "").includes("markdown-labels.cjs");
+const SHIPPED = new Set([
+  'node "$CLAUDE_PROJECT_DIR/.claude/hooks/markdown-labels.cjs"',
+  'node "${CLAUDE_PROJECT_DIR:-.}/.agents/hooks/markdown-labels.cjs" --claude-settings',
+  "node .agents/hooks/markdown-labels.cjs",
+]);
+for (const target of TARGETS.filter((t) => t.merge)) {
+  for (const groups of Object.values(JSON.parse(fs.readFileSync(path.join(TEMPLATES, target.from), "utf8")).hooks)) {
+    for (const group of groups) for (const hook of group.hooks) SHIPPED.add(hook.command);
+  }
+}
+const isOurs = (hook) => SHIPPED.has(String(hook?.command ?? "").trim());
+const mentionsOurs = (hook) => /\.(agents|claude)[\\/]hooks[\\/]markdown-labels\.cjs/.test(String(hook?.command ?? ""));
 const hooksOf = (group) => (Array.isArray(group?.hooks) ? group.hooks : []);
 
 /** Whether two paths are the same folder on disk, however they are spelled: drive-letter
@@ -76,7 +86,9 @@ function write(file, text, status) {
   if (existing) fs.accessSync(file, fs.constants.W_OK);
   const temp = `${file}.${process.pid}.tmp`;
   try {
-    fs.writeFileSync(temp, text);
+    // Created fresh ("wx" fails on anything already there, a planted symlink included), so
+    // the chmod and rename below only ever touch our own new file.
+    fs.writeFileSync(temp, text, { flag: "wx" });
     if (existing) fs.chmodSync(temp, existing.mode);
     fs.renameSync(temp, file);
   } finally {
