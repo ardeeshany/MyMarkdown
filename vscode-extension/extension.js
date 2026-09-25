@@ -562,6 +562,70 @@ async function toggleLabelsEnabled() {
   if (document) await refreshLabels(document);
 }
 
+/**
+ * Copy the label hook and skill into a workspace folder, so coding agents working there
+ * label the Markdown they write. The same install as `npx mymarkdown-hooks init`.
+ */
+async function installAgentHooks() {
+  const folders = (vscode.workspace.workspaceFolders || []).filter((folder) => folder.uri.scheme === "file");
+  if (!folders.length) {
+    vscode.window.showWarningMessage("MyMarkdown: open a project folder first; the hooks are installed into it.");
+    return;
+  }
+  const picked =
+    folders.length === 1
+      ? { folder: folders[0] }
+      : await vscode.window.showQuickPick(
+          folders.map((folder) => ({ label: folder.name, description: folder.uri.fsPath, folder })),
+          { placeHolder: "Install the label hooks into which folder?" },
+        );
+  if (!picked) return;
+  const { folder } = picked;
+
+  // Required at call time, like the AI instructions: a packaging slip here must not stop
+  // the rest of the extension loading.
+  const Hooks = require("./agent-hooks/install.js");
+  let results;
+  try {
+    results = Hooks.installAgentHooks(folder.uri.fsPath);
+    const differing = results.filter((result) => result.status === "differs");
+    if (differing.length) {
+      const replace = await vscode.window.showWarningMessage(
+        `MyMarkdown: ${differing.map((result) => result.file).join(", ")} in ${folder.name} ` +
+          "differ from this version (you may have edited them, or they are from an older release). Replace them?",
+        { modal: true },
+        "Replace",
+      );
+      if (replace === "Replace") results = Hooks.installAgentHooks(folder.uri.fsPath, { force: true });
+    }
+  } catch (error) {
+    vscode.window.showErrorMessage("MyMarkdown: could not install the label hooks — " + (error?.message || error));
+    return;
+  }
+
+  const count = (status) => results.filter((result) => result.status === status).length;
+  const broken = results.filter((result) => result.status === "invalid" || result.status === "failed");
+  if (broken.length) {
+    vscode.window.showWarningMessage(
+      "MyMarkdown: could not update " +
+        broken.map((result) => `${result.file} (${result.reason})`).join(", ") +
+        ". Fix it and run this command again.",
+    );
+  }
+  const changed = count("created") + count("merged") + count("updated");
+  if (!changed) {
+    if (!broken.length && !count("differs")) {
+      vscode.window.showInformationMessage(`MyMarkdown: the label hooks in ${folder.name} are already up to date.`);
+    }
+    return;
+  }
+  const kept = count("differs") ? ` ${count("differs")} that differ were left as they are.` : "";
+  vscode.window.showInformationMessage(
+    `MyMarkdown: label hooks installed in ${folder.name}.${kept} New Claude Code, Copilot and Cursor ` +
+      "sessions there pick them up; Codex asks you to approve the hook once, in /hooks.",
+  );
+}
+
 /** Shared by the standalone remove command and the picker inside switchLens. */
 async function pickAndDeleteLens(document, lenses) {
   const picked = await vscode.window.showQuickPick(
@@ -709,6 +773,7 @@ function activate(context) {
     vscode.commands.registerCommand("mymarkdown.switchLens", () => switchLens()),
     vscode.commands.registerCommand("mymarkdown.removeLens", () => removeLens()),
     vscode.commands.registerCommand("mymarkdown.toggleLabels", () => toggleLabelsEnabled()),
+    vscode.commands.registerCommand("mymarkdown.installAgentHooks", () => installAgentHooks()),
     vscode.commands.registerCommand("mymarkdown.revealLine", (line) => {
       const editor = activeMarkdownEditor();
       if (!editor) return;

@@ -918,6 +918,8 @@ function driveLabelCommands(sidecarByPath, activeDocument, openDocuments) {
   const configStore = { "labels.enabled": true };
   const commandHandlers = {};
   const quickPickQueue = [];
+  const warningAnswers = [];
+  const messages = [];
   const written = [];
   const refreshes = [];
   const watchers = [];
@@ -965,9 +967,18 @@ function driveLabelCommands(sidecarByPath, activeDocument, openDocuments) {
       activeTextEditor: activeDocument ? { document: activeDocument } : undefined,
       registerTreeDataProvider: () => off,
       onDidChangeActiveTextEditor: () => off,
-      showInformationMessage() {},
-      showWarningMessage() {},
-      showErrorMessage() {},
+      showInformationMessage: (text) => {
+        messages.push({ kind: "info", text });
+      },
+      // Each call consumes the next queued answer, like the quick picks below: a check plays
+      // the part of whoever presses a modal's button.
+      showWarningMessage: async (text) => {
+        messages.push({ kind: "warning", text });
+        return warningAnswers.shift();
+      },
+      showErrorMessage: (text) => {
+        messages.push({ kind: "error", text });
+      },
       // Each call consumes the next queued answer, in the order the code under test asks -
       // the same shape as a person clicking through a chain of quick picks by hand.
       showQuickPick: async () => quickPickQueue.shift(),
@@ -1060,6 +1071,9 @@ function driveLabelCommands(sidecarByPath, activeDocument, openDocuments) {
     api,
     configStore,
     queueQuickPick: (...answers) => quickPickQueue.push(...answers),
+    queueWarningAnswer: (...answers) => warningAnswers.push(...answers),
+    messages,
+    vscode: stub,
     written,
     deleted: () => deleted,
     refreshes,
@@ -1445,6 +1459,222 @@ check("label hook wiring: every agent points at the one script, and both skill c
     read(".claude/skills/markdown-labels/SKILL.md") === read(".agents/skills/markdown-labels/SKILL.md"),
     ".claude/skills/markdown-labels/SKILL.md has drifted from .agents/skills/markdown-labels/SKILL.md",
   );
+});
+
+// Installing the hook and skill into other projects: agent-hooks/install.js, shared by the
+// extension's command and the mymarkdown-hooks CLI.
+const Hooks = require("./agent-hooks/install.js");
+const HOOK_CLI = path.join(__dirname, "agent-hooks", "cli.js");
+
+function scratchProject() {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "mymd-install-"));
+  const file = (dest) => path.join(root, ...dest.split("/"));
+  return {
+    root,
+    file,
+    read: (dest) => fs.readFileSync(file(dest), "utf8"),
+    put: (dest, text) => {
+      fs.mkdirSync(path.dirname(file(dest)), { recursive: true });
+      fs.writeFileSync(file(dest), text);
+    },
+    cleanup: () => fs.rmSync(root, { recursive: true, force: true }),
+  };
+}
+
+const statuses = (results) => Object.fromEntries(results.map((result) => [result.file, result.status]));
+const template = (dest) =>
+  fs.readFileSync(path.join(__dirname, "agent-hooks", "files", Hooks.TARGETS.find((t) => t.dest === dest).from), "utf8");
+
+check("agent hooks installer: an empty project gets all six files, and running it again changes nothing", () => {
+  const project = scratchProject();
+  try {
+    const first = Hooks.installAgentHooks(project.root);
+    assert(first.length === 6 && first.every((result) => result.status === "created"), JSON.stringify(first));
+    for (const target of Hooks.TARGETS) {
+      assert(project.read(target.dest) === template(target.dest), target.dest + " should be the template");
+    }
+    const second = Hooks.installAgentHooks(project.root);
+    assert(second.every((result) => result.status === "unchanged"), "a second run should change nothing: " + JSON.stringify(second));
+
+    // The installed hook runs from its new home and nudges about a big unlabelled document.
+    project.put("docs/big.md", "# Guide\n\n## One\n\n" + "word ".repeat(420) + "\n\n## Two\n\nend\n");
+    const run = spawnSync(process.execPath, [project.file(".agents/hooks/markdown-labels.cjs"), "--claude-settings"], {
+      input: JSON.stringify({ tool_name: "Write", tool_input: { file_path: project.file("docs/big.md") }, tool_response: {} }),
+      env: { ...process.env, CLAUDE_PROJECT_DIR: project.root, COPILOT_CLI: "" },
+      encoding: "utf8",
+    });
+    includes(run.stdout, "docs/big.md is now", "the installed hook's nudge");
+  } finally {
+    project.cleanup();
+  }
+});
+
+check("agent hooks installer: existing agent configs are merged into, never replaced", () => {
+  const project = scratchProject();
+  try {
+    const theirs = { type: "command", command: "npm run lint" };
+    project.put(
+      ".claude/settings.json",
+      JSON.stringify({ permissions: { allow: ["Bash(ls)"] }, hooks: { PostToolUse: [{ matcher: "Write", hooks: [theirs] }] } }, null, "\t") + "\n",
+    );
+    project.put(".codex/hooks.json", JSON.stringify({ hooks: { Stop: [{ hooks: [{ type: "command", command: "echo done" }] }] } }));
+
+    const results = statuses(Hooks.installAgentHooks(project.root));
+    assert(results[".claude/settings.json"] === "merged" && results[".codex/hooks.json"] === "merged", JSON.stringify(results));
+
+    const claude = JSON.parse(project.read(".claude/settings.json"));
+    assert(claude.permissions.allow[0] === "Bash(ls)", "their permissions must survive");
+    assert(JSON.stringify(claude.hooks.PostToolUse[0].hooks[0]) === JSON.stringify(theirs), "their hook must survive, first");
+    includes(claude.hooks.PostToolUse[1].hooks[0].command, ".agents/hooks/markdown-labels.cjs", "our hook, added after theirs");
+    assert(project.read(".claude/settings.json").startsWith('{\n\t"permissions"'), "their tab indentation should be kept");
+    assert(project.read(".claude/settings.json").endsWith("}\n"), "their trailing newline should be kept");
+
+    const codex = JSON.parse(project.read(".codex/hooks.json"));
+    assert(codex.hooks.Stop[0].hooks[0].command === "echo done", "their Codex hook must survive");
+    includes(codex.hooks.PostToolUse[0].hooks[0].command, "markdown-labels.cjs", "our Codex hook");
+    assert(!project.read(".codex/hooks.json").endsWith("\n"), "a file with no trailing newline stays that way");
+  } finally {
+    project.cleanup();
+  }
+});
+
+check("agent hooks installer: files that differ are kept unless forced, and forcing keeps what shares our entry", () => {
+  const project = scratchProject();
+  try {
+    Hooks.installAgentHooks(project.root);
+    project.put(".agents/hooks/markdown-labels.cjs", "// my own tweaks\n");
+    // An entry from the release before this one, sharing its group with someone else's hook.
+    const old = { type: "command", command: 'node "$CLAUDE_PROJECT_DIR/.claude/hooks/markdown-labels.cjs"' };
+    const theirs = { type: "command", command: "prettier --write" };
+    project.put(".claude/settings.json", JSON.stringify({ hooks: { PostToolUse: [{ matcher: "Write|Edit", hooks: [theirs, old] }] } }, null, 2) + "\n");
+    const before = project.read(".claude/settings.json");
+
+    const kept = statuses(Hooks.installAgentHooks(project.root));
+    assert(kept[".agents/hooks/markdown-labels.cjs"] === "differs" && kept[".claude/settings.json"] === "differs", JSON.stringify(kept));
+    assert(project.read(".agents/hooks/markdown-labels.cjs") === "// my own tweaks\n", "an edited file must not be touched");
+    assert(project.read(".claude/settings.json") === before, "a differing entry must not be touched");
+
+    const forced = statuses(Hooks.installAgentHooks(project.root, { force: true }));
+    assert(forced[".agents/hooks/markdown-labels.cjs"] === "updated" && forced[".claude/settings.json"] === "updated", JSON.stringify(forced));
+    assert(project.read(".agents/hooks/markdown-labels.cjs") === template(".agents/hooks/markdown-labels.cjs"), "forced: the hook is replaced");
+    const groups = JSON.parse(project.read(".claude/settings.json")).hooks.PostToolUse;
+    assert(groups.length === 2, "ours should move to its own entry, got " + JSON.stringify(groups));
+    assert(JSON.stringify(groups[0]) === JSON.stringify({ matcher: "Write|Edit", hooks: [theirs] }), "their hook keeps its entry and matcher");
+    includes(groups[1].hooks[0].command, ".agents/hooks/markdown-labels.cjs", "the replacement entry");
+    assert(Hooks.installAgentHooks(project.root).every((result) => result.status === "unchanged"), "and then it is up to date");
+  } finally {
+    project.cleanup();
+  }
+});
+
+check("agent hooks installer: a config it cannot read is reported and left alone, and the rest still installs", () => {
+  const project = scratchProject();
+  try {
+    project.put(".claude/settings.json", "{ this is not json");
+    project.put(".github", "a file where a folder is needed\n");
+    const results = Hooks.installAgentHooks(project.root);
+    const byFile = statuses(results);
+    assert(byFile[".claude/settings.json"] === "invalid", JSON.stringify(results));
+    assert(project.read(".claude/settings.json") === "{ this is not json", "an unreadable config must not be touched");
+    assert(byFile[".github/hooks/markdown-labels.json"] === "failed", JSON.stringify(results));
+    assert(results.find((result) => result.status === "failed").reason, "a failure should say why");
+    assert(byFile[".agents/hooks/markdown-labels.cjs"] === "created" && byFile[".codex/hooks.json"] === "created", JSON.stringify(results));
+  } finally {
+    project.cleanup();
+  }
+});
+
+check("the repo's own agent files are exactly what the installer ships", () => {
+  // They are this repo's own install. After editing a template in agent-hooks/files, run
+  // `node vscode-extension/agent-hooks/cli.js init --force` from the repo root to refresh them.
+  const project = scratchProject();
+  try {
+    for (const target of Hooks.TARGETS) project.put(target.dest, fs.readFileSync(path.join(REPO, ...target.dest.split("/")), "utf8"));
+    const results = Hooks.installAgentHooks(project.root);
+    const stale = results.filter((result) => result.status !== "unchanged").map((result) => result.file);
+    assert(!stale.length, "out of date with agent-hooks/files: " + stale.join(", "));
+  } finally {
+    project.cleanup();
+  }
+});
+
+check("mymarkdown-hooks CLI: init installs at the git root from a subfolder, and reports bad usage and bad configs", () => {
+  const project = scratchProject();
+  try {
+    fs.mkdirSync(path.join(project.root, ".git"));
+    fs.mkdirSync(path.join(project.root, "src", "deep"), { recursive: true });
+    const cli = (args, cwd = project.root) => spawnSync(process.execPath, [HOOK_CLI, ...args], { cwd, encoding: "utf8" });
+
+    const init = cli(["init"], path.join(project.root, "src", "deep"));
+    assert(init.status === 0, "init should succeed: " + init.stderr);
+    assert(fs.existsSync(project.file(".agents/hooks/markdown-labels.cjs")), "files belong at the git root");
+    assert(!fs.existsSync(path.join(project.root, "src", "deep", ".agents")), "not in the folder it was run from");
+    includes(init.stdout, "created", "the report");
+
+    includes(cli(["init"]).stdout, "Already up to date", "a second run");
+    const help = cli(["--help"]);
+    assert(help.status === 0 && help.stdout.startsWith("Usage: mymarkdown-hooks init"), "--help: " + help.stdout);
+    assert(cli([]).status === 1 && cli(["install"]).status === 1 && cli(["init", "--yes"]).status === 1, "bad usage exits 1");
+
+    project.put(".codex/hooks.json", "not json");
+    const broken = cli(["init", project.root]);
+    assert(broken.status === 1, "an unreadable config should fail the run");
+    includes(broken.stdout, "invalid", "the report");
+  } finally {
+    project.cleanup();
+  }
+});
+
+check("the mymarkdown-hooks npm package ships everything the installer reads, and the VSIX keeps it", () => {
+  const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, "agent-hooks", "package.json"), "utf8"));
+  assert(pkg.name === "mymarkdown-hooks" && pkg.bin["mymarkdown-hooks"] === "cli.js", "name and bin");
+  assert(fs.readFileSync(HOOK_CLI, "utf8").startsWith("#!/usr/bin/env node\n"), "the bin needs a node shebang");
+  for (const needed of ["cli.js", "install.js", "files/"]) assert(pkg.files.includes(needed), "package files should include " + needed);
+  for (const target of Hooks.TARGETS) assert(fs.existsSync(path.join(__dirname, "agent-hooks", "files", target.from)), target.from);
+  const ignored = fs.readFileSync(path.join(__dirname, ".vscodeignore"), "utf8").split("\n").map((line) => line.trim());
+  assert(!ignored.some((line) => line.startsWith("agent-hooks")), ".vscodeignore must not drop agent-hooks: the command needs it");
+});
+
+check("Install Label Hooks command: installs into the open folder, and replaces changed files only when confirmed", () => {
+  const project = scratchProject();
+  const other = scratchProject();
+  const host = driveLabelCommands({});
+  const run = () => host.handlers["mymarkdown.installAgentHooks"]();
+  const folder = (p, name) => ({ name, uri: { fsPath: p.root, scheme: "file" } });
+  return run()
+    .then(() => {
+      assert(host.messages.pop().text.includes("open a project folder first"), "no folder: a warning, nothing else");
+      host.vscode.workspace.workspaceFolders = [folder(project, "proj")];
+      return run();
+    })
+    .then(() => {
+      assert(fs.existsSync(project.file(".agents/hooks/markdown-labels.cjs")), "installed into the only folder");
+      includes(host.messages.pop().text, "label hooks installed in proj", "the confirmation");
+      project.put(".agents/hooks/markdown-labels.cjs", "// edited\n");
+      host.queueWarningAnswer(undefined); // the modal dismissed
+      return run();
+    })
+    .then(() => {
+      assert(host.messages.some((m) => m.kind === "warning" && m.text.includes("Replace them?")), "it should ask before replacing");
+      assert(project.read(".agents/hooks/markdown-labels.cjs") === "// edited\n", "dismissed: the edit stays");
+      host.queueWarningAnswer("Replace");
+      return run();
+    })
+    .then(() => {
+      assert(project.read(".agents/hooks/markdown-labels.cjs") === template(".agents/hooks/markdown-labels.cjs"), "confirmed: replaced");
+      // Several folders: the one picked, and only that one.
+      host.vscode.workspace.workspaceFolders = [folder(project, "proj"), folder(other, "other")];
+      host.queueQuickPick({ label: "other", folder: folder(other, "other") });
+      return run();
+    })
+    .then(() => {
+      assert(fs.existsSync(other.file(".codex/hooks.json")), "installed into the folder picked");
+      includes(host.messages.pop().text, "installed in other", "the confirmation names it");
+    })
+    .finally(() => {
+      project.cleanup();
+      other.cleanup();
+    });
 });
 
 Promise.all(pending).then(() => {

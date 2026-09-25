@@ -88,28 +88,40 @@ section, and a label whose text you delete quietly disappears.
 ### Labels from your coding agent
 
 Coding agents can label the Markdown they write, so the labels are there the first time
-you open a document. The [MyMarkdown repository](https://github.com/ardeeshany/mymarkdown)
-ships a `markdown-labels` skill and a small hook for Claude Code, GitHub Copilot (CLI and
-VS Code agent mode) and Codex. When an agent saves a document of 400 or more words with at
-least two headings and no labels yet, the hook tells it to run the skill. The skill writes
-three lenses to `.mymd/`, the hook ties each label to its text so it survives later edits,
-and the open preview picks them up as soon as they are saved.
+you open a document. MyMarkdown ships a `markdown-labels` skill and a small hook for Claude
+Code, GitHub Copilot (CLI and VS Code agent mode), Cursor and Codex. When an agent saves a
+document of 400 or more words with at least two headings and no labels yet, the hook tells
+it to run the skill. The skill writes three lenses to `.mymd/`, the hook ties each label to
+its text so it survives later edits, and the open preview picks them up as soon as they are
+saved.
 
-To add it to your own project, copy these files from the repository. You need Node.js on
-your `PATH`.
+The hook and skill live in each project, so set them up once per project, either way:
 
-| Agent | Files | Turning it on |
-| --- | --- | --- |
-| Claude Code | `.claude/settings.json`, `.claude/skills/markdown-labels/` | Trust the folder when Claude Code asks. |
-| Cursor's agent | Same as Claude Code, plus `.agents/skills/markdown-labels/` | Nothing more on macOS and Linux: Cursor reads Claude Code's hooks unless an admin has turned that off. |
-| Copilot CLI | `.github/hooks/markdown-labels.json`, `.agents/skills/markdown-labels/` | Trust the folder when Copilot asks. |
-| VS Code agent mode | `.github/hooks/markdown-labels.json`, `.agents/skills/markdown-labels/` | Nothing more: agent mode reads `.github/hooks`. |
-| Codex | `.codex/hooks.json`, `.agents/skills/markdown-labels/` | Trust the project, then approve the hook in `/hooks`. Start Codex from the project root. |
+- In VS Code, open the project and run **MyMarkdown: Install Label Hooks for Coding
+  Agents**.
+- From a terminal anywhere inside the project, with no editor needed, run
+  `npx mymarkdown-hooks init`.
 
-Every agent also needs the hook script itself, `.agents/hooks/markdown-labels.cjs`. If you
-already have a `.claude/settings.json`, merge its `hooks` entry into yours rather than
-replacing the file. The hook and skill always use `.mymd`, whatever
-`mymarkdown.labels.storagePath` is set to.
+Both add the same six files at the project root: the hook
+(`.agents/hooks/markdown-labels.cjs`), the skill (in `.agents/skills/` and
+`.claude/skills/`), and one small config entry each for Claude Code and Cursor
+(`.claude/settings.json`), Copilot (`.github/hooks/markdown-labels.json`) and Codex
+(`.codex/hooks.json`). Nothing you already have is overwritten. The hook entry is merged
+into an existing `.claude/settings.json` or `.codex/hooks.json`, and a file you have edited
+is only replaced if you confirm (or pass `--force`). Run either again after an update to
+bring the files up to date. You need Node.js on your `PATH`.
+
+Then each agent may need one step of its own:
+
+| Agent | Turning it on |
+| --- | --- |
+| Claude Code | Trust the folder when Claude Code asks. |
+| Cursor's agent | Nothing more on macOS and Linux: Cursor reads Claude Code's hooks unless an admin has turned that off. |
+| Copilot CLI | Trust the folder when Copilot asks. |
+| VS Code agent mode | Nothing more: agent mode reads `.github/hooks`. |
+| Codex | Trust the project, then approve the hook in `/hooks`. Start Codex from the project root. |
+
+The hook and skill always use `.mymd`, whatever `mymarkdown.labels.storagePath` is set to.
 
 ## Settings
 
