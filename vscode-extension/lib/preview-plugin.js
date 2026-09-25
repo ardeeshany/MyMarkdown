@@ -67,6 +67,43 @@ function countLines(text) {
 }
 
 /**
+ * Stamp every block with the exact source lines it covers, 1-based and inclusive, for
+ * media/labels.js to place label bars by. VS Code's `data-line` gives only a block's first
+ * line, and its end cannot be recovered from the rendered text: markdown-it puts a newline
+ * between tags, so a four-item list or a table reads as many more lines than it has.
+ *
+ * The stamp is `data-mymd-span`, the number of lines after the first; the first is VS Code's
+ * own `data-line` plus one. Relative on purpose: when an edit shifts every line below it,
+ * VS Code's preview update only copies the new `data-line` onto blocks that are otherwise
+ * equal, and an absolute line number of our own would make every one of them differ. The
+ * blocks that deliberately drop `data-line` (a reflowed JSON fence, a drawn Mermaid diagram,
+ * a callout title) carry an absolute `data-mymd-start` instead, so they are still measured.
+ * Runs last among our rules, so it sees the tokens our other rules created or moved.
+ */
+function stampBlockExtents(state) {
+  const lines = state.src.split("\n");
+  for (const token of state.tokens) {
+    if (!token.map || token.type === "inline" || token.nesting === -1) continue;
+    const start = token.map[0] + 1;
+    // map[1] is 0-based exclusive, which is the 1-based inclusive last line. Lists and list
+    // items also claim the blank lines after them; those belong to no block.
+    let end = Math.max(start, token.map[1]);
+    // Inside a quote, a line of nothing but ">" is as blank as an empty one. Not in code or
+    // raw HTML, where such a line is content.
+    const blank = /^(fence|code_block|html_block)$/.test(token.type) ? /^\s*$/ : /^[\s>]*$/;
+    while (end > start && blank.test(String(lines[end - 1] ?? ""))) end -= 1;
+    token.attrSet("data-mymd-span", String(end - start));
+  }
+}
+
+/** The extent attributes for a renderer that writes its own tag and no `data-line`. */
+function extentAttributes(token) {
+  const span = token.attrGet && token.attrGet("data-mymd-span");
+  if (!token.map || span === null || span === undefined) return "";
+  return ' data-mymd-start="' + (token.map[0] + 1) + '" data-mymd-span="' + span + '"';
+}
+
+/**
  * The preview derives a code block's last source line from the newlines in its
  * rendered text, so source mapping is only truthful while the display has as
  * many lines as the source. Laying JSON out one field per line usually adds
@@ -90,6 +127,10 @@ function codeAttributes(token, escapeHtml, keepsSourceMapping) {
         else attrs.splice(i, 1);
       }
     }
+    // With no data-line left, the label bars need the block's first line spelled out.
+    if (token.map && attrs.some((pair) => pair[0] === "data-mymd-span")) {
+      attrs.push(["data-mymd-start", String(token.map[0] + 1)]);
+    }
   }
   return attrs.map((pair) => " " + pair[0] + '="' + escapeHtml(String(pair[1])) + '"').join("");
 }
@@ -102,7 +143,9 @@ function codeAttributes(token, escapeHtml, keepsSourceMapping) {
 function renderMermaidFence(token, escapeHtml) {
   const source = token.content || "";
   return (
-    '<div class="mymd-mermaid" data-mermaid="' +
+    '<div class="mymd-mermaid"' +
+    extentAttributes(token) +
+    ' data-mermaid="' +
     escapeHtml(source) +
     '"><pre class="mymd-mermaid-src">' +
     escapeHtml(source) +
@@ -230,16 +273,29 @@ function renderAlerts(state) {
 
     first.content = first.content.replace(ALERT_RE, "");
     inline.content = inline.content.replace(ALERT_RE, "");
+    const paragraph = tokens[i - 1];
+    const markerLine = paragraph.map ? paragraph.map[0] : -1;
     if (!first.content) {
       children.shift();
-      if (children[0] && children[0].type === "softbreak") children.shift();
+      // "[!NOTE]" alone on its line: that line is now drawn as the title, so the paragraph
+      // starts on the next one; left alone, every line of it would be placed a line too
+      // high. Inline markup after the marker ("[!NOTE] **Bold**") keeps the paragraph there.
+      const alone = children[0] && /^(soft|hard)break$/.test(children[0].type);
+      if (alone) children.shift();
+      if (alone && paragraph.map && paragraph.map[1] > paragraph.map[0] + 1) {
+        paragraph.map = [paragraph.map[0] + 1, paragraph.map[1]];
+      }
     }
 
     const quote = tokens[i - 2];
     quote.attrJoin("class", "mymd-alert mymd-alert-" + kind);
     const title = new state.Token("html_block", "", 0);
+    const titleLines =
+      markerLine >= 0
+        ? ' data-mymd-start="' + (markerLine + 1) + '" data-mymd-span="0"'
+        : "";
     title.content =
-      '<p class="mymd-alert-title">' + (ALERT_LABELS[kind] || kind) + "</p>\n";
+      '<p class="mymd-alert-title"' + titleLines + ">" + (ALERT_LABELS[kind] || kind) + "</p>\n";
     tokens.splice(i - 1, 0, title);
     i += 1;
   }
@@ -342,6 +398,7 @@ function mymarkdownPlugin(md, options) {
   md.core.ruler.after("inline", "mymarkdown_task_lists", renderTaskLists);
   md.core.ruler.after("mymarkdown_task_lists", "mymarkdown_alerts", renderAlerts);
   md.core.ruler.after("mymarkdown_alerts", "mymarkdown_highlights", renderHighlights);
+  md.core.ruler.push("mymarkdown_block_extents", stampBlockExtents);
 
   const baseRender = md.renderer.render.bind(md.renderer);
   md.renderer.render = (tokens, opts, env) =>
