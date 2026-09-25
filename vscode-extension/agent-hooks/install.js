@@ -9,6 +9,7 @@
 "use strict";
 
 const fs = require("fs");
+const os = require("os");
 const path = require("path");
 const { isDeepStrictEqual } = require("util");
 
@@ -116,6 +117,12 @@ function mergeInto(file, templateText, force) {
  */
 function installAgentHooks(root, { force = false } = {}) {
   if (!fs.statSync(root).isDirectory()) throw new Error(`${root} is not a folder`);
+  // In the home folder these paths are every agent's *global* config (~/.claude/settings.json,
+  // ~/.codex/hooks.json), and the hook commands in them name a project-relative script, so
+  // every session in every other project would run a hook that is not there.
+  if (path.resolve(root) === path.resolve(os.homedir())) {
+    throw new Error(`${root} is your home folder; run this in a project folder instead`);
+  }
   return TARGETS.map((target) => {
     const file = path.join(root, ...target.dest.split("/"));
     const template = fs.readFileSync(path.join(TEMPLATES, target.from), "utf8");

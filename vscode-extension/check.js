@@ -1584,6 +1584,19 @@ check("agent hooks installer: a config it cannot read is reported and left alone
   }
 });
 
+check("agent hooks installer: refuses the home folder, where these paths are every agent's global config", () => {
+  let error;
+  try {
+    Hooks.installAgentHooks(os.homedir());
+  } catch (e) {
+    error = e;
+  }
+  assert(error && /home folder/.test(error.message), "installing into ~ must be refused, got " + (error && error.message));
+  // The CLI outside any git repo falls back to the folder it runs in: from ~ that is refused too.
+  const run = spawnSync(process.execPath, [HOOK_CLI, "init"], { cwd: os.homedir(), encoding: "utf8" });
+  assert(run.status === 1 && /home folder/.test(run.stderr), "the CLI in ~ should refuse: " + run.stderr);
+});
+
 check("the repo's own agent files are exactly what the installer ships", () => {
   // They are this repo's own install. After editing a template in agent-hooks/files, run
   // `node vscode-extension/agent-hooks/cli.js init --force` from the repo root to refresh them.
