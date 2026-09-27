@@ -1,0 +1,11 @@
+{
+  "name": "mymarkdown",
+  "displayName": "MyMarkdown labels",
+  "version": "0.1.0",
+  "description": "Have coding agents label the Markdown they write, for the MyMarkdown VS Code extension. Runs a Node hook after each Markdown write; nothing leaves your machine. Requires Node.js 18 or later.",
+  "author": { "name": "MyMarkdown", "url": "https://github.com/ardeeshany/MyMarkdown" },
+  "homepage": "https://github.com/ardeeshany/MyMarkdown/tree/main/vscode-extension/agent-hooks/plugin",
+  "repository": "https://github.com/ardeeshany/MyMarkdown",
+  "license": "MIT",
+  "keywords": ["markdown", "labels", "vscode", "mymarkdown"]
+}

@@ -1,7 +1,7 @@
 {
   "name": "mymarkdown-hooks",
   "version": "0.1.0",
-  "description": "Set up coding agents (Claude Code, GitHub Copilot, Cursor, Codex) to label the Markdown they write, for the MyMarkdown VS Code extension.",
+  "description": "Set up coding agents (Claude Code, GitHub Copilot, Cursor, Codex, Windsurf, OpenCode and more) to label the Markdown they write, for the MyMarkdown VS Code extension.",
   "license": "MIT",
   "bin": {
     "mymarkdown-hooks": "cli.js"
@@ -10,7 +10,8 @@
   "files": [
     "cli.js",
     "install.js",
-    "files/"
+    "files/",
+    "plugin/"
   ],
   "engines": {
     "node": ">=18"
@@ -28,6 +29,9 @@
     "copilot",
     "codex",
     "cursor",
+    "windsurf",
+    "opencode",
+    "plugin",
     "hooks"
   ]
 }

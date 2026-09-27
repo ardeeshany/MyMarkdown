@@ -14,7 +14,9 @@ const os = require("os");
 const path = require("path");
 const { isDeepStrictEqual } = require("util");
 
-const TEMPLATES = path.join(__dirname, "files");
+const TEMPLATES = __dirname;
+/** The plugin folder: the only copy of the hook and skill, and what the installer copies from. */
+const PLUGIN_DIR = path.join(__dirname, "plugin");
 const HOOK = ".agents/hooks/markdown-labels.cjs";
 
 /**
@@ -24,12 +26,12 @@ const HOOK = ".agents/hooks/markdown-labels.cjs";
  * `runsHook`: the file registers the hook script, so it is only worth writing with it.
  */
 const TARGETS = [
-  { dest: HOOK, from: "markdown-labels.cjs" },
-  { dest: ".agents/skills/markdown-labels/SKILL.md", from: "SKILL.md" },
-  { dest: ".claude/skills/markdown-labels/SKILL.md", from: "SKILL.md" },
-  { dest: ".claude/settings.json", from: "claude-settings.json", merge: true, runsHook: true },
-  { dest: ".github/hooks/markdown-labels.json", from: "copilot-hooks.json", runsHook: true },
-  { dest: ".codex/hooks.json", from: "codex-hooks.json", merge: true, runsHook: true },
+  { dest: HOOK, from: "plugin/hooks/markdown-labels.cjs" },
+  { dest: ".agents/skills/markdown-labels/SKILL.md", from: "plugin/skills/markdown-labels/SKILL.md" },
+  { dest: ".claude/skills/markdown-labels/SKILL.md", from: "plugin/skills/markdown-labels/SKILL.md" },
+  { dest: ".claude/settings.json", from: "files/claude-settings.json", merge: true, runsHook: true },
+  { dest: ".github/hooks/markdown-labels.json", from: "files/copilot-hooks.json", runsHook: true },
+  { dest: ".codex/hooks.json", from: "files/codex-hooks.json", merge: true, runsHook: true },
 ];
 
 /**
@@ -212,4 +214,4 @@ function installAgentHooks(root, { force = false } = {}) {
 /** Results that leave some agent without the hook: the ones to tell the user about. */
 const brokenResults = (results) => results.filter((result) => ["invalid", "skipped", "failed"].includes(result.status));
 
-module.exports = { installAgentHooks, brokenResults, sameFolder, TARGETS };
+module.exports = { installAgentHooks, brokenResults, sameFolder, TARGETS, PLUGIN_DIR };

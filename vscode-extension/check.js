@@ -1523,6 +1523,29 @@ check("label hook wiring: every agent points at the one script, and both skill c
   );
 });
 
+const readJson = (rel) => JSON.parse(fs.readFileSync(path.join(__dirname, rel), "utf8"));
+const PLUGIN = "agent-hooks/plugin";
+const PKG_VERSION = readJson("agent-hooks/package.json").version;
+
+check("plugin manifests: one name, one version, every field the listings ask for, and no hooks key where it would double", () => {
+  const root = readJson(PLUGIN + "/plugin.json");
+  assert(root.$schema === "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json", "root manifest schema");
+  assert(root.name === "mymarkdown" && root.version === PKG_VERSION, "root name/version");
+  for (const key of ["description", "author", "homepage", "repository", "license", "keywords"]) assert(root[key], "root manifest lacks " + key);
+  assert(/Node\.js 18/.test(root.description), "the description must say Node.js 18 or later is required");
+  assert(root.extensions && root.extensions["com.openai"] && root.extensions["com.openai"].hooks === "./hooks/hooks.json", "Codex reads hooks through extensions.com.openai");
+  for (const file of [".claude-plugin/plugin.json", ".cursor-plugin/plugin.json", ".qoder-plugin/plugin.json"]) {
+    const m = readJson(PLUGIN + "/" + file);
+    assert(m.name === "mymarkdown" && m.version === PKG_VERSION, file + " name/version");
+    assert(!("hooks" in m), file + " must not declare hooks: hooks/hooks.json is loaded by its location");
+    for (const key of ["description", "author", "license"]) assert(m[key], file + " lacks " + key);
+  }
+  for (const file of ["README.md", "LICENSE", "hooks/markdown-labels.cjs", "skills/markdown-labels/SKILL.md"]) {
+    assert(fs.existsSync(path.join(__dirname, PLUGIN, file)), "plugin folder lacks " + file);
+  }
+  assert(fs.readFileSync(path.join(__dirname, PLUGIN, "LICENSE"), "utf8") === fs.readFileSync(path.join(__dirname, "LICENSE"), "utf8"), "plugin LICENSE is a copy of the extension's");
+});
+
 // Installing the hook and skill into other projects: agent-hooks/install.js, shared by the
 // extension's command and the mymarkdown-hooks CLI.
 const Hooks = require("./agent-hooks/install.js");
@@ -1544,8 +1567,7 @@ function scratchProject() {
 }
 
 const statuses = (results) => Object.fromEntries(results.map((result) => [result.file, result.status]));
-const template = (dest) =>
-  fs.readFileSync(path.join(__dirname, "agent-hooks", "files", Hooks.TARGETS.find((t) => t.dest === dest).from), "utf8");
+const template = (dest) => fs.readFileSync(path.join(__dirname, "agent-hooks", Hooks.TARGETS.find((t) => t.dest === dest).from), "utf8");
 
 check("agent hooks installer: an empty project gets all six files, and running it again changes nothing", () => {
   const project = scratchProject();
@@ -1851,8 +1873,8 @@ check("the mymarkdown-hooks npm package ships everything the installer reads, an
   const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, "agent-hooks", "package.json"), "utf8"));
   assert(pkg.name === "mymarkdown-hooks" && pkg.bin["mymarkdown-hooks"] === "cli.js", "name and bin");
   assert(fs.readFileSync(HOOK_CLI, "utf8").startsWith("#!/usr/bin/env node\n"), "the bin needs a node shebang");
-  for (const needed of ["cli.js", "install.js", "files/"]) assert(pkg.files.includes(needed), "package files should include " + needed);
-  for (const target of Hooks.TARGETS) assert(fs.existsSync(path.join(__dirname, "agent-hooks", "files", target.from)), target.from);
+  for (const needed of ["cli.js", "install.js", "files/", "plugin/"]) assert(pkg.files.includes(needed), "package files should include " + needed);
+  for (const target of Hooks.TARGETS) assert(fs.existsSync(path.join(__dirname, "agent-hooks", target.from)), target.from);
   // npm packs a LICENSE from the package folder itself, and a symlink is not followed.
   assert(
     fs.readFileSync(path.join(__dirname, "agent-hooks", "LICENSE"), "utf8") === fs.readFileSync(path.join(__dirname, "LICENSE"), "utf8"),
