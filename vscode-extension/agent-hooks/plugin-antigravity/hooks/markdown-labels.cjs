@@ -58,8 +58,8 @@ function projectRoot(payload) {
   if (IN_PROJECT) return { root: OWN_ROOT, inProject: true };
   const env = process.env;
   const fromEnv = env.CLAUDE_PROJECT_DIR || env.DEVIN_PROJECT_DIR || env.COPILOT_PROJECT_DIR || env.AUGMENT_PROJECT_DIR || env.CURSOR_PROJECT_DIR;
-  const workspace = (Array.isArray(payload.workspace_roots) && payload.workspace_roots[0]) || (Array.isArray(payload.workspacePaths) && payload.workspacePaths[0]);
-  const written = typeof payload.cwd === "string" && payload.cwd ? payload.cwd : (payload.toolCall && payload.toolCall.args && payload.toolCall.args.TargetFile ? path.dirname(payload.toolCall.args.TargetFile) : null);
+  const workspace = (Array.isArray(payload.workspace_roots) && typeof payload.workspace_roots[0] === "string" && payload.workspace_roots[0]) || (Array.isArray(payload.workspacePaths) && typeof payload.workspacePaths[0] === "string" && payload.workspacePaths[0]);
+  const written = typeof payload.cwd === "string" && payload.cwd ? payload.cwd : (payload.toolCall && payload.toolCall.args && typeof payload.toolCall.args.TargetFile === "string" && payload.toolCall.args.TargetFile ? path.dirname(payload.toolCall.args.TargetFile) : null);
   return { root: path.resolve(fromEnv || workspace || (written ? gitTop(written) : process.cwd())), inProject: false };
 }
 
@@ -88,6 +88,11 @@ const WRITE_TOOLS = new Set([
   "Write", // Kiro's PostFileSave is mapped to this below
   "write_to_file", "replace_file_content", "multi_replace_file_content", // Antigravity
 ]);
+
+// The installer's .agents/hooks copy only ever gets written for these dialects; yielding to
+// it for any other one (cursor, devin, augment, antigravity) would silence a plugin that has
+// nothing installed to conflict with.
+const YIELDS = new Set(["claude", "copilot", "kiro"]);
 
 // Same anchors as anchorsFor in vscode-extension/lib/labels.js; check.js holds them equal.
 const ANCHOR_LENGTH = 500;
@@ -268,18 +273,24 @@ function main(payload) {
   if (detected.dialect === "antigravity") {
     if (detected.event === "invocation") {
       const marker = markerFor(payload);
-      let note = null;
+      let raw = null;
       try {
-        note = fs.readFileSync(marker, "utf8");
+        raw = fs.readFileSync(marker, "utf8");
         fs.rmSync(marker, { force: true });
       } catch {
         // No write since the last invocation.
       }
-      process.stdout.write(note ? JSON.stringify({ injectSteps: [{ userMessage: note }] }) : "{}");
+      // One or more writes may have appended their own nudge since the last invocation;
+      // repeats (the same file nudged twice) collapse to one line.
+      const lines = raw ? [...new Set(raw.split("\n").map((line) => line.trim()).filter(Boolean))] : [];
+      process.stdout.write(lines.length ? JSON.stringify({ injectSteps: [{ userMessage: lines.join("\n") }] }) : "{}");
       return;
     }
-    // A tool step: answer {} whatever happens, and keep the nudge for PostInvocation.
-    if (!detected.tool || !WRITE_TOOLS.has(detected.tool)) return void process.stdout.write("{}");
+    // PostToolUse cannot inject context, so it must always answer {} - printed once, up
+    // front, before anything below gets a chance to return early or throw (main's own
+    // top-level catch would otherwise swallow the error and leave stdout empty).
+    process.stdout.write("{}");
+    if (!detected.tool || !WRITE_TOOLS.has(detected.tool)) return;
   }
   const { dialect } = detected;
   const tool = detected.tool;
@@ -299,7 +310,8 @@ function main(payload) {
 
   const { root: ROOT, inProject } = projectRoot(payload);
   // A project with its own per-repo install is that copy's business; two nudges help nobody.
-  if (!inProject && fs.existsSync(path.join(ROOT, ".agents", "hooks", "markdown-labels.cjs"))) return;
+  // Only true for a dialect the installer actually writes one for (see YIELDS above).
+  if (!inProject && YIELDS.has(dialect) && fs.existsSync(path.join(ROOT, ".agents", "hooks", "markdown-labels.cjs"))) return;
   // Relative paths are relative to where the agent works, which as a plugin is never here.
   const base = (typeof payload.cwd === "string" && payload.cwd) || (inProject ? process.cwd() : ROOT);
 
@@ -323,15 +335,17 @@ function main(payload) {
     const note = nudge(root, file, relative, skillName(dialect, inProject));
     if (note) notes.push(note);
   }
-  if (!notes.length) return void (dialect === "antigravity" && process.stdout.write("{}"));
+  if (!notes.length) return;
   respond(dialect, notes.join("\n"), payload);
 }
 
 /** Each agent reads the nudge from a different place in the hook's output. */
 function respond(dialect, additionalContext, payload) {
   if (dialect === "antigravity") {
-    fs.writeFileSync(markerFor(payload), additionalContext);
-    process.stdout.write("{}");
+    // Antigravity already got its {} from the tool-step print above; this only leaves the
+    // nudge behind. Appended, not overwritten: a second write before the next PostInvocation
+    // must not erase the first one's nudge.
+    fs.appendFileSync(markerFor(payload), additionalContext + "\n");
     return;
   }
   const out =

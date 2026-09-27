@@ -1692,6 +1692,50 @@ check("Antigravity: PostToolUse stamps and leaves a marker, PostInvocation deliv
     // The root comes from the written file's repository when workspacePaths is empty.
     assert(JSON.stringify(p.run({ stepIdx: 6, toolCall: { name: "replace_file_content", args: { TargetFile: p.doc } }, conversationId: "conv-1", workspacePaths: [] })) === "{}");
     assert(fs.existsSync(marker), "nudged again after a second write");
+
+    // A tool step that only touches a sidecar leaves nothing to nudge, but the extension's
+    // stamping still runs (the check's own title claims it), and the answer is still {}.
+    const sidecar = path.join(p.root, ".mymd", "docs", "big.md.json");
+    fs.mkdirSync(path.dirname(sidecar), { recursive: true });
+    fs.writeFileSync(sidecar, JSON.stringify({ version: 1, lenses: [{ name: "L", ranges: [{ label: "One", color: "#111111", startLine: 1, endLine: 3 }] }] }));
+    assert(JSON.stringify(p.run({ stepIdx: 7, toolCall: { name: "write_to_file", args: { TargetFile: sidecar, CodeContent: "x" } }, conversationId: "conv-1", workspacePaths: [p.root] })) === "{}", "a sidecar write still answers {}");
+    assert(JSON.parse(fs.readFileSync(sidecar, "utf8")).lenses[0].ranges[0].anchor === "# guide", "the sidecar's unanchored range was stamped");
+
+    // The controller's ruling: Antigravity has no per-repo install of its own, so a project's
+    // .agents/hooks copy - written for claude/copilot/kiro - must not silence it.
+    const marker2 = path.join(os.tmpdir(), "mymarkdown-labels-conv-2");
+    fs.rmSync(marker2, { force: true });
+    fs.mkdirSync(path.join(p.root, ".agents", "hooks"), { recursive: true });
+    fs.writeFileSync(path.join(p.root, ".agents", "hooks", "markdown-labels.cjs"), "// another dialect's own copy\n");
+    try {
+      const doc2 = path.join(p.root, "docs", "two.md");
+      fs.writeFileSync(doc2, "# Two\n\n## One\n\n" + "word ".repeat(420) + "\n\n## Two\n\nend\n");
+      assert(JSON.stringify(p.run({ stepIdx: 8, toolCall: { name: "write_to_file", args: { TargetFile: doc2, CodeContent: "x" } }, conversationId: "conv-2", workspacePaths: [p.root] })) === "{}", "a write still answers {} with a per-repo install present");
+      const inject2 = p.run({ invocationNum: 2, initialNumSteps: 1, conversationId: "conv-2", workspacePaths: [p.root] });
+      assert(inject2 && inject2.injectSteps && inject2.injectSteps[0].userMessage.includes("docs/two.md is now"), "the nudge still reaches PostInvocation despite the per-repo install: " + JSON.stringify(inject2));
+    } finally {
+      fs.rmSync(marker2, { force: true });
+      fs.rmSync(path.join(p.root, ".agents"), { recursive: true, force: true });
+    }
+
+    // The plan-mandated fix: two writes before one PostInvocation must not lose the first
+    // nudge to the second overwriting the marker.
+    const marker3 = path.join(os.tmpdir(), "mymarkdown-labels-conv-3");
+    fs.rmSync(marker3, { force: true });
+    try {
+      const docA = path.join(p.root, "docs", "alpha.md");
+      const docB = path.join(p.root, "docs", "beta.md");
+      fs.writeFileSync(docA, "# Alpha\n\n## One\n\n" + "word ".repeat(420) + "\n\n## Two\n\nend\n");
+      fs.writeFileSync(docB, "# Beta\n\n## One\n\n" + "word ".repeat(420) + "\n\n## Two\n\nend\n");
+      p.run({ stepIdx: 9, toolCall: { name: "write_to_file", args: { TargetFile: docA, CodeContent: "x" } }, conversationId: "conv-3", workspacePaths: [p.root] });
+      p.run({ stepIdx: 10, toolCall: { name: "write_to_file", args: { TargetFile: docB, CodeContent: "x" } }, conversationId: "conv-3", workspacePaths: [p.root] });
+      const inject3 = p.run({ invocationNum: 2, initialNumSteps: 1, conversationId: "conv-3", workspacePaths: [p.root] });
+      assert(inject3 && inject3.injectSteps, "the second invocation still carries a nudge: " + JSON.stringify(inject3));
+      const msg = inject3.injectSteps[0].userMessage;
+      assert(msg.includes("docs/alpha.md is now") && msg.includes("docs/beta.md is now"), "both writes' nudges survive to one PostInvocation: " + msg);
+    } finally {
+      fs.rmSync(marker3, { force: true });
+    }
   } finally {
     fs.rmSync(marker, { force: true });
     p.cleanup();
