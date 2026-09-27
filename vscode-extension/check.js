@@ -1679,13 +1679,18 @@ check("Antigravity: PostToolUse stamps and leaves a marker, PostInvocation deliv
     const write = { stepIdx: 3, toolCall: { name: "write_to_file", args: { TargetFile: p.doc, CodeContent: "x" } }, conversationId: "conv-1", workspacePaths: [p.root], error: "" };
     assert(JSON.stringify(p.run(write)) === "{}", "PostToolUse must answer {} and nothing else");
     assert(fs.existsSync(marker), "a marker for this conversation");
+    // A non-tool PostToolUse step (no invocationNum) between the write and the next
+    // invocation is a tool step, not an invocation: it must answer {} without touching the
+    // marker, or the real PostInvocation below would find nothing left to deliver.
+    assert(JSON.stringify(p.run({ stepIdx: 4, toolCall: null, conversationId: "conv-1" })) === "{}", "a non-tool step answers {}");
+    assert(fs.existsSync(marker), "a non-tool step must not consume the marker");
     const inject = p.run({ invocationNum: 2, initialNumSteps: 3, conversationId: "conv-1", workspacePaths: [p.root] });
     assert(inject && inject.injectSteps && inject.injectSteps[0].userMessage.includes("docs/big.md is now"), "PostInvocation carries the nudge: " + JSON.stringify(inject));
     includes(inject.injectSteps[0].userMessage, "mymarkdown:markdown-labels", "the skill as Antigravity lists it");
     assert(JSON.stringify(p.run({ invocationNum: 3, initialNumSteps: 3, conversationId: "conv-1" })) === "{}", "delivered once");
-    assert(JSON.stringify(p.run({ stepIdx: 4, toolCall: null, conversationId: "conv-1" })) === "{}", "a non-tool step");
+    assert(JSON.stringify(p.run({ stepIdx: 5, toolCall: null, conversationId: "conv-1" })) === "{}", "a non-tool step with no marker either");
     // The root comes from the written file's repository when workspacePaths is empty.
-    assert(JSON.stringify(p.run({ stepIdx: 5, toolCall: { name: "replace_file_content", args: { TargetFile: p.doc } }, conversationId: "conv-1", workspacePaths: [] })) === "{}");
+    assert(JSON.stringify(p.run({ stepIdx: 6, toolCall: { name: "replace_file_content", args: { TargetFile: p.doc } }, conversationId: "conv-1", workspacePaths: [] })) === "{}");
     assert(fs.existsSync(marker), "nudged again after a second write");
   } finally {
     fs.rmSync(marker, { force: true });

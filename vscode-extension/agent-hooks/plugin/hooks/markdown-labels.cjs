@@ -227,7 +227,7 @@ function detect(payload) {
   if ("conversationId" in payload && ("toolCall" in payload || "invocationNum" in payload)) {
     const call = payload.toolCall;
     const target = call && call.args && typeof call.args.TargetFile === "string" ? call.args.TargetFile : null;
-    return { dialect: "antigravity", tool: call ? call.name : null, input: target ? { file_path: target } : {}, event: call ? "tool" : "invocation" };
+    return { dialect: "antigravity", tool: call ? call.name : null, input: target ? { file_path: target } : {}, event: "invocationNum" in payload ? "invocation" : "tool" };
   }
   if ("toolName" in payload) return { dialect: "copilot", tool: payload.toolName, input: payload.toolArgs };
   if (payload.hook_event_name === "PostFileSave" && typeof payload.file_path === "string") {
