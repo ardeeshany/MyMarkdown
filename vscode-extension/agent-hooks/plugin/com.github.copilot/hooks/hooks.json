@@ -1,0 +1,13 @@
+{
+  "version": 1,
+  "hooks": {
+    "postToolUse": [
+      {
+        "type": "command",
+        "bash": "node \"${PLUGIN_ROOT}/hooks/markdown-labels.cjs\"; exit 0",
+        "powershell": "node \"${PLUGIN_ROOT}/hooks/markdown-labels.cjs\"; exit 0",
+        "timeoutSec": 15
+      }
+    ]
+  }
+}

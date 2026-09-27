@@ -37,9 +37,38 @@ const STORAGE = ".mymd";
 // The file extensions VS Code opens as Markdown (its markdown-basics list, less .litcoffee,
 // .ron, .ronn and .workbook, which are usually something else).
 const MARKDOWN = /\.(md|mkd|mkdn|mdwn|mdown|markdown|markdn|mdtxt|mdtext)$/i;
-// This file lives at <root>/.agents/hooks/. Agents report the cwd their session started in,
-// which may be a subfolder, so the root comes from here instead.
-const ROOT = path.resolve(__dirname, "..", "..");
+// Installed in a project, this file lives at <root>/.agents/hooks/ and the root is two folders
+// up. Installed as a plugin it lives wherever the agent keeps plugins, and the project can only
+// come from what the agent tells the hook: an environment variable, the payload's workspace, or
+// the git repository around the folder the agent runs in.
+const IN_PROJECT = /[\\/]\.agents[\\/]hooks$/.test(__dirname);
+const OWN_ROOT = path.resolve(__dirname, "..", "..");
+
+/** The top of the git repository `dir` is in, or `dir` itself outside one. */
+function gitTop(dir) {
+  for (let at = path.resolve(dir); ; at = path.dirname(at)) {
+    if (fs.existsSync(path.join(at, ".git"))) return at;
+    if (path.dirname(at) === at) return path.resolve(dir);
+  }
+}
+
+/** The project root for this run, and whether this copy of the hook lives inside it. */
+function projectRoot(payload) {
+  if (IN_PROJECT) return { root: OWN_ROOT, inProject: true };
+  const env = process.env;
+  const fromEnv = env.CLAUDE_PROJECT_DIR || env.DEVIN_PROJECT_DIR || env.COPILOT_PROJECT_DIR || env.AUGMENT_PROJECT_DIR || env.CURSOR_PROJECT_DIR;
+  const workspace = (Array.isArray(payload.workspace_roots) && payload.workspace_roots[0]) || (Array.isArray(payload.workspacePaths) && payload.workspacePaths[0]);
+  const cwd = typeof payload.cwd === "string" && payload.cwd ? payload.cwd : null;
+  return { root: path.resolve(fromEnv || workspace || (cwd ? gitTop(cwd) : process.cwd())), inProject: false };
+}
+
+/** How the agent lists the skill: a plugin's skill is namespaced in some agents. */
+function skillName(dialect, inProject) {
+  if (inProject) return "markdown-labels";
+  if (dialect === "cursor") return "/markdown-labels";
+  if (dialect === "claude" || dialect === "devin") return "mymarkdown:markdown-labels";
+  return "markdown-labels";
+}
 
 // Names each agent gives a tool that writes files. Reads (Read, view, read_file) are left
 // out on purpose: opening an old document is not a reason to label it.
@@ -159,7 +188,7 @@ function countHeadings(text) {
 }
 
 /** The nudge for one Markdown file, or null when it is small or already labelled. */
-function nudge(root, file, relative) {
+function nudge(root, file, relative, skill) {
   let text;
   try {
     text = fs.readFileSync(file, "utf8");
@@ -174,8 +203,8 @@ function nudge(root, file, relative) {
   // Worded as an instruction: put as a suggestion, models skip it as "not requested".
   return (
     `${shown} is now ${words} words across ${headings} headings, past the markdown-labels ` +
-    `threshold, and has no MyMarkdown labels. Run the markdown-labels skill now, before you ` +
-    `finish, to write label lenses for it.`
+    `threshold, and has no MyMarkdown labels. Run the ${skill} skill now, before you finish, ` +
+    `to write label lenses for it.`
   );
 }
 
@@ -195,6 +224,7 @@ function main(payload) {
   // Copilot CLI's own format is camelCase and takes its context at the top level; Claude
   // Code, VS Code and Codex send snake_case and read hookSpecificOutput.
   const copilot = "toolName" in payload;
+  const dialect = copilot ? "copilot" : "claude";
   const tool = copilot ? payload.toolName : payload.tool_name;
   if (!WRITE_TOOLS.has(tool)) return;
   let input = copilot ? payload.toolArgs : payload.tool_input;
@@ -210,8 +240,14 @@ function main(payload) {
   if (!input || typeof input !== "object") return;
   if (tool === "str_replace_editor" && input.command === "view") return;
 
+  const { root: ROOT, inProject } = projectRoot(payload);
+  // A project with its own per-repo install is that copy's business; two nudges help nobody.
+  if (!inProject && fs.existsSync(path.join(ROOT, ".agents", "hooks", "markdown-labels.cjs"))) return;
+  // Relative paths are relative to where the agent works, which as a plugin is never here.
+  const base = (typeof payload.cwd === "string" && payload.cwd) || (inProject ? process.cwd() : ROOT);
+
   const notes = [];
-  for (const file of writtenFiles(input, payload.cwd || process.cwd())) {
+  for (const file of writtenFiles(input, base)) {
     let relative = path.relative(ROOT, file);
     if (!relative || relative.startsWith("..") || path.isAbsolute(relative)) continue;
     // A Claude Code worktree (.claude/worktrees/<name>/) is a checkout of its own, with its own
@@ -227,17 +263,22 @@ function main(payload) {
       continue;
     }
     if (!MARKDOWN.test(relative) || parts.includes("node_modules") || parts.includes(".git")) continue;
-    const note = nudge(root, file, relative);
+    const note = nudge(root, file, relative, skillName(dialect, inProject));
     if (note) notes.push(note);
   }
   if (!notes.length) return;
+  respond(dialect, notes.join("\n"));
+}
 
-  const additionalContext = notes.join("\n");
-  process.stdout.write(
-    JSON.stringify(
-      copilot ? { additionalContext } : { hookSpecificOutput: { hookEventName: "PostToolUse", additionalContext } },
-    ),
-  );
+/** Each agent reads the nudge from a different place in the hook's output. */
+function respond(dialect, additionalContext) {
+  const out =
+    dialect === "copilot"
+      ? { additionalContext }
+      : dialect === "cursor"
+        ? { additional_context: additionalContext }
+        : { hookSpecificOutput: { hookEventName: "PostToolUse", additionalContext } };
+  process.stdout.write(JSON.stringify(out));
 }
 
 let input = "";

@@ -1399,6 +1399,27 @@ function hookRepo() {
   return { root, doc, run, cleanup: () => fs.rmSync(root, { recursive: true, force: true }) };
 }
 
+/** The hook as a plugin: installed outside the project, told about it only by the agent. */
+function pluginRepo() {
+  const base = fs.mkdtempSync(path.join(os.tmpdir(), "mymd-plugin-"));
+  const root = path.join(base, "project");
+  fs.mkdirSync(path.join(root, "docs"), { recursive: true });
+  fs.mkdirSync(path.join(root, ".git"));
+  const script = path.join(base, "plugin-home", "plugin", "hooks", "markdown-labels.cjs");
+  fs.mkdirSync(path.dirname(script), { recursive: true });
+  fs.copyFileSync(path.join(REPO, "vscode-extension", "agent-hooks", "plugin", "hooks", "markdown-labels.cjs"), script);
+  const doc = path.join(root, "docs", "big.md");
+  fs.writeFileSync(doc, "# Guide\n\n## One\n\n" + "word ".repeat(420) + "\n\n## Two\n\nend\n");
+  const run = (payload, { args = [], env = {} } = {}) => {
+    const inherited = { ...process.env };
+    for (const key of ["CLAUDE_PROJECT_DIR", "DEVIN_PROJECT_DIR", "COPILOT_PROJECT_DIR", "AUGMENT_PROJECT_DIR", "CURSOR_PROJECT_DIR", "COPILOT_CLI"]) delete inherited[key];
+    const result = spawnSync(process.execPath, [script, ...args], { input: JSON.stringify(payload), env: { ...inherited, ...env }, cwd: path.dirname(script), encoding: "utf8" });
+    assert(result.status === 0, "the hook must always exit 0, got " + result.status + ": " + result.stderr);
+    return result.stdout ? JSON.parse(result.stdout) : null;
+  };
+  return { base, root, doc, script, run, cleanup: () => fs.rmSync(base, { recursive: true, force: true }) };
+}
+
 check("label hook: each agent's write gets the nudge, in the format that agent reads", () => {
   const repo = hookRepo();
   try {
@@ -1560,6 +1581,64 @@ check("marketplace files: each reader's format, the same plugin name and path, n
   assert(augment.name === "mymarkdown-plugins" && augment.plugins[0].name === "mymarkdown" && augment.plugins[0].source === rel, "Augment entry");
   assert(augment.version === PKG_VERSION && augment.plugins[0].version === PKG_VERSION, "Augment carries the version");
   assert(fs.existsSync(path.join(REPO, rel, "plugin.json")), "every source points at the plugin folder");
+});
+
+check("plugin hook: finds the project from the agent's context, never from where the script lives", () => {
+  const p = pluginRepo();
+  try {
+    const claudeContext = (out) => out && out.hookSpecificOutput && out.hookSpecificOutput.additionalContext;
+    const write = { tool_name: "Write", tool_input: { file_path: p.doc }, tool_response: {} };
+    // Root from each environment variable an agent sets.
+    for (const name of ["CLAUDE_PROJECT_DIR", "DEVIN_PROJECT_DIR", "COPILOT_PROJECT_DIR", "AUGMENT_PROJECT_DIR"]) {
+      const out = p.run(write, { env: { [name]: p.root } });
+      includes(claudeContext(out) || "", "docs/big.md is now", "root from " + name);
+    }
+    // No variable: the git top above the payload's cwd (a subfolder here).
+    includes(claudeContext(p.run({ ...write, cwd: path.join(p.root, "docs") })) || "", "docs/big.md is now", "root from the git top above cwd");
+    // A file outside that root is ignored.
+    const outside = path.join(p.base, "elsewhere.md");
+    fs.copyFileSync(p.doc, outside);
+    assert(p.run({ tool_name: "Write", tool_input: { file_path: outside }, tool_response: {}, cwd: p.root }) === null, "a file outside the project is ignored");
+    // The nudge names the plugin's skill the way Claude Code lists it.
+    includes(claudeContext(p.run(write, { env: { CLAUDE_PROJECT_DIR: p.root } })), "mymarkdown:markdown-labels", "the skill name under a Claude plugin");
+    // Stamping lands under the project, and stamping twice changes nothing (two copies may run).
+    const sidecar = path.join(p.root, ".mymd", "docs", "big.md.json");
+    fs.mkdirSync(path.dirname(sidecar), { recursive: true });
+    fs.writeFileSync(sidecar, JSON.stringify({ version: 1, lenses: [{ name: "L", ranges: [{ label: "One", color: "#111111", startLine: 1, endLine: 3 }] }] }));
+    p.run({ tool_name: "Write", tool_input: { file_path: sidecar }, tool_response: {}, cwd: p.root });
+    const once = fs.readFileSync(sidecar, "utf8");
+    assert(JSON.parse(once).lenses[0].ranges[0].anchor === "# guide", "stamped under the project root");
+    p.run({ tool_name: "Write", tool_input: { file_path: sidecar }, tool_response: {}, cwd: p.root });
+    assert(fs.readFileSync(sidecar, "utf8") === once, "a second stamping run changes nothing");
+  } finally {
+    p.cleanup();
+  }
+});
+
+check("plugin hook: yields to a project that has its own per-repo install", () => {
+  const p = pluginRepo();
+  try {
+    fs.mkdirSync(path.join(p.root, ".agents", "hooks"), { recursive: true });
+    fs.writeFileSync(path.join(p.root, ".agents", "hooks", "markdown-labels.cjs"), "// the project's own copy\n");
+    const out = p.run({ tool_name: "Write", tool_input: { file_path: p.doc }, tool_response: {} }, { env: { CLAUDE_PROJECT_DIR: p.root } });
+    assert(out === null, "the project's own hook speaks for it; the plugin must stay quiet, got " + JSON.stringify(out));
+  } finally {
+    p.cleanup();
+  }
+});
+
+check("plugin hook files: the shared Claude-schema entry and Copilot's flat one run the same script", () => {
+  const shared = readJson(PLUGIN + "/hooks/hooks.json");
+  const group = shared.hooks.PostToolUse[0];
+  assert(group.matcher === "Write|Edit|write|edit|apply_patch|save-file|str-replace-editor", "the matcher names every reader's write tools, got " + group.matcher);
+  const hook = group.hooks[0];
+  assert(hook.type === "command" && hook.timeout === 15, "command hook, 15 s");
+  includes(hook.command, '${CLAUDE_PLUGIN_ROOT}/hooks/markdown-labels.cjs', "the shared command");
+  assert(/; exit 0$/.test(hook.command), "a machine without node must not see an error after every write");
+  const copilot = readJson(PLUGIN + "/com.github.copilot/hooks/hooks.json");
+  const entry = copilot.hooks.postToolUse[0];
+  assert(copilot.version === 1 && entry.type === "command" && entry.timeoutSec === 15, "Copilot's own schema");
+  for (const key of ["bash", "powershell"]) includes(entry[key], "${PLUGIN_ROOT}/hooks/markdown-labels.cjs", "Copilot " + key);
 });
 
 // Installing the hook and skill into other projects: agent-hooks/install.js, shared by the
