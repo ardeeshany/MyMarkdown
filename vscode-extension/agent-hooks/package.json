@@ -6,7 +6,7 @@
   "bin": {
     "mymarkdown-hooks": "cli.js"
   },
-  "main": "install.js",
+  "main": "plugin/opencode/mymarkdown.mjs",
   "files": [
     "cli.js",
     "install.js",
@@ -32,6 +32,7 @@
     "cursor",
     "windsurf",
     "opencode",
+    "opencode-plugin",
     "plugin",
     "hooks"
   ]

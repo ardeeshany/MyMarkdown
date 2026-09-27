@@ -1774,6 +1774,61 @@ check("Antigravity folder: its own manifest and hook schema, copies of the hook 
   assert(readJson("agent-hooks/package.json").files.includes("plugin-antigravity/"), "shipped in the npm package");
 });
 
+check("OpenCode adapter: registers the skill and appends the nudge to a write's result, in both API generations", () => {
+  // The adapter inherits process.env by design (it spawns the hook without an env override),
+  // so a developer's own shell must not change the verdict: hide the project-dir variables
+  // that would redirect the hook's project root, then put back whatever was actually there.
+  const ENV_KEYS = ["CLAUDE_PROJECT_DIR", "DEVIN_PROJECT_DIR", "COPILOT_PROJECT_DIR", "AUGMENT_PROJECT_DIR", "CURSOR_PROJECT_DIR"];
+  const saved = ENV_KEYS.map((key) => [key, process.env[key]]);
+  for (const [key] of saved) delete process.env[key];
+  const restoreEnv = () => {
+    for (const [key, value] of saved) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+  };
+
+  const p = pluginRepo();
+  try {
+    const mjs = path.join(__dirname, "agent-hooks", "plugin", "opencode", "mymarkdown.mjs");
+    return import(mjs).then(async (mod) => {
+      const plugin = mod.default;
+      assert(plugin.id === "mymarkdown" && typeof plugin.server === "function" && typeof plugin.setup === "function", "the dual-generation shape");
+      // 1.x: a hooks object; the nudge lands in output.output.
+      const hooks = await plugin.server({ directory: p.root, worktree: p.root });
+      const config = {};
+      await hooks.config(config);
+      assert(config.skills.paths.some((dir) => fs.existsSync(path.join(dir, "markdown-labels", "SKILL.md"))), "1.x: the skill folder is registered");
+      const output = { title: "write", output: "Wrote docs/big.md", metadata: {} };
+      await hooks["tool.execute.after"]({ tool: "write", sessionID: "s", callID: "c", args: { filePath: p.doc, content: "x" } }, output);
+      includes(output.output, "docs/big.md is now", "1.x: the nudge in the tool result");
+      const untouched = { title: "read", output: "…", metadata: {} };
+      await hooks["tool.execute.after"]({ tool: "read", sessionID: "s", callID: "c", args: { filePath: p.doc } }, untouched);
+      assert(untouched.output === "…", "1.x: a read is left alone");
+      // 2.x: ctx hooks; the nudge lands in event.result.content, the skill through the editor.
+      const added = [];
+      let after;
+      await plugin.setup({
+        location: { directory: p.root },
+        tool: { hook: async (name, fn) => { if (name === "execute.after") after = fn; } },
+        skill: { transform: async (fn) => fn({ add: (skill) => added.push(skill) }) },
+      });
+      assert(added.length === 1 && added[0].id === "markdown-labels" && /label/i.test(added[0].description) && added[0].content.length > 100, "2.x: the skill: " + JSON.stringify(added[0] && added[0].id));
+      const event = { tool: "write", status: "completed", input: { path: p.doc, content: "x" }, result: { output: "ok", content: "Wrote docs/big.md" } };
+      await after(event);
+      includes(String(event.result.content), "docs/big.md is now", "2.x: the nudge in the result");
+      assert(event.result.output === "ok", "2.x: the rest of the result is kept");
+    }).finally(() => {
+      p.cleanup();
+      restoreEnv();
+    });
+  } catch (error) {
+    p.cleanup();
+    restoreEnv();
+    throw error;
+  }
+});
+
 check("plugin hook files: the shared Claude-schema entry and Copilot's flat one run the same script", () => {
   const shared = readJson(PLUGIN + "/hooks/hooks.json");
   const group = shared.hooks.PostToolUse[0];
