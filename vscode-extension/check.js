@@ -1618,10 +1618,17 @@ check("plugin hook: finds the project from the agent's context, never from where
 check("plugin hook: yields to a project that has its own per-repo install", () => {
   const p = pluginRepo();
   try {
+    const write = { tool_name: "Write", tool_input: { file_path: p.doc }, tool_response: {} };
     fs.mkdirSync(path.join(p.root, ".agents", "hooks"), { recursive: true });
     fs.writeFileSync(path.join(p.root, ".agents", "hooks", "markdown-labels.cjs"), "// the project's own copy\n");
-    const out = p.run({ tool_name: "Write", tool_input: { file_path: p.doc }, tool_response: {} }, { env: { CLAUDE_PROJECT_DIR: p.root } });
+    const out = p.run(write, { env: { CLAUDE_PROJECT_DIR: p.root } });
     assert(out === null, "the project's own hook speaks for it; the plugin must stay quiet, got " + JSON.stringify(out));
+    // A positive control: without the per-repo install, the very same payload nudges. This
+    // proves the silence above came from the yield rule, not from an unrelated fault (a wrong
+    // root, a thrown error, a tool-name change) that the hook's catch-all would swallow too.
+    fs.rmSync(path.join(p.root, ".agents"), { recursive: true, force: true });
+    const nudged = p.run(write, { env: { CLAUDE_PROJECT_DIR: p.root } });
+    includes(nudged && nudged.hookSpecificOutput && nudged.hookSpecificOutput.additionalContext, "docs/big.md is now", "without the project's own hook, the plugin speaks");
   } finally {
     p.cleanup();
   }
