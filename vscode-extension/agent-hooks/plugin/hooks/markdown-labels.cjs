@@ -77,6 +77,9 @@ const WRITE_TOOLS = new Set([
   "create", "edit", "str_replace_editor", "str_replace", // Copilot CLI
   "create_file", "replace_string_in_file", "multi_replace_string_in_file", "insert_edit_into_file", // VS Code
   "apply_patch", // Codex, VS Code
+  "write", "notebook_edit", // Devin (edit and apply_patch are above)
+  "save-file", "str-replace-editor", // Augment
+  "Write", // Kiro's PostFileSave is mapped to this below
 ]);
 
 // Same anchors as anchorsFor in vscode-extension/lib/labels.js; check.js holds them equal.
@@ -109,11 +112,11 @@ function anchorsFor(lines, startLine, endLine) {
 
 /** Every file a tool call wrote, as absolute paths, whichever agent described it. */
 function writtenFiles(input, cwd) {
-  const found = [input.file_path, input.path, input.filePath];
+  const found = [input.file_path, input.path, input.filePath, ...(Array.isArray(input.paths) ? input.paths : [])];
   for (const r of Array.isArray(input.replacements) ? input.replacements : []) found.push(r?.filePath);
   // apply_patch keeps its paths in the patch text: tool_input.input in VS Code, .command in
-  // Codex, .patch (or the bare string) in Copilot CLI.
-  const patch = String(input.input ?? input.patch ?? input.command ?? "");
+  // Codex, .patch (or the bare string) in Copilot CLI, .raw_patch in Devin.
+  const patch = String(input.input ?? input.raw_patch ?? input.patch ?? input.command ?? "");
   for (const m of patch.matchAll(/^\*\*\* (?:Add File|Update File|Move to): (.+)$/gm)) found.push(m[1].trim());
   return [...new Set(found.filter((f) => typeof f === "string" && f).map((f) => path.resolve(cwd, f)))];
 }
@@ -208,6 +211,32 @@ function nudge(root, file, relative, skill) {
   );
 }
 
+/**
+ * Which agent sent this payload, and the write it describes, in one shape. Agents differ in
+ * case (Devin), casing of the event name (Cursor), where the paths sit (Augment lists them in
+ * file_changes; Kiro's save event names one file), and how a patch is carried.
+ */
+function detect(payload) {
+  if ("toolName" in payload) return { dialect: "copilot", tool: payload.toolName, input: payload.toolArgs };
+  if (payload.hook_event_name === "PostFileSave" && typeof payload.file_path === "string") {
+    return { dialect: "kiro", tool: "Write", input: { file_path: payload.file_path } };
+  }
+  const tool = payload.tool_name;
+  let input = payload.tool_input;
+  if (Array.isArray(payload.file_changes)) {
+    // Augment: relative to the first workspace root.
+    const base = (Array.isArray(payload.workspace_roots) && payload.workspace_roots[0]) || process.env.AUGMENT_PROJECT_DIR || "";
+    const paths = payload.file_changes.map((change) => change && change.path).filter((p) => typeof p === "string" && p);
+    return { dialect: "augment", tool, input: { paths: paths.map((p) => path.resolve(base, p)) } };
+  }
+  if (payload.hook_event_name === "postToolUse" || "cursor_version" in payload) return { dialect: "cursor", tool, input };
+  if (typeof tool === "string" && /^(write|edit|apply_patch|notebook_edit)$/.test(tool)) {
+    if (payload.tool_response && payload.tool_response.success === false) return { dialect: "devin", tool: null, input };
+    return { dialect: "devin", tool, input };
+  }
+  return { dialect: "claude", tool, input };
+}
+
 function main(payload) {
   // Copilot CLI, and VS Code with chat.useClaudeHooks on, run Claude's hooks as well as
   // their own. Their own entry in .github/hooks speaks for them, so this copy stays quiet.
@@ -223,11 +252,11 @@ function main(payload) {
 
   // Copilot CLI's own format is camelCase and takes its context at the top level; Claude
   // Code, VS Code and Codex send snake_case and read hookSpecificOutput.
-  const copilot = "toolName" in payload;
-  const dialect = copilot ? "copilot" : "claude";
-  const tool = copilot ? payload.toolName : payload.tool_name;
+  const detected = detect(payload);
+  const { dialect } = detected;
+  const tool = detected.tool;
   if (!WRITE_TOOLS.has(tool)) return;
-  let input = copilot ? payload.toolArgs : payload.tool_input;
+  let input = detected.input;
   // Arguments may arrive JSON-encoded, or as a bare patch (Copilot's apply_patch).
   if (typeof input === "string") {
     try {

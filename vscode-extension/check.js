@@ -1634,6 +1634,43 @@ check("plugin hook: yields to a project that has its own per-repo install", () =
   }
 });
 
+check("plugin hook: every agent's payload shape reaches the nudge, in that agent's output format", () => {
+  const p = pluginRepo();
+  try {
+    const patch = "*** Begin Patch\n*** Update File: docs/big.md\n@@\n-a\n+b\n*** End Patch";
+    const cases = [
+      // Devin: lowercase tool names, no cwd, the root from its own variable; apply_patch as text or under a key.
+      ["Devin write", { hook_event_name: "PostToolUse", tool_name: "write", tool_input: { file_path: p.doc }, tool_response: { success: true } }, { DEVIN_PROJECT_DIR: p.root }, "hookSpecificOutput", "mymarkdown:markdown-labels"],
+      ["Devin apply_patch (string)", { hook_event_name: "PostToolUse", tool_name: "apply_patch", tool_input: patch, tool_response: { success: true } }, { DEVIN_PROJECT_DIR: p.root }, "hookSpecificOutput", "mymarkdown:markdown-labels"],
+      ["Devin apply_patch (raw_patch)", { hook_event_name: "PostToolUse", tool_name: "apply_patch", tool_input: { raw_patch: patch }, tool_response: { success: true } }, { DEVIN_PROJECT_DIR: p.root }, "hookSpecificOutput", "mymarkdown:markdown-labels"],
+      // Cursor: camelCase event, the root from workspace_roots, a flat answer, and cwd is NOT the project.
+      ["Cursor", { hook_event_name: "postToolUse", cursor_version: "3.21.18", conversation_id: "c1", workspace_roots: [p.root], cwd: path.dirname(p.script), tool_name: "Write", tool_input: { file_path: p.doc, content: "x" }, tool_output: "{}" }, {}, "additional_context", "/markdown-labels"],
+      // Augment: paths relative to the workspace, listed in file_changes.
+      ["Augment", { hook_event_name: "PostToolUse", tool_name: "save-file", tool_input: {}, file_changes: [{ path: "docs/big.md" }], workspace_roots: [p.root] }, { AUGMENT_PROJECT_DIR: p.root }, "hookSpecificOutput", "markdown-labels"],
+      // Qoder CLI: Claude's shape.
+      ["Qoder CLI", { hook_event_name: "PostToolUse", tool_name: "Write", tool_input: { file_path: p.doc }, cwd: p.root }, {}, "hookSpecificOutput", "markdown-labels"],
+    ];
+    for (const [name, payload, env, field, skill] of cases) {
+      const out = p.run(payload, { env });
+      const text = out && (field === "hookSpecificOutput" ? out.hookSpecificOutput && out.hookSpecificOutput.additionalContext : out[field]);
+      assert(text && text.includes("docs/big.md is now") && text.includes(skill), name + " got " + JSON.stringify(out));
+      if (field === "additional_context") assert(!("hookSpecificOutput" in out), "Cursor gets the flat field only");
+    }
+    // A Devin write that failed is not a document to label.
+    assert(p.run({ hook_event_name: "PostToolUse", tool_name: "write", tool_input: { file_path: p.doc }, tool_response: { success: false } }, { env: { DEVIN_PROJECT_DIR: p.root } }) === null, "a failed write");
+    // Kiro's PostFileSave (its command action stamps sidecars; a .md save carries no answer worth sending).
+    const sidecar = path.join(p.root, ".mymd", "docs", "big.md.json");
+    fs.mkdirSync(path.dirname(sidecar), { recursive: true });
+    fs.writeFileSync(sidecar, JSON.stringify({ version: 1, lenses: [{ name: "L", ranges: [{ label: "One", color: "#111111", startLine: 1, endLine: 3 }] }] }));
+    p.run({ hook_event_name: "PostFileSave", session_id: "s", cwd: p.root, file_path: sidecar });
+    assert(JSON.parse(fs.readFileSync(sidecar, "utf8")).lenses[0].ranges[0].anchor === "# guide", "Kiro's save event stamps the sidecar");
+    // Cursor's cwd (the plugin folder) never becomes the root: no sidecar folder appears there.
+    assert(!fs.existsSync(path.join(path.dirname(p.script), ".mymd")), "nothing written next to the plugin");
+  } finally {
+    p.cleanup();
+  }
+});
+
 check("plugin hook files: the shared Claude-schema entry and Copilot's flat one run the same script", () => {
   const shared = readJson(PLUGIN + "/hooks/hooks.json");
   const group = shared.hooks.PostToolUse[0];
