@@ -1,0 +1,11 @@
+{
+  "mymarkdown": {
+    "PostToolUse": [
+      {
+        "matcher": "write_to_file|replace_file_content|multi_replace_file_content",
+        "hooks": [{ "type": "command", "command": "node hooks/markdown-labels.cjs", "timeout": 15 }]
+      }
+    ],
+    "PostInvocation": [{ "type": "command", "command": "node hooks/markdown-labels.cjs", "timeout": 15 }]
+  }
+}

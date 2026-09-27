@@ -28,6 +28,7 @@
 "use strict";
 
 const fs = require("fs");
+const os = require("os");
 const path = require("path");
 
 const MIN_WORDS = 400;
@@ -58,15 +59,20 @@ function projectRoot(payload) {
   const env = process.env;
   const fromEnv = env.CLAUDE_PROJECT_DIR || env.DEVIN_PROJECT_DIR || env.COPILOT_PROJECT_DIR || env.AUGMENT_PROJECT_DIR || env.CURSOR_PROJECT_DIR;
   const workspace = (Array.isArray(payload.workspace_roots) && payload.workspace_roots[0]) || (Array.isArray(payload.workspacePaths) && payload.workspacePaths[0]);
-  const cwd = typeof payload.cwd === "string" && payload.cwd ? payload.cwd : null;
-  return { root: path.resolve(fromEnv || workspace || (cwd ? gitTop(cwd) : process.cwd())), inProject: false };
+  const written = typeof payload.cwd === "string" && payload.cwd ? payload.cwd : (payload.toolCall && payload.toolCall.args && payload.toolCall.args.TargetFile ? path.dirname(payload.toolCall.args.TargetFile) : null);
+  return { root: path.resolve(fromEnv || workspace || (written ? gitTop(written) : process.cwd())), inProject: false };
+}
+
+/** Antigravity can only inject context from PostInvocation, so PostToolUse leaves the nudge here. */
+function markerFor(payload) {
+  return path.join(os.tmpdir(), "mymarkdown-labels-" + String(payload.conversationId).replace(/[^\w.-]/g, "_"));
 }
 
 /** How the agent lists the skill: a plugin's skill is namespaced in some agents. */
 function skillName(dialect, inProject) {
   if (inProject) return "markdown-labels";
   if (dialect === "cursor") return "/markdown-labels";
-  if (dialect === "claude" || dialect === "devin") return "mymarkdown:markdown-labels";
+  if (dialect === "claude" || dialect === "devin" || dialect === "antigravity") return "mymarkdown:markdown-labels";
   return "markdown-labels";
 }
 
@@ -80,6 +86,7 @@ const WRITE_TOOLS = new Set([
   "write", "notebook_edit", // Devin (edit and apply_patch are above)
   "save-file", "str-replace-editor", // Augment
   "Write", // Kiro's PostFileSave is mapped to this below
+  "write_to_file", "replace_file_content", "multi_replace_file_content", // Antigravity
 ]);
 
 // Same anchors as anchorsFor in vscode-extension/lib/labels.js; check.js holds them equal.
@@ -217,6 +224,11 @@ function nudge(root, file, relative, skill) {
  * file_changes; Kiro's save event names one file), and how a patch is carried.
  */
 function detect(payload) {
+  if ("conversationId" in payload && ("toolCall" in payload || "invocationNum" in payload)) {
+    const call = payload.toolCall;
+    const target = call && call.args && typeof call.args.TargetFile === "string" ? call.args.TargetFile : null;
+    return { dialect: "antigravity", tool: call ? call.name : null, input: target ? { file_path: target } : {}, event: call ? "tool" : "invocation" };
+  }
   if ("toolName" in payload) return { dialect: "copilot", tool: payload.toolName, input: payload.toolArgs };
   if (payload.hook_event_name === "PostFileSave" && typeof payload.file_path === "string") {
     return { dialect: "kiro", tool: "Write", input: { file_path: payload.file_path } };
@@ -253,6 +265,22 @@ function main(payload) {
   // Copilot CLI's own format is camelCase and takes its context at the top level; Claude
   // Code, VS Code and Codex send snake_case and read hookSpecificOutput.
   const detected = detect(payload);
+  if (detected.dialect === "antigravity") {
+    if (detected.event === "invocation") {
+      const marker = markerFor(payload);
+      let note = null;
+      try {
+        note = fs.readFileSync(marker, "utf8");
+        fs.rmSync(marker, { force: true });
+      } catch {
+        // No write since the last invocation.
+      }
+      process.stdout.write(note ? JSON.stringify({ injectSteps: [{ userMessage: note }] }) : "{}");
+      return;
+    }
+    // A tool step: answer {} whatever happens, and keep the nudge for PostInvocation.
+    if (!detected.tool || !WRITE_TOOLS.has(detected.tool)) return void process.stdout.write("{}");
+  }
   const { dialect } = detected;
   const tool = detected.tool;
   if (!WRITE_TOOLS.has(tool)) return;
@@ -295,12 +323,17 @@ function main(payload) {
     const note = nudge(root, file, relative, skillName(dialect, inProject));
     if (note) notes.push(note);
   }
-  if (!notes.length) return;
-  respond(dialect, notes.join("\n"));
+  if (!notes.length) return void (dialect === "antigravity" && process.stdout.write("{}"));
+  respond(dialect, notes.join("\n"), payload);
 }
 
 /** Each agent reads the nudge from a different place in the hook's output. */
-function respond(dialect, additionalContext) {
+function respond(dialect, additionalContext, payload) {
+  if (dialect === "antigravity") {
+    fs.writeFileSync(markerFor(payload), additionalContext);
+    process.stdout.write("{}");
+    return;
+  }
   const out =
     dialect === "copilot"
       ? { additionalContext }

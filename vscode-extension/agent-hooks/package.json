@@ -11,7 +11,8 @@
     "cli.js",
     "install.js",
     "files/",
-    "plugin/"
+    "plugin/",
+    "plugin-antigravity/"
   ],
   "engines": {
     "node": ">=18"

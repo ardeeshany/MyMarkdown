@@ -1671,6 +1671,44 @@ check("plugin hook: every agent's payload shape reaches the nudge, in that agent
   }
 });
 
+check("Antigravity: PostToolUse stamps and leaves a marker, PostInvocation delivers the nudge once, non-tool steps are harmless", () => {
+  const p = pluginRepo();
+  const marker = path.join(os.tmpdir(), "mymarkdown-labels-conv-1");
+  try {
+    fs.rmSync(marker, { force: true });
+    const write = { stepIdx: 3, toolCall: { name: "write_to_file", args: { TargetFile: p.doc, CodeContent: "x" } }, conversationId: "conv-1", workspacePaths: [p.root], error: "" };
+    assert(JSON.stringify(p.run(write)) === "{}", "PostToolUse must answer {} and nothing else");
+    assert(fs.existsSync(marker), "a marker for this conversation");
+    const inject = p.run({ invocationNum: 2, initialNumSteps: 3, conversationId: "conv-1", workspacePaths: [p.root] });
+    assert(inject && inject.injectSteps && inject.injectSteps[0].userMessage.includes("docs/big.md is now"), "PostInvocation carries the nudge: " + JSON.stringify(inject));
+    includes(inject.injectSteps[0].userMessage, "mymarkdown:markdown-labels", "the skill as Antigravity lists it");
+    assert(JSON.stringify(p.run({ invocationNum: 3, initialNumSteps: 3, conversationId: "conv-1" })) === "{}", "delivered once");
+    assert(JSON.stringify(p.run({ stepIdx: 4, toolCall: null, conversationId: "conv-1" })) === "{}", "a non-tool step");
+    // The root comes from the written file's repository when workspacePaths is empty.
+    assert(JSON.stringify(p.run({ stepIdx: 5, toolCall: { name: "replace_file_content", args: { TargetFile: p.doc } }, conversationId: "conv-1", workspacePaths: [] })) === "{}");
+    assert(fs.existsSync(marker), "nudged again after a second write");
+  } finally {
+    fs.rmSync(marker, { force: true });
+    p.cleanup();
+  }
+});
+
+check("Antigravity folder: its own manifest and hook schema, copies of the hook and skill held equal", () => {
+  const dir = "agent-hooks/plugin-antigravity";
+  const manifest = readJson(dir + "/plugin.json");
+  assert(manifest.name === "mymarkdown" && manifest.version === PKG_VERSION && manifest.description, "manifest");
+  const hooks = readJson(dir + "/hooks.json").mymarkdown;
+  assert(hooks.PostToolUse[0].matcher === "write_to_file|replace_file_content|multi_replace_file_content", "tool matcher");
+  for (const entry of [hooks.PostToolUse[0].hooks[0], hooks.PostInvocation[0]]) {
+    assert(entry.type === "command" && entry.command === "node hooks/markdown-labels.cjs" && entry.timeout === 15, "relative command, 15 s: " + JSON.stringify(entry));
+  }
+  for (const file of ["hooks/markdown-labels.cjs", "skills/markdown-labels/SKILL.md"]) {
+    assert(fs.readFileSync(path.join(__dirname, dir, file), "utf8") === fs.readFileSync(path.join(__dirname, PLUGIN, file), "utf8"), file + " has drifted from the plugin's copy");
+  }
+  assert(!fs.existsSync(path.join(__dirname, dir, "hooks", "hooks.json")), "no Claude-schema hook file here: agy would fail to parse it");
+  assert(readJson("agent-hooks/package.json").files.includes("plugin-antigravity/"), "shipped in the npm package");
+});
+
 check("plugin hook files: the shared Claude-schema entry and Copilot's flat one run the same script", () => {
   const shared = readJson(PLUGIN + "/hooks/hooks.json");
   const group = shared.hooks.PostToolUse[0];
