@@ -1546,6 +1546,22 @@ check("plugin manifests: one name, one version, every field the listings ask for
   assert(fs.readFileSync(path.join(__dirname, PLUGIN, "LICENSE"), "utf8") === fs.readFileSync(path.join(__dirname, "LICENSE"), "utf8"), "plugin LICENSE is a copy of the extension's");
 });
 
+check("marketplace files: each reader's format, the same plugin name and path, no version in Claude's entry", () => {
+  const rel = "./vscode-extension/agent-hooks/plugin";
+  const claude = JSON.parse(fs.readFileSync(path.join(REPO, ".claude-plugin", "marketplace.json"), "utf8"));
+  assert(claude.name === "mymarkdown-plugins" && claude.owner && claude.owner.name, "Claude marketplace name/owner");
+  assert(claude.plugins.length === 1 && claude.plugins[0].name === "mymarkdown" && claude.plugins[0].source === rel, "Claude entry");
+  assert(!("version" in claude.plugins[0]), "Claude's validate complains when the version is in both the manifest and the entry");
+  const codex = JSON.parse(fs.readFileSync(path.join(REPO, ".agents", "plugins", "marketplace.json"), "utf8"));
+  assert(codex.name === "mymarkdown-plugins", "Codex marketplace name");
+  const entry = codex.plugins[0];
+  assert(entry.name === "mymarkdown" && entry.source && entry.source.source === "local" && entry.source.path === rel, "Codex entry: a local source for a subfolder plugin: " + JSON.stringify(entry));
+  const augment = JSON.parse(fs.readFileSync(path.join(REPO, ".augment-plugin", "marketplace.json"), "utf8"));
+  assert(augment.name === "mymarkdown-plugins" && augment.plugins[0].name === "mymarkdown" && augment.plugins[0].source === rel, "Augment entry");
+  assert(augment.version === PKG_VERSION && augment.plugins[0].version === PKG_VERSION, "Augment carries the version");
+  assert(fs.existsSync(path.join(REPO, rel, "plugin.json")), "every source points at the plugin folder");
+});
+
 // Installing the hook and skill into other projects: agent-hooks/install.js, shared by the
 // extension's command and the mymarkdown-hooks CLI.
 const Hooks = require("./agent-hooks/install.js");
