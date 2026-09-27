@@ -89,10 +89,10 @@ const WRITE_TOOLS = new Set([
   "write_to_file", "replace_file_content", "multi_replace_file_content", // Antigravity
 ]);
 
-// The installer's .agents/hooks copy only ever gets written for these dialects; yielding to
-// it for any other one (cursor, devin, augment, antigravity) would silence a plugin that has
-// nothing installed to conflict with.
-const YIELDS = new Set(["claude", "copilot", "kiro"]);
+// These are the dialects whose per-repo config the installer writes, or that run it anyway:
+// Cursor loads .claude/settings.json too, setting CLAUDE_PROJECT_DIR for Claude compatibility.
+// Devin, Augment and Antigravity have no per-repo copy running, so they never yield to one.
+const YIELDS = new Set(["claude", "copilot", "cursor", "kiro"]);
 
 // Same anchors as anchorsFor in vscode-extension/lib/labels.js; check.js holds them equal.
 const ANCHOR_LENGTH = 500;
@@ -247,7 +247,10 @@ function detect(payload) {
     return { dialect: "augment", tool, input: { paths: paths.map((p) => path.resolve(base, p)) } };
   }
   if (payload.hook_event_name === "postToolUse" || "cursor_version" in payload) return { dialect: "cursor", tool, input };
-  if (typeof tool === "string" && /^(write|edit|apply_patch|notebook_edit)$/.test(tool)) {
+  // Devin never sends a cwd; Codex and Claude Code always do. Without that check, a shared
+  // tool name (apply_patch) would call Codex Devin, and Codex's own per-repo copy in
+  // .codex/hooks.json would never get the chance to yield to it.
+  if (typeof tool === "string" && /^(write|edit|apply_patch|notebook_edit)$/.test(tool) && typeof payload.cwd !== "string") {
     if (payload.tool_response && payload.tool_response.success === false) return { dialect: "devin", tool: null, input };
     return { dialect: "devin", tool, input };
   }
@@ -290,10 +293,11 @@ function main(payload) {
     // front, before anything below gets a chance to return early or throw (main's own
     // top-level catch would otherwise swallow the error and leave stdout empty).
     process.stdout.write("{}");
-    if (!detected.tool || !WRITE_TOOLS.has(detected.tool)) return;
   }
   const { dialect } = detected;
   const tool = detected.tool;
+  // WRITE_TOOLS.has(null) is false, so a non-tool or non-write Antigravity step (already
+  // answered {} above) is caught here too, same as every other dialect.
   if (!WRITE_TOOLS.has(tool)) return;
   let input = detected.input;
   // Arguments may arrive JSON-encoded, or as a bare patch (Copilot's apply_patch).
@@ -310,7 +314,7 @@ function main(payload) {
 
   const { root: ROOT, inProject } = projectRoot(payload);
   // A project with its own per-repo install is that copy's business; two nudges help nobody.
-  // Only true for a dialect the installer actually writes one for (see YIELDS above).
+  // Only true when a per-repo copy actually runs for this dialect (see YIELDS above).
   if (!inProject && YIELDS.has(dialect) && fs.existsSync(path.join(ROOT, ".agents", "hooks", "markdown-labels.cjs"))) return;
   // Relative paths are relative to where the agent works, which as a plugin is never here.
   const base = (typeof payload.cwd === "string" && payload.cwd) || (inProject ? process.cwd() : ROOT);

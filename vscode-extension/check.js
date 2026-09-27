@@ -1623,6 +1623,18 @@ check("plugin hook: yields to a project that has its own per-repo install", () =
     fs.writeFileSync(path.join(p.root, ".agents", "hooks", "markdown-labels.cjs"), "// the project's own copy\n");
     const out = p.run(write, { env: { CLAUDE_PROJECT_DIR: p.root } });
     assert(out === null, "the project's own hook speaks for it; the plugin must stay quiet, got " + JSON.stringify(out));
+
+    // Codex's own per-repo copy runs from .codex/hooks.json: a shared tool name (apply_patch)
+    // must not be mistaken for Devin, which has no per-repo copy and so never yields.
+    const patch = "*** Begin Patch\n*** Update File: docs/big.md\n@@\n-a\n+b\n*** End Patch";
+    const codex = p.run({ hook_event_name: "PostToolUse", tool_name: "apply_patch", tool_input: patch, cwd: p.root });
+    assert(codex === null, "Codex's own per-repo copy speaks for it too, got " + JSON.stringify(codex));
+
+    // Cursor loads .claude/settings.json too (setting CLAUDE_PROJECT_DIR for Claude
+    // compatibility, per cursor.com/docs/agent/hooks), so its per-repo copy runs there as well.
+    const cursor = p.run({ hook_event_name: "postToolUse", cursor_version: "3.21.18", conversation_id: "c1", workspace_roots: [p.root], cwd: path.dirname(p.script), tool_name: "Write", tool_input: { file_path: p.doc, content: "x" }, tool_output: "{}" });
+    assert(cursor === null, "Cursor's own per-repo copy speaks for it too, got " + JSON.stringify(cursor));
+
     // A positive control: without the per-repo install, the very same payload nudges. This
     // proves the silence above came from the yield rule, not from an unrelated fault (a wrong
     // root, a thrown error, a tool-name change) that the hook's catch-all would swallow too.
@@ -1700,6 +1712,10 @@ check("Antigravity: PostToolUse stamps and leaves a marker, PostInvocation deliv
     fs.writeFileSync(sidecar, JSON.stringify({ version: 1, lenses: [{ name: "L", ranges: [{ label: "One", color: "#111111", startLine: 1, endLine: 3 }] }] }));
     assert(JSON.stringify(p.run({ stepIdx: 7, toolCall: { name: "write_to_file", args: { TargetFile: sidecar, CodeContent: "x" } }, conversationId: "conv-1", workspacePaths: [p.root] })) === "{}", "a sidecar write still answers {}");
     assert(JSON.parse(fs.readFileSync(sidecar, "utf8")).lenses[0].ranges[0].anchor === "# guide", "the sidecar's unanchored range was stamped");
+
+    // A malformed TargetFile and workspacePaths entry must not turn the {} print into a
+    // silent crash (main's own top-level catch would otherwise swallow the thrown error).
+    assert(JSON.stringify(p.run({ stepIdx: 11, toolCall: { name: "write_to_file", args: { TargetFile: 42 } }, conversationId: "conv-1", workspacePaths: [42] })) === "{}", "malformed args still answer {}");
 
     // The controller's ruling: Antigravity has no per-repo install of its own, so a project's
     // .agents/hooks copy - written for claude/copilot/kiro - must not silence it.
