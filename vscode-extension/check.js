@@ -1943,7 +1943,7 @@ check("docs: the README's install lines name the marketplace, the version is one
   }
   includes(readme, "Install once for every project", "the section");
   const npm = fs.readFileSync(path.join(__dirname, "agent-hooks", "README.md"), "utf8");
-  includes(npm, "not affiliated", "the npm README disowns the unrelated mymarkdown-* packages");
+  includes(npm, "affiliated with the `mymarkdown-cli`", "the npm README disowns the unrelated mymarkdown-* packages");
   includes(npm, "opencode plugin add mymarkdown-hooks", "the npm README says it is the OpenCode plugin");
   for (const copy of [".agents/skills/markdown-labels/SKILL.md", ".claude/skills/markdown-labels/SKILL.md"]) {
     assert(fs.readFileSync(path.join(REPO, copy), "utf8") === fs.readFileSync(path.join(__dirname, PLUGIN, "skills/markdown-labels/SKILL.md"), "utf8"), copy + " drifted from the plugin's skill");

@@ -36,4 +36,4 @@ The same folder is a plugin for Claude Code, Codex, Copilot, Cursor, Windsurf an
 installed once per machine; see the extension README's "Install once for every project".
 This package is also the OpenCode plugin: `opencode plugin add mymarkdown-hooks`.
 
-not affiliated with the `mymarkdown-cli` or `mymarkdown-mcp` packages on npm.
+Not affiliated with the `mymarkdown-cli` or `mymarkdown-mcp` packages on npm.
