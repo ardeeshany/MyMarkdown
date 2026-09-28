@@ -1271,6 +1271,23 @@ check("a sidecar written outside the extension (by an agent) shows up without ed
     });
 });
 
+check("an unanchored sidecar (written by an agent without a hook) is stamped on read, once", () => {
+  const doc = "# A\n\nabc\n\n## B\n\ndef\n";
+  const sidecars = { "/ws/.mymd/doc.md.json": { version: 1, lenses: [{ name: "Parts", ranges: [{ label: "One", color: "#111111", startLine: 5, endLine: 7 }] }] } };
+  const host = driveLabelCommands(sidecars, fakeMarkdownDocument("/ws/doc.md", doc));
+  return settle().then(() => {
+    assert(host.written.length === 1, "exactly one write, got " + host.written.length);
+    const range = host.written[0].body.lenses[0].ranges[0];
+    assert(range.anchor === "## b" && host.written[0].body.sourceHash, "the write carries anchors and a hash: " + JSON.stringify(range));
+    // The watcher sees the file it just wrote: no second write.
+    sidecars["/ws/.mymd/doc.md.json"] = host.written[0].body;
+    host.watchers[0].handlers.change(sidecarUri("/ws/.mymd/doc.md.json"));
+    return settle();
+  }).then(() => {
+    assert(host.written.length === 1, "a stamped sidecar is not written again");
+  });
+});
+
 check("changing labels.storagePath re-points the watcher and rereads labels from the new folder", () => {
   const doc = "# A\n\nabc\n";
   const lens = (name) =>

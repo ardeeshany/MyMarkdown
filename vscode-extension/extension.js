@@ -263,6 +263,9 @@ async function writeSidecar(document, lenses) {
   return true;
 }
 
+/** Documents whose unanchored sidecar is being written back with anchors. */
+const stamping = new Set();
+
 /** Every lens for a document, re-anchored against its current text. */
 async function lensesFor(document) {
   const key = document.uri.toString();
@@ -271,6 +274,13 @@ async function lensesFor(document) {
   const raw = await readSidecar(document);
   const { lenses } = Labels.readLabels(raw, document.getText());
   lensCache.set(key, { version: document.version, lenses });
+  // A sidecar written by hand or by an agent with no hook has no anchors, and a range without
+  // one stays on its line numbers as the text moves. Stamp it now, the way a hook would have.
+  const unanchored = Array.isArray(raw?.lenses) && raw.lenses.some((lens) => Array.isArray(lens?.ranges) && lens.ranges.some((range) => range && !range.anchor));
+  if (unanchored && lenses.length && !stamping.has(key)) {
+    stamping.add(key);
+    writeSidecar(document, []).finally(() => stamping.delete(key));
+  }
   return lenses;
 }
 
