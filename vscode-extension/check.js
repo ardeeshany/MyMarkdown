@@ -1783,7 +1783,8 @@ check("Antigravity: PostToolUse stamps and leaves a marker, PostInvocation deliv
   const p = pluginRepo();
   // Sandboxed onto p.base (cleaned up with the rest of it): the marker's own per-user rule,
   // so the test can find what the hook actually wrote, and no race with a concurrent check.js.
-  const tmp = { env: { TMPDIR: p.base } };
+  // All three: os.tmpdir() reads TEMP/TMP on win32 and ignores TMPDIR outright.
+  const tmp = { env: { TMPDIR: p.base, TEMP: p.base, TMP: p.base } };
   const owner = typeof process.getuid === "function" ? String(process.getuid()) : os.userInfo().username;
   const markerPath = (conv) => path.join(p.base, "mymarkdown-labels-" + owner, conv);
   // A marker file for `conv` wherever it actually landed - agnostic to the exact scheme, so
@@ -1869,17 +1870,18 @@ check("Antigravity: PostToolUse stamps and leaves a marker, PostInvocation deliv
     fs.rmSync(marker4);
     const planted = path.join(p.base, "planted.txt");
     fs.writeFileSync(planted, "PLANTED");
-    fs.symlinkSync(planted, marker4);
-    const inject4 = p.run({ invocationNum: 2, initialNumSteps: 1, conversationId: "conv-4", workspacePaths: [p.root] }, tmp);
-    assert(JSON.stringify(inject4) === "{}", "a symlinked marker must be refused, not read: " + JSON.stringify(inject4));
-    assert(fs.readFileSync(planted, "utf8") === "PLANTED", "the planted file itself must be left alone");
+    if (fileSymlink(planted, marker4)) {
+      const inject4 = p.run({ invocationNum: 2, initialNumSteps: 1, conversationId: "conv-4", workspacePaths: [p.root] }, tmp);
+      assert(JSON.stringify(inject4) === "{}", "a symlinked marker must be refused, not read: " + JSON.stringify(inject4));
+      assert(fs.readFileSync(planted, "utf8") === "PLANTED", "the planted file itself must be left alone");
+    } // else: Windows without Developer Mode can't create the symlink; nothing to assert here.
 
     // Controller's ruling: no conversationId, no marker - nothing is read or written. A fresh,
     // unlabelled doc, so there is a real nudge on offer that a broken guard could still leak.
     const doc5 = path.join(p.root, "docs", "five.md");
     fs.writeFileSync(doc5, "# Five\n\n## One\n\n" + "word ".repeat(420) + "\n\n## Two\n\nend\n");
     const emptyConvDir = fs.mkdtempSync(path.join(p.base, "empty-conv-"));
-    assert(JSON.stringify(p.run({ stepIdx: 13, toolCall: { name: "write_to_file", args: { TargetFile: doc5, CodeContent: "x" } }, conversationId: "", workspacePaths: [p.root] }, { env: { TMPDIR: emptyConvDir } })) === "{}", "an empty conversationId still answers {}");
+    assert(JSON.stringify(p.run({ stepIdx: 13, toolCall: { name: "write_to_file", args: { TargetFile: doc5, CodeContent: "x" } }, conversationId: "", workspacePaths: [p.root] }, { env: { TMPDIR: emptyConvDir, TEMP: emptyConvDir, TMP: emptyConvDir } })) === "{}", "an empty conversationId still answers {}");
     assert(fs.readdirSync(emptyConvDir).length === 0, "no marker folder entry is created for an empty conversationId");
   } finally {
     p.cleanup();
