@@ -20,7 +20,14 @@ function nudge(tool, args, cwd) {
   const tool_input = name === "apply_patch" ? { input: args.patchText } : { file_path: args.filePath ?? args.path };
   return new Promise((resolve) => {
     let out = "";
-    const child = spawn(process.execPath.includes("node") ? process.execPath : "node", [HOOK], { cwd, stdio: ["pipe", "pipe", "ignore"] });
+    // Bun-compiled OpenCode and npm-installed OpenCode (opencode-linux-x64/bin/opencode) both
+    // have an execPath that is not Node but whose full path can still contain the substring
+    // "node" (e.g. under node_modules); check the binary's own basename, and fall back to the
+    // "node" on PATH, so we never spawn OpenCode itself with the hook as its argument.
+    const node = /^node(\.exe)?$/i.test(path.basename(process.execPath)) ? process.execPath : "node";
+    // A hook that never exits must not leave the tool call pending forever; every other host
+    // runs this hook with the same 15 s timeout, and Node kills the child and fires "close".
+    const child = spawn(node, [HOOK], { cwd, stdio: ["pipe", "pipe", "ignore"], timeout: 15000 });
     child.stdout.on("data", (chunk) => (out += chunk));
     child.on("close", () => {
       try {
