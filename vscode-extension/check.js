@@ -1830,7 +1830,9 @@ check("OpenCode adapter: registers the skill and appends the nudge to a write's 
 });
 
 check("Kiro hook files: a prompt nudge on Markdown saves, a command that stamps sidecars, the global and per-repo forms", () => {
-  for (const [file, command] of [["agent-hooks/plugin/kiro/markdown-labels.json", 'node "$HOME/.kiro/hooks/markdown-labels.cjs"; exit 0'], ["agent-hooks/files/kiro-hooks.json", 'node "${WORKSPACE_ROOT}/.agents/hooks/markdown-labels.cjs"; exit 0']]) {
+  const walkingLauncher =
+    "node -e \"let p=require('path'),f=require('fs'),d=process.env.CLAUDE_PROJECT_DIR||process.cwd(),h;while(!f.existsSync(h=p.join(d,'.agents/hooks/markdown-labels.cjs'))&&p.dirname(d)!==d)d=p.dirname(d);f.existsSync(h)&&require(h)\"";
+  for (const [file, command] of [["agent-hooks/plugin/kiro/markdown-labels.json", 'node "$HOME/.kiro/hooks/markdown-labels.cjs"; exit 0'], ["agent-hooks/files/kiro-hooks.json", walkingLauncher]]) {
     const data = readJson(file);
     assert(data.version === "v1" && data.hooks.length === 2, file + " shape");
     const [prompt, stamp] = data.hooks;

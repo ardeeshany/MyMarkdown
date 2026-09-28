@@ -45,7 +45,7 @@ const SHIPPED = new Set([
   'node "$CLAUDE_PROJECT_DIR/.claude/hooks/markdown-labels.cjs"',
   'node "${CLAUDE_PROJECT_DIR:-.}/.agents/hooks/markdown-labels.cjs" --claude-settings',
   "node .agents/hooks/markdown-labels.cjs",
-  'node "${WORKSPACE_ROOT}/.agents/hooks/markdown-labels.cjs"; exit 0',
+  "node -e \"let p=require('path'),f=require('fs'),d=process.env.CLAUDE_PROJECT_DIR||process.cwd(),h;while(!f.existsSync(h=p.join(d,'.agents/hooks/markdown-labels.cjs'))&&p.dirname(d)!==d)d=p.dirname(d);f.existsSync(h)&&require(h)\"",
 ]);
 for (const target of TARGETS.filter((t) => t.merge)) {
   for (const groups of Object.values(JSON.parse(fs.readFileSync(path.join(TEMPLATES, target.from), "utf8")).hooks)) {

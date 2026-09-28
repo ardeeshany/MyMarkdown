@@ -16,7 +16,7 @@
       "description": "Stamp text anchors into a label sidecar the agent just wrote, so its labels survive later edits.",
       "trigger": "PostFileSave",
       "matcher": "[\\\\/]\\.mymd[\\\\/].+\\.json$",
-      "action": { "type": "command", "command": "node \"${WORKSPACE_ROOT}/.agents/hooks/markdown-labels.cjs\"; exit 0" },
+      "action": { "type": "command", "command": "node -e \"let p=require('path'),f=require('fs'),d=process.env.CLAUDE_PROJECT_DIR||process.cwd(),h;while(!f.existsSync(h=p.join(d,'.agents/hooks/markdown-labels.cjs'))&&p.dirname(d)!==d)d=p.dirname(d);f.existsSync(h)&&require(h)\"" },
       "timeout": 15
     }
   ]
