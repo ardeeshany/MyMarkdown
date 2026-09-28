@@ -29,3 +29,11 @@ replaces any edits you made to them.
 Needs Node.js 18 or later. Codex also asks you to trust the project and approve the hook once, in
 `/hooks`. The same install is one command inside VS Code: **MyMarkdown: Install Label Hooks for
 Coding Agents**.
+
+## As a plugin
+
+The same folder is a plugin for Claude Code, Codex, Copilot, Cursor, Windsurf and others,
+installed once per machine; see the extension README's "Install once for every project".
+This package is also the OpenCode plugin: `opencode plugin add mymarkdown-hooks`.
+
+not affiliated with the `mymarkdown-cli` or `mymarkdown-mcp` packages on npm.

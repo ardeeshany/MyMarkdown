@@ -1936,6 +1936,20 @@ check("Kiro hook files: a prompt nudge on Markdown saves, a command that stamps 
   }
 });
 
+check("docs: the README's install lines name the marketplace, the version is one everywhere, and copies are in step", () => {
+  const readme = fs.readFileSync(path.join(__dirname, "README.md"), "utf8");
+  for (const line of ["claude plugin install mymarkdown@mymarkdown-plugins", "copilot plugin install mymarkdown@mymarkdown-plugins", "codex plugin add mymarkdown@mymarkdown-plugins", "devin plugins install ardeeshany/MyMarkdown#vscode-extension/agent-hooks/plugin", "opencode plugin add mymarkdown-hooks", "plugin-antigravity", "~/.kiro/hooks", "~/.agents/skills"]) {
+    includes(readme, line, "extension README");
+  }
+  includes(readme, "Install once for every project", "the section");
+  const npm = fs.readFileSync(path.join(__dirname, "agent-hooks", "README.md"), "utf8");
+  includes(npm, "not affiliated", "the npm README disowns the unrelated mymarkdown-* packages");
+  includes(npm, "opencode plugin add mymarkdown-hooks", "the npm README says it is the OpenCode plugin");
+  for (const copy of [".agents/skills/markdown-labels/SKILL.md", ".claude/skills/markdown-labels/SKILL.md"]) {
+    assert(fs.readFileSync(path.join(REPO, copy), "utf8") === fs.readFileSync(path.join(__dirname, PLUGIN, "skills/markdown-labels/SKILL.md"), "utf8"), copy + " drifted from the plugin's skill");
+  }
+});
+
 check("plugin hook files: the shared Claude-schema entry and Copilot's flat one run the same script", () => {
   const shared = readJson(PLUGIN + "/hooks/hooks.json");
   const group = shared.hooks.PostToolUse[0];
