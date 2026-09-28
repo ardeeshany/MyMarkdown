@@ -1750,6 +1750,9 @@ check("plugin hook: every agent's payload shape reaches the nudge, in that agent
       ["Devin apply_patch (raw_patch)", { hook_event_name: "PostToolUse", tool_name: "apply_patch", tool_input: { raw_patch: patch }, tool_response: { success: true } }, { DEVIN_PROJECT_DIR: p.root }, "hookSpecificOutput", "mymarkdown:markdown-labels"],
       // Cursor: camelCase event, the root from workspace_roots, a flat answer, and cwd is NOT the project.
       ["Cursor", { hook_event_name: "postToolUse", cursor_version: "3.21.18", conversation_id: "c1", workspace_roots: [p.root], cwd: path.dirname(p.script), tool_name: "Write", tool_input: { file_path: p.doc, content: "x" }, tool_output: "{}" }, {}, "additional_context", "/markdown-labels"],
+      // Cursor with a relative file_path: cwd is the plugin folder, never the project, so a
+      // relative path must resolve against workspace_roots, not against cwd.
+      ["Cursor relative file_path", { hook_event_name: "postToolUse", cursor_version: "3.21.18", conversation_id: "c2", workspace_roots: [p.root], cwd: path.dirname(p.script), tool_name: "Write", tool_input: { file_path: "docs/big.md", content: "x" }, tool_output: "{}" }, {}, "additional_context", "/markdown-labels"],
       // Augment: paths relative to the workspace, listed in file_changes.
       ["Augment", { hook_event_name: "PostToolUse", tool_name: "save-file", tool_input: {}, file_changes: [{ path: "docs/big.md" }], workspace_roots: [p.root] }, { AUGMENT_PROJECT_DIR: p.root }, "hookSpecificOutput", "markdown-labels"],
       // Qoder CLI: Claude's shape.
@@ -1778,24 +1781,42 @@ check("plugin hook: every agent's payload shape reaches the nudge, in that agent
 
 check("Antigravity: PostToolUse stamps and leaves a marker, PostInvocation delivers the nudge once, non-tool steps are harmless", () => {
   const p = pluginRepo();
-  const marker = path.join(os.tmpdir(), "mymarkdown-labels-conv-1");
+  // Sandboxed onto p.base (cleaned up with the rest of it): the marker's own per-user rule,
+  // so the test can find what the hook actually wrote, and no race with a concurrent check.js.
+  const tmp = { env: { TMPDIR: p.base } };
+  const owner = typeof process.getuid === "function" ? String(process.getuid()) : os.userInfo().username;
+  const markerPath = (conv) => path.join(p.base, "mymarkdown-labels-" + owner, conv);
+  // A marker file for `conv` wherever it actually landed - agnostic to the exact scheme, so
+  // it also finds a pre-fix, owner-less marker when this check is run against old code.
+  const findMarker = (conv) => {
+    const stack = [p.base];
+    while (stack.length) {
+      const dir = stack.pop();
+      for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+        const full = path.join(dir, entry.name);
+        if (entry.isDirectory()) stack.push(full);
+        else if (entry.name.includes(conv)) return full;
+      }
+    }
+    return null;
+  };
   try {
-    fs.rmSync(marker, { force: true });
+    const marker = markerPath("conv-1");
     const write = { stepIdx: 3, toolCall: { name: "write_to_file", args: { TargetFile: p.doc, CodeContent: "x" } }, conversationId: "conv-1", workspacePaths: [p.root], error: "" };
-    assert(JSON.stringify(p.run(write)) === "{}", "PostToolUse must answer {} and nothing else");
+    assert(JSON.stringify(p.run(write, tmp)) === "{}", "PostToolUse must answer {} and nothing else");
     assert(fs.existsSync(marker), "a marker for this conversation");
     // A non-tool PostToolUse step (no invocationNum) between the write and the next
     // invocation is a tool step, not an invocation: it must answer {} without touching the
     // marker, or the real PostInvocation below would find nothing left to deliver.
-    assert(JSON.stringify(p.run({ stepIdx: 4, toolCall: null, conversationId: "conv-1" })) === "{}", "a non-tool step answers {}");
+    assert(JSON.stringify(p.run({ stepIdx: 4, toolCall: null, conversationId: "conv-1" }, tmp)) === "{}", "a non-tool step answers {}");
     assert(fs.existsSync(marker), "a non-tool step must not consume the marker");
-    const inject = p.run({ invocationNum: 2, initialNumSteps: 3, conversationId: "conv-1", workspacePaths: [p.root] });
+    const inject = p.run({ invocationNum: 2, initialNumSteps: 3, conversationId: "conv-1", workspacePaths: [p.root] }, tmp);
     assert(inject && inject.injectSteps && inject.injectSteps[0].userMessage.includes("docs/big.md is now"), "PostInvocation carries the nudge: " + JSON.stringify(inject));
     includes(inject.injectSteps[0].userMessage, "mymarkdown:markdown-labels", "the skill as Antigravity lists it");
-    assert(JSON.stringify(p.run({ invocationNum: 3, initialNumSteps: 3, conversationId: "conv-1" })) === "{}", "delivered once");
-    assert(JSON.stringify(p.run({ stepIdx: 5, toolCall: null, conversationId: "conv-1" })) === "{}", "a non-tool step with no marker either");
+    assert(JSON.stringify(p.run({ invocationNum: 3, initialNumSteps: 3, conversationId: "conv-1" }, tmp)) === "{}", "delivered once");
+    assert(JSON.stringify(p.run({ stepIdx: 5, toolCall: null, conversationId: "conv-1" }, tmp)) === "{}", "a non-tool step with no marker either");
     // The root comes from the written file's repository when workspacePaths is empty.
-    assert(JSON.stringify(p.run({ stepIdx: 6, toolCall: { name: "replace_file_content", args: { TargetFile: p.doc } }, conversationId: "conv-1", workspacePaths: [] })) === "{}");
+    assert(JSON.stringify(p.run({ stepIdx: 6, toolCall: { name: "replace_file_content", args: { TargetFile: p.doc } }, conversationId: "conv-1", workspacePaths: [] }, tmp)) === "{}");
     assert(fs.existsSync(marker), "nudged again after a second write");
 
     // A tool step that only touches a sidecar leaves nothing to nudge, but the extension's
@@ -1803,50 +1824,64 @@ check("Antigravity: PostToolUse stamps and leaves a marker, PostInvocation deliv
     const sidecar = path.join(p.root, ".mymd", "docs", "big.md.json");
     fs.mkdirSync(path.dirname(sidecar), { recursive: true });
     fs.writeFileSync(sidecar, JSON.stringify({ version: 1, lenses: [{ name: "L", ranges: [{ label: "One", color: "#111111", startLine: 1, endLine: 3 }] }] }));
-    assert(JSON.stringify(p.run({ stepIdx: 7, toolCall: { name: "write_to_file", args: { TargetFile: sidecar, CodeContent: "x" } }, conversationId: "conv-1", workspacePaths: [p.root] })) === "{}", "a sidecar write still answers {}");
+    assert(JSON.stringify(p.run({ stepIdx: 7, toolCall: { name: "write_to_file", args: { TargetFile: sidecar, CodeContent: "x" } }, conversationId: "conv-1", workspacePaths: [p.root] }, tmp)) === "{}", "a sidecar write still answers {}");
     assert(JSON.parse(fs.readFileSync(sidecar, "utf8")).lenses[0].ranges[0].anchor === "# guide", "the sidecar's unanchored range was stamped");
 
     // A malformed TargetFile and workspacePaths entry must not turn the {} print into a
     // silent crash (main's own top-level catch would otherwise swallow the thrown error).
-    assert(JSON.stringify(p.run({ stepIdx: 11, toolCall: { name: "write_to_file", args: { TargetFile: 42 } }, conversationId: "conv-1", workspacePaths: [42] })) === "{}", "malformed args still answer {}");
+    assert(JSON.stringify(p.run({ stepIdx: 11, toolCall: { name: "write_to_file", args: { TargetFile: 42 } }, conversationId: "conv-1", workspacePaths: [42] }, tmp)) === "{}", "malformed args still answer {}");
 
     // The controller's ruling: Antigravity has no per-repo install of its own, so a project's
     // .agents/hooks copy - written for claude/copilot/kiro - must not silence it.
-    const marker2 = path.join(os.tmpdir(), "mymarkdown-labels-conv-2");
-    fs.rmSync(marker2, { force: true });
     fs.mkdirSync(path.join(p.root, ".agents", "hooks"), { recursive: true });
     fs.writeFileSync(path.join(p.root, ".agents", "hooks", "markdown-labels.cjs"), "// another dialect's own copy\n");
     try {
       const doc2 = path.join(p.root, "docs", "two.md");
       fs.writeFileSync(doc2, "# Two\n\n## One\n\n" + "word ".repeat(420) + "\n\n## Two\n\nend\n");
-      assert(JSON.stringify(p.run({ stepIdx: 8, toolCall: { name: "write_to_file", args: { TargetFile: doc2, CodeContent: "x" } }, conversationId: "conv-2", workspacePaths: [p.root] })) === "{}", "a write still answers {} with a per-repo install present");
-      const inject2 = p.run({ invocationNum: 2, initialNumSteps: 1, conversationId: "conv-2", workspacePaths: [p.root] });
+      assert(JSON.stringify(p.run({ stepIdx: 8, toolCall: { name: "write_to_file", args: { TargetFile: doc2, CodeContent: "x" } }, conversationId: "conv-2", workspacePaths: [p.root] }, tmp)) === "{}", "a write still answers {} with a per-repo install present");
+      const inject2 = p.run({ invocationNum: 2, initialNumSteps: 1, conversationId: "conv-2", workspacePaths: [p.root] }, tmp);
       assert(inject2 && inject2.injectSteps && inject2.injectSteps[0].userMessage.includes("docs/two.md is now"), "the nudge still reaches PostInvocation despite the per-repo install: " + JSON.stringify(inject2));
     } finally {
-      fs.rmSync(marker2, { force: true });
       fs.rmSync(path.join(p.root, ".agents"), { recursive: true, force: true });
     }
 
     // The plan-mandated fix: two writes before one PostInvocation must not lose the first
     // nudge to the second overwriting the marker.
-    const marker3 = path.join(os.tmpdir(), "mymarkdown-labels-conv-3");
-    fs.rmSync(marker3, { force: true });
-    try {
-      const docA = path.join(p.root, "docs", "alpha.md");
-      const docB = path.join(p.root, "docs", "beta.md");
-      fs.writeFileSync(docA, "# Alpha\n\n## One\n\n" + "word ".repeat(420) + "\n\n## Two\n\nend\n");
-      fs.writeFileSync(docB, "# Beta\n\n## One\n\n" + "word ".repeat(420) + "\n\n## Two\n\nend\n");
-      p.run({ stepIdx: 9, toolCall: { name: "write_to_file", args: { TargetFile: docA, CodeContent: "x" } }, conversationId: "conv-3", workspacePaths: [p.root] });
-      p.run({ stepIdx: 10, toolCall: { name: "write_to_file", args: { TargetFile: docB, CodeContent: "x" } }, conversationId: "conv-3", workspacePaths: [p.root] });
-      const inject3 = p.run({ invocationNum: 2, initialNumSteps: 1, conversationId: "conv-3", workspacePaths: [p.root] });
-      assert(inject3 && inject3.injectSteps, "the second invocation still carries a nudge: " + JSON.stringify(inject3));
-      const msg = inject3.injectSteps[0].userMessage;
-      assert(msg.includes("docs/alpha.md is now") && msg.includes("docs/beta.md is now"), "both writes' nudges survive to one PostInvocation: " + msg);
-    } finally {
-      fs.rmSync(marker3, { force: true });
-    }
+    const docA = path.join(p.root, "docs", "alpha.md");
+    const docB = path.join(p.root, "docs", "beta.md");
+    fs.writeFileSync(docA, "# Alpha\n\n## One\n\n" + "word ".repeat(420) + "\n\n## Two\n\nend\n");
+    fs.writeFileSync(docB, "# Beta\n\n## One\n\n" + "word ".repeat(420) + "\n\n## Two\n\nend\n");
+    p.run({ stepIdx: 9, toolCall: { name: "write_to_file", args: { TargetFile: docA, CodeContent: "x" } }, conversationId: "conv-3", workspacePaths: [p.root] }, tmp);
+    p.run({ stepIdx: 10, toolCall: { name: "write_to_file", args: { TargetFile: docB, CodeContent: "x" } }, conversationId: "conv-3", workspacePaths: [p.root] }, tmp);
+    const inject3 = p.run({ invocationNum: 2, initialNumSteps: 1, conversationId: "conv-3", workspacePaths: [p.root] }, tmp);
+    assert(inject3 && inject3.injectSteps, "the second invocation still carries a nudge: " + JSON.stringify(inject3));
+    const msg = inject3.injectSteps[0].userMessage;
+    assert(msg.includes("docs/alpha.md is now") && msg.includes("docs/beta.md is now"), "both writes' nudges survive to one PostInvocation: " + msg);
+
+    // Controller's ruling: a marker swapped for a symlink between the write and the next
+    // PostInvocation - planted by another local user, or pointing at a secret - must never be
+    // followed, either to read from or to append to.
+    const doc4 = path.join(p.root, "docs", "four.md");
+    fs.writeFileSync(doc4, "# Four\n\n## One\n\n" + "word ".repeat(420) + "\n\n## Two\n\nend\n");
+    p.run({ stepIdx: 12, toolCall: { name: "write_to_file", args: { TargetFile: doc4, CodeContent: "x" } }, conversationId: "conv-4", workspacePaths: [p.root] }, tmp);
+    const marker4 = findMarker("conv-4");
+    assert(marker4, "a real marker exists before the swap");
+    fs.rmSync(marker4);
+    const planted = path.join(p.base, "planted.txt");
+    fs.writeFileSync(planted, "PLANTED");
+    fs.symlinkSync(planted, marker4);
+    const inject4 = p.run({ invocationNum: 2, initialNumSteps: 1, conversationId: "conv-4", workspacePaths: [p.root] }, tmp);
+    assert(JSON.stringify(inject4) === "{}", "a symlinked marker must be refused, not read: " + JSON.stringify(inject4));
+    assert(fs.readFileSync(planted, "utf8") === "PLANTED", "the planted file itself must be left alone");
+
+    // Controller's ruling: no conversationId, no marker - nothing is read or written. A fresh,
+    // unlabelled doc, so there is a real nudge on offer that a broken guard could still leak.
+    const doc5 = path.join(p.root, "docs", "five.md");
+    fs.writeFileSync(doc5, "# Five\n\n## One\n\n" + "word ".repeat(420) + "\n\n## Two\n\nend\n");
+    const emptyConvDir = fs.mkdtempSync(path.join(p.base, "empty-conv-"));
+    assert(JSON.stringify(p.run({ stepIdx: 13, toolCall: { name: "write_to_file", args: { TargetFile: doc5, CodeContent: "x" } }, conversationId: "", workspacePaths: [p.root] }, { env: { TMPDIR: emptyConvDir } })) === "{}", "an empty conversationId still answers {}");
+    assert(fs.readdirSync(emptyConvDir).length === 0, "no marker folder entry is created for an empty conversationId");
   } finally {
-    fs.rmSync(marker, { force: true });
     p.cleanup();
   }
 });
@@ -1898,6 +1933,15 @@ check("OpenCode adapter: registers the skill and appends the nudge to a write's 
       const untouched = { title: "read", output: "…", metadata: {} };
       await hooks["tool.execute.after"]({ tool: "read", sessionID: "s", callID: "c", args: { filePath: p.doc } }, untouched);
       assert(untouched.output === "…", "1.x: a read is left alone");
+      // Controller's ruling: OpenCode runs no per-repo hook of its own, so a project's
+      // .agents/hooks copy (written for claude/copilot/cursor/kiro) must not silence it, and
+      // it must be told its own skill name, not Claude's plugin-namespaced one.
+      fs.mkdirSync(path.join(p.root, ".agents", "hooks"), { recursive: true });
+      fs.writeFileSync(path.join(p.root, ".agents", "hooks", "markdown-labels.cjs"), "// another dialect's own copy\n");
+      const stillOutput = { title: "write", output: "Wrote docs/big.md", metadata: {} };
+      await hooks["tool.execute.after"]({ tool: "write", sessionID: "s", callID: "c", args: { filePath: p.doc, content: "x" } }, stillOutput);
+      includes(stillOutput.output, "the markdown-labels skill", "1.x: OpenCode still nudges with a per-repo install present, naming its own skill");
+      assert(!/mymarkdown:/.test(stillOutput.output), "1.x: OpenCode is not Claude Code, so it must not get the plugin-namespaced skill name");
       // 2.x: ctx hooks; the nudge lands in event.result.content, the skill through the editor.
       const added = [];
       let after;

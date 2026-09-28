@@ -37,7 +37,7 @@ function nudge(tool, args, cwd) {
       }
     });
     child.on("error", () => resolve(""));
-    child.stdin.end(JSON.stringify({ hook_event_name: "PostToolUse", tool_name: name, tool_input, cwd }));
+    child.stdin.end(JSON.stringify({ hook_event_name: "PostToolUse", tool_name: name, tool_input, cwd, agent: "opencode" }));
   });
 }
 

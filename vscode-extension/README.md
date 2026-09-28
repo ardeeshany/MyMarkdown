@@ -120,7 +120,8 @@ You need Node.js on your `PATH`.
 
 Instead of setting up each project, install the hook and skill once as a plugin, through
 each agent's own plugin command. It then runs in every project, and stays quiet in a project
-that has the per-project setup above. Requires Node.js 18 or later.
+that has the per-project setup above (for the agents that read the per-project files: Claude
+Code, Copilot, Cursor and Kiro). Requires Node.js 18 or later.
 
 ```
 Claude Code   claude plugin marketplace add ardeeshany/MyMarkdown
@@ -150,8 +151,8 @@ marketplace clones the repository (Claude Code users can pass
 top of the git repository the agent works in, so open that folder in VS Code. Cursor's Cloud
 Agents and Windsurf's cloud sessions do not run user plugins; the per-project setup covers
 them. Update and uninstall are each agent's own plugin commands. The install lines for
-Windsurf, Augment, Qoder, OpenCode, Antigravity and Kiro follow each tool's documentation and
-have not yet been run end to end; please report what you find.
+Windsurf, Augment, Qoder, OpenCode, Antigravity, Cursor and Kiro follow each tool's
+documentation and have not yet been run end to end; please report what you find.
 
 Then each agent may need one step of its own:
 

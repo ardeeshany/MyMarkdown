@@ -63,9 +63,37 @@ function projectRoot(payload) {
   return { root: path.resolve(fromEnv || workspace || (written ? gitTop(written) : process.cwd())), inProject: false };
 }
 
-/** Antigravity can only inject context from PostInvocation, so PostToolUse leaves the nudge here. */
+/**
+ * Antigravity can only inject context from PostInvocation, so PostToolUse leaves the nudge
+ * here. Lives in a per-user folder, not a name any local user could predict and plant ahead of
+ * us: null when there is no conversation to key it on, so nothing is ever read or written.
+ */
 function markerFor(payload) {
-  return path.join(os.tmpdir(), "mymarkdown-labels-" + String(payload.conversationId).replace(/[^\w.-]/g, "_"));
+  if (typeof payload.conversationId !== "string" || !payload.conversationId) return null;
+  const owner = typeof process.getuid === "function" ? String(process.getuid()) : os.userInfo().username;
+  const dir = path.join(os.tmpdir(), "mymarkdown-labels-" + owner);
+  return { dir, file: path.join(dir, payload.conversationId.replace(/[^\w.-]/g, "_")) };
+}
+
+/** True once `dir` exists, owned by us and not a symlink - never throws. */
+function ownedDir(dir) {
+  try {
+    fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
+    const stat = fs.lstatSync(dir);
+    if (stat.isSymbolicLink()) return false;
+    return typeof process.getuid !== "function" || stat.uid === process.getuid();
+  } catch {
+    return false;
+  }
+}
+
+/** True when `file` does not exist or is not a symlink - the only cases safe to read or append. */
+function notASymlink(file) {
+  try {
+    return !fs.lstatSync(file).isSymbolicLink();
+  } catch {
+    return true; // Doesn't exist yet: safe either way.
+  }
 }
 
 /** How the agent lists the skill: a plugin's skill is namespaced in some agents. */
@@ -85,7 +113,6 @@ const WRITE_TOOLS = new Set([
   "apply_patch", // Codex, VS Code
   "write", "notebook_edit", // Devin (edit and apply_patch are above)
   "save-file", "str-replace-editor", // Augment
-  "Write", // Kiro's PostFileSave is mapped to this below
   "write_to_file", "replace_file_content", "multi_replace_file_content", // Antigravity
 ]);
 
@@ -247,6 +274,10 @@ function detect(payload) {
     return { dialect: "augment", tool, input: { paths: paths.map((p) => path.resolve(base, p)) } };
   }
   if (payload.hook_event_name === "postToolUse" || "cursor_version" in payload) return { dialect: "cursor", tool, input };
+  // OpenCode's adapter builds a Claude-shaped payload (it has a cwd, like Codex and Claude
+  // Code), but it runs no per-repo hook of its own, so it must never yield to one and must
+  // get its own skill name - both keyed off a dialect of its own, not the claude fall-through.
+  if (payload.agent === "opencode") return { dialect: "opencode", tool, input };
   // Devin never sends a cwd; Codex and Claude Code always do. Without that check, a shared
   // tool name (apply_patch) would call Codex Devin, and Codex's own per-repo copy in
   // .codex/hooks.json would never get the chance to yield to it.
@@ -275,13 +306,16 @@ function main(payload) {
   const detected = detect(payload);
   if (detected.dialect === "antigravity") {
     if (detected.event === "invocation") {
-      const marker = markerFor(payload);
       let raw = null;
       try {
-        raw = fs.readFileSync(marker, "utf8");
-        fs.rmSync(marker, { force: true });
+        const marker = markerFor(payload);
+        if (marker && ownedDir(marker.dir) && notASymlink(marker.file)) {
+          raw = fs.readFileSync(marker.file, "utf8");
+          fs.rmSync(marker.file, { force: true });
+        }
       } catch {
-        // No write since the last invocation.
+        // No write since the last invocation, no conversation to key it on, or the marker
+        // (or the folder it lives in) was refused as unsafe.
       }
       // One or more writes may have appended their own nudge since the last invocation;
       // repeats (the same file nudged twice) collapse to one line.
@@ -316,8 +350,9 @@ function main(payload) {
   // A project with its own per-repo install is that copy's business; two nudges help nobody.
   // Only true when a per-repo copy actually runs for this dialect (see YIELDS above).
   if (!inProject && YIELDS.has(dialect) && fs.existsSync(path.join(ROOT, ".agents", "hooks", "markdown-labels.cjs"))) return;
-  // Relative paths are relative to where the agent works, which as a plugin is never here.
-  const base = (typeof payload.cwd === "string" && payload.cwd) || (inProject ? process.cwd() : ROOT);
+  // Relative paths are relative to where the agent works, which as a plugin is never here -
+  // except for Cursor, whose cwd is always the plugin folder itself, never the project.
+  const base = (dialect !== "cursor" && typeof payload.cwd === "string" && payload.cwd) || (inProject ? process.cwd() : ROOT);
 
   const notes = [];
   for (const file of writtenFiles(input, base)) {
@@ -349,7 +384,14 @@ function respond(dialect, additionalContext, payload) {
     // Antigravity already got its {} from the tool-step print above; this only leaves the
     // nudge behind. Appended, not overwritten: a second write before the next PostInvocation
     // must not erase the first one's nudge.
-    fs.appendFileSync(markerFor(payload), additionalContext + "\n");
+    try {
+      const marker = markerFor(payload);
+      if (marker && ownedDir(marker.dir) && notASymlink(marker.file)) {
+        fs.appendFileSync(marker.file, additionalContext + "\n");
+      }
+    } catch {
+      // A hook must never be the reason a tool call fails; the marker is best-effort.
+    }
     return;
   }
   const out =
