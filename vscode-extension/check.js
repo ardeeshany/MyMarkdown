@@ -1288,6 +1288,82 @@ check("an unanchored sidecar (written by an agent without a hook) is stamped on 
   });
 });
 
+check("a range with no content line to anchor to is never written, however often the sidecar is reread", () => {
+  // Lines 1-8 split by "\n"; startLine 20/endLine 25 sanitises down to line 8, the empty
+  // string left after the trailing newline - there is no content there to ever anchor to.
+  const doc = "# A\n\nabc\n\n## B\n\ndef\n";
+  const sidecars = { "/ws/.mymd/doc.md.json": { version: 1, lenses: [{ name: "Parts", ranges: [{ label: "One", color: "#111111", startLine: 20, endLine: 25 }] }] } };
+  const host = driveLabelCommands(sidecars, fakeMarkdownDocument("/ws/doc.md", doc));
+  return settle().then(() => {
+    assert(host.written.length === 0, "nothing to gain, nothing written, got " + host.written.length);
+    // Four watcher round-trips: a range that could gain an anchor would have shown up on
+    // the first one; this one must not, no matter how many times it is reread.
+    let chain = Promise.resolve();
+    for (let i = 0; i < 4; i += 1) {
+      chain = chain.then(() => {
+        if (host.written.length) sidecars["/ws/.mymd/doc.md.json"] = host.written[host.written.length - 1].body;
+        host.watchers[0].handlers.change(sidecarUri("/ws/.mymd/doc.md.json"));
+        return settle();
+      });
+    }
+    return chain;
+  }).then(() => {
+    assert(host.written.length === 0, "still nothing written after repeated rereads, got " + host.written.length);
+  });
+});
+
+check("a lens mixing a stampable range with one that can never gain an anchor is written exactly once", () => {
+  const doc = "# A\n\nabc\n\n## B\n\ndef\n";
+  const sidecars = {
+    "/ws/.mymd/doc.md.json": {
+      version: 1,
+      lenses: [{
+        name: "Parts",
+        ranges: [
+          { label: "One", color: "#111111", startLine: 5, endLine: 7 },
+          { label: "Two", color: "#222222", startLine: 20, endLine: 25 },
+        ],
+      }],
+    },
+  };
+  const host = driveLabelCommands(sidecars, fakeMarkdownDocument("/ws/doc.md", doc));
+  return settle().then(() => {
+    assert(host.written.length === 1, "exactly one write, got " + host.written.length);
+    const ranges = host.written[0].body.lenses[0].ranges;
+    assert(ranges[0].anchor === "## b", "the stampable range gets its anchor: " + JSON.stringify(ranges[0]));
+    assert(ranges[1].anchor === "", "the blank range stays anchor-less, not retried forever: " + JSON.stringify(ranges[1]));
+    sidecars["/ws/.mymd/doc.md.json"] = host.written[0].body;
+    host.watchers[0].handlers.change(sidecarUri("/ws/.mymd/doc.md.json"));
+    return settle();
+  }).then(() => {
+    assert(host.written.length === 1, "the still-blank range does not trigger another write");
+  });
+});
+
+check("a stamp write that fails shows one error and is not retried after a later edit", () => {
+  const doc = "# A\n\nabc\n\n## B\n\ndef\n";
+  const sidecars = { "/ws/.mymd/doc.md.json": { version: 1, lenses: [{ name: "Parts", ranges: [{ label: "One", color: "#111111", startLine: 5, endLine: 7 }] }] } };
+  const document = fakeMarkdownDocument("/ws/doc.md", doc);
+  const host = driveLabelCommands(sidecars, document);
+  host.vscode.workspace.fs.writeFile = async () => {
+    throw new Error("EACCES");
+  };
+  return settle().then(() => {
+    assert(host.written.length === 0, "the failing write never lands, got " + host.written.length);
+    const errors = host.messages.filter((m) => m.kind === "error");
+    assert(errors.length === 1, "exactly one error shown, got " + errors.length);
+    // A real edit bumps the version and would normally force a reread; a write that already
+    // failed once must not be retried just because the text changed again.
+    document.version += 1;
+    host.edit(document);
+    return settle();
+  }).then(() => {
+    assert(host.written.length === 0, "still nothing written after the edit");
+    const errors = host.messages.filter((m) => m.kind === "error");
+    assert(errors.length === 1, "no second error after the edit, got " + errors.length);
+  });
+});
+
 check("changing labels.storagePath re-points the watcher and rereads labels from the new folder", () => {
   const doc = "# A\n\nabc\n";
   const lens = (name) =>

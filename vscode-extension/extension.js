@@ -263,8 +263,14 @@ async function writeSidecar(document, lenses) {
   return true;
 }
 
-/** Documents whose unanchored sidecar is being written back with anchors. */
-const stamping = new Set();
+/**
+ * Documents that already had their once-only stamp attempt: added before the write starts,
+ * so a second read arriving while it is still in flight cannot fire a second one, and left
+ * in place afterward unless the write actually landed. A write that fails shows its own
+ * error and must not be retried on every later edit, so only success clears the entry — a
+ * sidecar with real anchors will not look unanchored on the next read anyway.
+ */
+const stamped = new Set();
 
 /** Every lens for a document, re-anchored against its current text. */
 async function lensesFor(document) {
@@ -274,12 +280,21 @@ async function lensesFor(document) {
   const raw = await readSidecar(document);
   const { lenses } = Labels.readLabels(raw, document.getText());
   lensCache.set(key, { version: document.version, lenses });
-  // A sidecar written by hand or by an agent with no hook has no anchors, and a range without
-  // one stays on its line numbers as the text moves. Stamp it now, the way a hook would have.
-  const unanchored = Array.isArray(raw?.lenses) && raw.lenses.some((lens) => Array.isArray(lens?.ranges) && lens.ranges.some((range) => range && !range.anchor));
-  if (unanchored && lenses.length && !stamping.has(key)) {
-    stamping.add(key);
-    writeSidecar(document, []).finally(() => stamping.delete(key));
+  // A range with no anchor was written by hand or by an agent with no hook — but some ranges
+  // (blank lines, or one sanitising clamped onto the file's empty last line) never carry any
+  // content to anchor to and will always come back with anchor: "", however often they are
+  // restamped. Test whether a range could actually GAIN an anchor on the current text, not
+  // just whether it lacks one, or such a range would be rewritten on every single reread,
+  // forever, for as long as the document stays open.
+  const lines = document.getText().split("\n");
+  const unanchored = lenses.some(
+    (lens) => lens.ranges.some((range) => !range.anchor && Labels.anchorsFor(lines, range.startLine, range.endLine).anchor),
+  );
+  if (unanchored && !stamped.has(key)) {
+    stamped.add(key);
+    writeSidecar(document, []).then((ok) => {
+      if (ok) stamped.delete(key);
+    });
   }
   return lenses;
 }
