@@ -75,7 +75,7 @@ function main(argv) {
     );
   } else if (count("created") + count("merged") + count("updated")) {
     process.stdout.write(
-      "New Claude Code, Copilot and Cursor sessions in this project pick the hook up. Codex needs\n" +
+      "New Claude Code, Copilot, Cursor and Kiro sessions in this project pick the hook up. Codex needs\n" +
         "the project trusted and the hook approved once, in /hooks.\n",
     );
   } else if (count("unchanged") === results.length) {

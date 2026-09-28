@@ -1829,6 +1829,18 @@ check("OpenCode adapter: registers the skill and appends the nudge to a write's 
   }
 });
 
+check("Kiro hook files: a prompt nudge on Markdown saves, a command that stamps sidecars, the global and per-repo forms", () => {
+  for (const [file, command] of [["agent-hooks/plugin/kiro/markdown-labels.json", 'node "$HOME/.kiro/hooks/markdown-labels.cjs"; exit 0'], ["agent-hooks/files/kiro-hooks.json", 'node "${WORKSPACE_ROOT}/.agents/hooks/markdown-labels.cjs"; exit 0']]) {
+    const data = readJson(file);
+    assert(data.version === "v1" && data.hooks.length === 2, file + " shape");
+    const [prompt, stamp] = data.hooks;
+    assert(prompt.trigger === "PostFileSave" && new RegExp(prompt.matcher).test("docs/guide.md") && !new RegExp(prompt.matcher).test("a.txt"), file + ": the nudge fires on Markdown saves");
+    assert(prompt.action.type === "agent" && /markdown-labels/.test(prompt.action.prompt) && /400/.test(prompt.action.prompt), file + ": a fixed prompt naming the skill and the threshold");
+    assert(stamp.trigger === "PostFileSave" && new RegExp(stamp.matcher).test("/p/.mymd/docs/guide.md.json") && !new RegExp(stamp.matcher).test("/p/docs/guide.md"), file + ": stamping matches sidecars only");
+    assert(stamp.action.type === "command" && stamp.action.command === command && stamp.timeout === 15, file + ": the stamping command: " + stamp.action.command);
+  }
+});
+
 check("plugin hook files: the shared Claude-schema entry and Copilot's flat one run the same script", () => {
   const shared = readJson(PLUGIN + "/hooks/hooks.json");
   const group = shared.hooks.PostToolUse[0];
@@ -1866,11 +1878,11 @@ function scratchProject() {
 const statuses = (results) => Object.fromEntries(results.map((result) => [result.file, result.status]));
 const template = (dest) => fs.readFileSync(path.join(__dirname, "agent-hooks", Hooks.TARGETS.find((t) => t.dest === dest).from), "utf8");
 
-check("agent hooks installer: an empty project gets all six files, and running it again changes nothing", () => {
+check("agent hooks installer: an empty project gets all seven files, and running it again changes nothing", () => {
   const project = scratchProject();
   try {
     const first = Hooks.installAgentHooks(project.root);
-    assert(first.length === 6 && first.every((result) => result.status === "created"), JSON.stringify(first));
+    assert(first.length === 7 && first.every((result) => result.status === "created"), JSON.stringify(first));
     for (const target of Hooks.TARGETS) {
       assert(project.read(target.dest) === template(target.dest), target.dest + " should be the template");
     }

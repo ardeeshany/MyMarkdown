@@ -23,6 +23,7 @@ const HOOK = ".agents/hooks/markdown-labels.cjs";
  * Where each file goes, relative to the project root, and the template it comes from.
  * Claude Code reads only .claude/skills; Copilot, VS Code and Codex read .agents/skills.
  * Cursor reads both, and reads Claude Code's hooks from .claude/settings.json.
+ * Kiro reads any file in .kiro/hooks, so ours is a file of its own, never merged.
  * `runsHook`: the file registers the hook script, so it is only worth writing with it.
  */
 const TARGETS = [
@@ -32,6 +33,7 @@ const TARGETS = [
   { dest: ".claude/settings.json", from: "files/claude-settings.json", merge: true, runsHook: true },
   { dest: ".github/hooks/markdown-labels.json", from: "files/copilot-hooks.json", runsHook: true },
   { dest: ".codex/hooks.json", from: "files/codex-hooks.json", merge: true, runsHook: true },
+  { dest: ".kiro/hooks/markdown-labels.json", from: "files/kiro-hooks.json", runsHook: true },
 ];
 
 /**
@@ -43,6 +45,7 @@ const SHIPPED = new Set([
   'node "$CLAUDE_PROJECT_DIR/.claude/hooks/markdown-labels.cjs"',
   'node "${CLAUDE_PROJECT_DIR:-.}/.agents/hooks/markdown-labels.cjs" --claude-settings',
   "node .agents/hooks/markdown-labels.cjs",
+  'node "${WORKSPACE_ROOT}/.agents/hooks/markdown-labels.cjs"; exit 0',
 ]);
 for (const target of TARGETS.filter((t) => t.merge)) {
   for (const groups of Object.values(JSON.parse(fs.readFileSync(path.join(TEMPLATES, target.from), "utf8")).hooks)) {
