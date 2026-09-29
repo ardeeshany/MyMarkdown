@@ -5,18 +5,18 @@
       "name": "markdown-labels nudge",
       "description": "After the agent saves a Markdown file, ask it to run the markdown-labels skill when the document is long and has no label sidecar.",
       "trigger": "PostFileSave",
-      "matcher": "\\.(md|mkd|mkdn|mdwn|mdown|markdown|markdn|mdtxt|mdtext)$",
+      "matcher": "\\.([mM][dD]|[mM][kK][dD]|[mM][kK][dD][nN]|[mM][dD][wW][nN]|[mM][dD][oO][wW][nN]|[mM][aA][rR][kK][dD][oO][wW][nN]|[mM][aA][rR][kK][dD][nN]|[mM][dD][tT][xX][tT]|[mM][dD][tT][eE][xX][tT])$",
       "action": {
         "type": "agent",
-        "prompt": "You just saved the Markdown file named in file_path below. If it has 400 or more words and at least two headings, and no label sidecar exists at <project root>/.mymd/<path of the file relative to the project root>.json, run the markdown-labels skill on it now. Otherwise ignore this instruction."
+        "prompt": "You just saved the Markdown file named by file_path in the JSON below (cwd there is the project root; a relative file_path is relative to it). If it has 400 or more words and at least two headings, and no label sidecar exists at <cwd>/.mymd/<file_path relative to cwd>.json, run the markdown-labels skill on it now. Otherwise ignore this instruction."
       }
     },
     {
       "name": "markdown-labels anchors",
       "description": "Stamp text anchors into a label sidecar the agent just wrote, so its labels survive later edits.",
       "trigger": "PostFileSave",
-      "matcher": "[\\\\/]\\.mymd[\\\\/].+\\.json$",
-      "action": { "type": "command", "command": "node \"$HOME/.kiro/hooks/markdown-labels.cjs\"; exit 0" },
+      "matcher": "(^|[\\\\/])\\.mymd[\\\\/].+\\.json$",
+      "action": { "type": "command", "command": "node -e \"require(require('path').join(require('os').homedir(),'.kiro','hooks','markdown-labels.cjs'))\"" },
       "timeout": 15
     }
   ]

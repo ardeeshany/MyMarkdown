@@ -1,0 +1,12 @@
+{
+  "name": "mymarkdown-plugins",
+  "owner": { "name": "MyMarkdown" },
+  "metadata": { "description": "Plugins for the MyMarkdown VS Code extension." },
+  "plugins": [
+    {
+      "name": "mymarkdown",
+      "source": "vscode-extension/agent-hooks/plugin",
+      "description": "Have coding agents label the Markdown they write, for the MyMarkdown VS Code extension. Runs a Node hook after each Markdown write; nothing leaves your machine. Requires Node.js 18 or later."
+    }
+  ]
+}

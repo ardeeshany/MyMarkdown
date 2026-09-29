@@ -1641,20 +1641,26 @@ const readJson = (rel) => JSON.parse(fs.readFileSync(path.join(__dirname, rel), 
 const PLUGIN = "agent-hooks/plugin";
 const PKG_VERSION = readJson("agent-hooks/package.json").version;
 
-check("plugin manifests: one name, one version, every field the listings ask for, and no hooks key where it would double", () => {
-  const root = readJson(PLUGIN + "/plugin.json");
-  assert(root.$schema === "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json", "root manifest schema");
-  assert(root.name === "mymarkdown" && root.version === PKG_VERSION, "root name/version");
-  for (const key of ["description", "author", "homepage", "repository", "license", "keywords"]) assert(root[key], "root manifest lacks " + key);
-  assert(/Node\.js 18/.test(root.description), "the description must say Node.js 18 or later is required");
-  assert(root.extensions && root.extensions["com.openai"] && root.extensions["com.openai"].hooks === "./hooks/hooks.json", "Codex reads hooks through extensions.com.openai");
-  for (const file of [".claude-plugin/plugin.json", ".cursor-plugin/plugin.json", ".qoder-plugin/plugin.json"]) {
+check("plugin manifests: one name, one version, one description, and a hooks key only where Cursor needs its own file", () => {
+  assert(!fs.existsSync(path.join(__dirname, PLUGIN, "plugin.json")), "no Agent Plugins root plugin.json: Codex drops every hook of a plugin in that format, and VS Code does not substitute its plugin root in it");
+  assert(!fs.existsSync(path.join(__dirname, PLUGIN, "com.github.copilot")), "no com.github.copilot folder: Copilot reads it only for an Agent Plugins plugin, and reads the shared hooks/hooks.json otherwise");
+  const description = readJson(PLUGIN + "/.claude-plugin/plugin.json").description;
+  assert(/Node\.js 18/.test(description), "the description must say Node.js 18 or later is required");
+  for (const file of [".claude-plugin/plugin.json", ".cursor-plugin/plugin.json", ".qoder-plugin/plugin.json", ".codex-plugin/plugin.json"]) {
     const m = readJson(PLUGIN + "/" + file);
     assert(m.name === "mymarkdown" && m.version === PKG_VERSION, file + " name/version");
-    assert(!("hooks" in m), file + " must not declare hooks: hooks/hooks.json is loaded by its location");
-    for (const key of ["description", "author", "license"]) assert(m[key], file + " lacks " + key);
+    assert(m.description === description, file + " carries the same description");
+    if (file === ".cursor-plugin/plugin.json") assert(m.hooks === "./cursor/hooks.json", file + " points Cursor at its own hooks file, got " + m.hooks);
+    else assert(!("hooks" in m), file + " must not declare hooks: hooks/hooks.json is loaded by its location");
   }
-  for (const file of ["README.md", "LICENSE", "hooks/markdown-labels.cjs", "skills/markdown-labels/SKILL.md"]) {
+  for (const file of [".claude-plugin/plugin.json", ".cursor-plugin/plugin.json", ".qoder-plugin/plugin.json"]) {
+    const m = readJson(PLUGIN + "/" + file);
+    for (const key of ["author", "license"]) assert(m[key], file + " lacks " + key);
+  }
+  assert(!("url" in readJson(PLUGIN + "/.cursor-plugin/plugin.json").author), "Cursor's manifest schema allows no author url");
+  const codex = readJson(PLUGIN + "/.codex-plugin/plugin.json").interface || {};
+  assert(codex.displayName === "MyMarkdown labels" && codex.shortDescription === "Label the Markdown you write, for the MyMarkdown preview" && codex.category === "Developer Tools" && JSON.stringify(codex.capabilities) === '["Skills","Lifecycle hooks"]', "Codex install-surface interface: " + JSON.stringify(codex));
+  for (const file of ["README.md", "LICENSE", "hooks/markdown-labels.cjs", "skills/markdown-labels/SKILL.md", "cursor/hooks.json"]) {
     assert(fs.existsSync(path.join(__dirname, PLUGIN, file)), "plugin folder lacks " + file);
   }
   assert(fs.readFileSync(path.join(__dirname, PLUGIN, "LICENSE"), "utf8") === fs.readFileSync(path.join(__dirname, "LICENSE"), "utf8"), "plugin LICENSE is a copy of the extension's");
@@ -1673,7 +1679,10 @@ check("marketplace files: each reader's format, the same plugin name and path, n
   const augment = JSON.parse(fs.readFileSync(path.join(REPO, ".augment-plugin", "marketplace.json"), "utf8"));
   assert(augment.name === "mymarkdown-plugins" && augment.plugins[0].name === "mymarkdown" && augment.plugins[0].source === rel, "Augment entry");
   assert(augment.version === PKG_VERSION && augment.plugins[0].version === PKG_VERSION, "Augment carries the version");
-  assert(fs.existsSync(path.join(REPO, rel, "plugin.json")), "every source points at the plugin folder");
+  const cursor = JSON.parse(fs.readFileSync(path.join(REPO, ".cursor-plugin", "marketplace.json"), "utf8"));
+  const bareSource = (source) => source.replace(/^\.\//, "");
+  assert(cursor.name === claude.name && cursor.plugins.length === 1 && cursor.plugins[0].name === "mymarkdown" && cursor.plugins[0].description === claude.plugins[0].description && bareSource(cursor.plugins[0].source) === bareSource(rel), "Cursor marketplace agrees with Claude's: " + JSON.stringify(cursor));
+  assert(fs.existsSync(path.join(REPO, rel, ".claude-plugin", "plugin.json")), "every source points at the plugin folder");
 });
 
 check("plugin hook: finds the project from the agent's context, never from where the script lives", () => {
@@ -1971,15 +1980,31 @@ check("OpenCode adapter: registers the skill and appends the nudge to a write's 
 check("Kiro hook files: a prompt nudge on Markdown saves, a command that stamps sidecars, the global and per-repo forms", () => {
   const walkingLauncher =
     "node -e \"let p=require('path'),f=require('fs'),d=process.env.CLAUDE_PROJECT_DIR||process.cwd(),h;while(!f.existsSync(h=p.join(d,'.agents/hooks/markdown-labels.cjs'))&&p.dirname(d)!==d)d=p.dirname(d);f.existsSync(h)&&require(h)\"";
-  for (const [file, command] of [["agent-hooks/plugin/kiro/markdown-labels.json", 'node "$HOME/.kiro/hooks/markdown-labels.cjs"; exit 0'], ["agent-hooks/files/kiro-hooks.json", walkingLauncher]]) {
+  const homeLauncher = "node -e \"require(require('path').join(require('os').homedir(),'.kiro','hooks','markdown-labels.cjs'))\"";
+  const [, body, flags] = fs.readFileSync(path.join(__dirname, PLUGIN, "hooks/markdown-labels.cjs"), "utf8").match(/const MARKDOWN = \/(.+)\/([a-z]*);/);
+  const MARKDOWN = new RegExp(body, flags);
+  const withoutCommand = [];
+  for (const [file, command] of [["agent-hooks/plugin/kiro/markdown-labels.json", homeLauncher], ["agent-hooks/files/kiro-hooks.json", walkingLauncher]]) {
     const data = readJson(file);
     assert(data.version === "v1" && data.hooks.length === 2, file + " shape");
     const [prompt, stamp] = data.hooks;
-    assert(prompt.trigger === "PostFileSave" && new RegExp(prompt.matcher).test("docs/guide.md") && !new RegExp(prompt.matcher).test("a.txt"), file + ": the nudge fires on Markdown saves");
-    assert(prompt.action.type === "agent" && /markdown-labels/.test(prompt.action.prompt) && /400/.test(prompt.action.prompt), file + ": a fixed prompt naming the skill and the threshold");
-    assert(stamp.trigger === "PostFileSave" && new RegExp(stamp.matcher).test("/p/.mymd/docs/guide.md.json") && !new RegExp(stamp.matcher).test("/p/docs/guide.md"), file + ": stamping matches sidecars only");
+    // Kiro compiles the matcher with no flags, so case must be handled inside the pattern.
+    const markdown = new RegExp(prompt.matcher);
+    assert(prompt.trigger === "PostFileSave", file + ": the nudge fires on saves");
+    for (const sample of ["docs/guide.md", "README.MD", "a.Markdown", "notes.mdtxt", "/p/NOTES.MDTEXT", "x.mdx", "notes.txt", "md"]) {
+      assert(markdown.test(sample) === MARKDOWN.test(sample), file + ": the nudge matcher disagrees with the hook's MARKDOWN on " + sample);
+    }
+    assert(prompt.action.type === "agent", file + ": an agent prompt");
+    for (const word of ["markdown-labels", "400", "file_path", "cwd"]) includes(prompt.action.prompt, word, file + " prompt");
+    const sidecar = new RegExp(stamp.matcher);
+    assert(stamp.trigger === "PostFileSave", file + ": stamping fires on saves");
+    for (const sample of [".mymd/docs/guide.md.json", "/p/.mymd/docs/guide.md.json", "C:\\p\\.mymd\\guide.md.json"]) assert(sidecar.test(sample), file + ": stamping must match the sidecar " + sample);
+    for (const sample of ["/p/docs/guide.md", "/p/x.mymd/a.json"]) assert(!sidecar.test(sample), file + ": stamping must not match " + sample);
     assert(stamp.action.type === "command" && stamp.action.command === command && stamp.timeout === 15, file + ": the stamping command: " + stamp.action.command);
+    stamp.action.command = "";
+    withoutCommand.push(JSON.stringify(data));
   }
+  assert(withoutCommand[0] === withoutCommand[1], "the two Kiro files differ only in the stamping command");
 });
 
 check("docs: the README's install lines name the marketplace, the version is one everywhere, and copies are in step", () => {
@@ -1996,18 +2021,21 @@ check("docs: the README's install lines name the marketplace, the version is one
   }
 });
 
-check("plugin hook files: the shared Claude-schema entry and Copilot's flat one run the same script", () => {
+check("plugin hook files: one shared Claude-schema entry every reader parses, and Cursor's own file", () => {
   const shared = readJson(PLUGIN + "/hooks/hooks.json");
+  assert(Object.keys(shared).join() === "hooks", "Codex accepts only description and hooks at the top level, got " + Object.keys(shared));
   const group = shared.hooks.PostToolUse[0];
-  assert(group.matcher === "Write|Edit|write|edit|apply_patch|save-file|str-replace-editor", "the matcher names every reader's write tools, got " + group.matcher);
+  assert(group.matcher === "Write|Edit|write|edit|apply_patch|save-file|str-replace-editor|create|str_replace_editor", "the matcher names every reader's write tools, Copilot CLI's create and str_replace_editor too, got " + group.matcher);
   const hook = group.hooks[0];
-  assert(hook.type === "command" && hook.timeout === 15, "command hook, 15 s");
-  includes(hook.command, '${CLAUDE_PLUGIN_ROOT}/hooks/markdown-labels.cjs', "the shared command");
-  assert(/; exit 0$/.test(hook.command), "a machine without node must not see an error after every write");
-  const copilot = readJson(PLUGIN + "/com.github.copilot/hooks/hooks.json");
-  const entry = copilot.hooks.postToolUse[0];
-  assert(copilot.version === 1 && entry.type === "command" && entry.timeoutSec === 15, "Copilot's own schema");
-  for (const key of ["bash", "powershell"]) includes(entry[key], "${PLUGIN_ROOT}/hooks/markdown-labels.cjs", "Copilot " + key);
+  assert(hook.type === "command" && !("timeout" in hook), "no timeout: Augment reads it as milliseconds and kills the hook before Node starts");
+  assert(hook.command === 'node "${CLAUDE_PLUGIN_ROOT}/hooks/markdown-labels.cjs"; exit 0', "the shared command, which a machine without node must not turn into an error after every write: " + hook.command);
+  const stray = fs.readdirSync(path.join(__dirname, PLUGIN, "hooks"), { recursive: true }).filter((file) => /\.json$/i.test(file) && file !== "hooks.json");
+  assert(stray.length === 0, "Augment loads every JSON file under hooks/, so hooks.json must be the only one: " + stray);
+  const cursor = readJson(PLUGIN + "/cursor/hooks.json");
+  assert(cursor.version === 1 && Object.keys(cursor.hooks).join() === "postToolUse" && cursor.hooks.postToolUse.length === 1, "Cursor's own schema, one postToolUse entry");
+  const entry = cursor.hooks.postToolUse[0];
+  includes(entry.command, "${CURSOR_PLUGIN_ROOT}/hooks/markdown-labels.cjs", "Cursor's command");
+  assert(entry.matcher === "Write" && entry.timeout === 15, "Cursor's one write tool, 15 s");
 });
 
 // Installing the hook and skill into other projects: agent-hooks/install.js, shared by the
