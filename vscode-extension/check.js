@@ -2180,36 +2180,53 @@ check("Antigravity: PreInvocation answers with an ephemeralMessage, and the mark
 });
 
 check("OpenCode adapter: registers the skill and appends the nudge to a write's result, in both API generations", () => {
-  // The adapter inherits process.env by design (it spawns the hook without an env override),
-  // so a developer's own shell must not change the verdict: hide the project-dir variables
-  // that would redirect the hook's project root, then put back whatever was actually there.
-  const ENV_KEYS = ["CLAUDE_PROJECT_DIR", "DEVIN_PROJECT_DIR", "COPILOT_PROJECT_DIR", "AUGMENT_PROJECT_DIR", "CURSOR_PROJECT_DIR"];
-  const saved = ENV_KEYS.map((key) => [key, process.env[key]]);
-  for (const [key] of saved) delete process.env[key];
-  const restoreEnv = () => {
-    for (const [key, value] of saved) {
-      if (value === undefined) delete process.env[key];
-      else process.env[key] = value;
-    }
-  };
-
   const p = pluginRepo();
+  // The adapter beside the hook copy, with its skill in a folder whose name differs from the
+  // skill's own, so the skill name the 2.x editor gets must come from the front matter.
+  const home = path.join(p.base, "plugin-home", "plugin");
+  const mjs = path.join(home, "opencode", "mymarkdown.mjs");
+  fs.mkdirSync(path.dirname(mjs), { recursive: true });
+  fs.copyFileSync(path.join(__dirname, PLUGIN, "opencode", "mymarkdown.mjs"), mjs);
+  fs.mkdirSync(path.join(home, "skills", "renamed"), { recursive: true });
+  fs.copyFileSync(path.join(__dirname, PLUGIN, "skills", "markdown-labels", "SKILL.md"), path.join(home, "skills", "renamed", "SKILL.md"));
+  // The ESM loader rejects a bare Windows path, so the module is imported by its file URL.
+  const url = require("url").pathToFileURL(mjs).href;
   try {
-    const mjs = path.join(__dirname, "agent-hooks", "plugin", "opencode", "mymarkdown.mjs");
-    return import(mjs).then(async (mod) => {
+    // An OpenCode started inside another agent's session inherits that agent's project variable;
+    // the hook must still take the project OpenCode names. A separate process carries the
+    // variable, since this runner does not await a check before running the next one.
+    const elsewhere = fs.mkdtempSync(path.join(os.tmpdir(), "mymd-elsewhere-"));
+    const script =
+      `const { default: plugin } = await import(${JSON.stringify(url)});` +
+      `const hooks = await plugin.server({ directory: ${JSON.stringify(p.root)}, worktree: ${JSON.stringify(p.root)} });` +
+      `const output = { title: "write", output: "Wrote docs/big.md", metadata: {} };` +
+      `await hooks["tool.execute.after"]({ tool: "write", sessionID: "s", callID: "c", args: { filePath: ${JSON.stringify(p.doc)}, content: "x" } }, output);` +
+      `process.stdout.write(output.output);`;
+    const inherited = spawnSync(process.execPath, ["--input-type=module", "-e", script], { env: { ...process.env, CLAUDE_PROJECT_DIR: elsewhere }, encoding: "utf8" });
+    fs.rmSync(elsewhere, { recursive: true, force: true });
+    assert(inherited.status === 0, "the env probe exits 0: " + inherited.stderr);
+    includes(inherited.stdout, "docs/big.md is now", "1.x: an inherited CLAUDE_PROJECT_DIR does not take the project from OpenCode");
+
+    return import(url).then(async (mod) => {
       const plugin = mod.default;
       assert(plugin.id === "mymarkdown" && typeof plugin.server === "function" && typeof plugin.setup === "function", "the dual-generation shape");
       // 1.x: a hooks object; the nudge lands in output.output.
       const hooks = await plugin.server({ directory: p.root, worktree: p.root });
       const config = {};
       await hooks.config(config);
-      assert(config.skills.paths.some((dir) => fs.existsSync(path.join(dir, "markdown-labels", "SKILL.md"))), "1.x: the skill folder is registered");
+      assert(config.skills.paths.some((dir) => fs.existsSync(path.join(dir, "renamed", "SKILL.md"))), "1.x: the skill folder is registered");
       const output = { title: "write", output: "Wrote docs/big.md", metadata: {} };
       await hooks["tool.execute.after"]({ tool: "write", sessionID: "s", callID: "c", args: { filePath: p.doc, content: "x" } }, output);
       includes(output.output, "docs/big.md is now", "1.x: the nudge in the tool result");
       const untouched = { title: "read", output: "…", metadata: {} };
       await hooks["tool.execute.after"]({ tool: "read", sessionID: "s", callID: "c", args: { filePath: p.doc } }, untouched);
       assert(untouched.output === "…", "1.x: a read is left alone");
+      // 1.x resolves a relative path against the instance directory; worktree is the git root,
+      // or "/" outside git, so it must not be the base.
+      const sub = await plugin.server({ directory: path.join(p.root, "docs"), worktree: "/" });
+      const relative = { title: "write", output: "Wrote big.md", metadata: {} };
+      await sub["tool.execute.after"]({ tool: "write", sessionID: "s", callID: "c", args: { filePath: "big.md", content: "x" } }, relative);
+      includes(relative.output, "big.md is now", "1.x: a relative write from a subfolder resolves against the directory");
       // Controller's ruling: OpenCode runs no per-repo hook of its own, so a project's
       // .agents/hooks copy (written for claude/copilot/cursor/kiro) must not silence it, and
       // it must be told its own skill name, not Claude's plugin-namespaced one.
@@ -2227,18 +2244,22 @@ check("OpenCode adapter: registers the skill and appends the nudge to a write's 
         tool: { hook: async (name, fn) => { if (name === "execute.after") after = fn; } },
         skill: { transform: async (fn) => fn({ add: (skill) => added.push(skill) }) },
       });
-      assert(added.length === 1 && added[0].id === "markdown-labels" && /label/i.test(added[0].description) && added[0].content.length > 100, "2.x: the skill: " + JSON.stringify(added[0] && added[0].id));
+      assert(added.length === 1 && added[0].id === "renamed" && /label/i.test(added[0].description) && added[0].content.length > 100, "2.x: the skill: " + JSON.stringify(added[0] && added[0].id));
+      assert(added[0].name === "markdown-labels", "2.x: the skill's name comes from its front matter, got " + added[0].name);
       const event = { tool: "write", status: "completed", input: { path: p.doc, content: "x" }, result: { output: "ok", content: "Wrote docs/big.md" } };
       await after(event);
       includes(String(event.result.content), "docs/big.md is now", "2.x: the nudge in the result");
       assert(event.result.output === "ok", "2.x: the rest of the result is kept");
-    }).finally(() => {
-      p.cleanup();
-      restoreEnv();
-    });
+      const result = { output: "failed", content: "Error" };
+      const failed = { tool: "write", status: "error", input: { path: p.doc, content: "x" }, result };
+      await after(failed);
+      assert(failed.result === result && result.content === "Error", "2.x: a failed write's result is left alone");
+      const patched = { tool: "patch", status: "completed", input: { patchText: "*** Begin Patch\n*** Add File: docs/big.md\n+x\n*** End Patch" }, result: { content: "Applied" } };
+      await after(patched);
+      includes(String(patched.result.content), "docs/big.md is now", "2.x: the nudge after a patch");
+    }).finally(() => p.cleanup());
   } catch (error) {
     p.cleanup();
-    restoreEnv();
     throw error;
   }
 });
