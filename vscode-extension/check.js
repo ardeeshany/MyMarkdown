@@ -1521,33 +1521,48 @@ check("a sidecar the agent rewrites while the stamp makes its folder is left to 
   });
 });
 
-check("on disk the stamp lands by renaming a temp file over the sidecar, and leaves no temp when it steps aside", () => {
+check("on disk the stamp renames a temp file over the sidecar, retries a refused rename, and leaves no temp", () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "mymd-stamp-"));
   const doc = "# A\n\nabc\n\n## B\n\ndef\n";
   const bare = (name) => ({ version: 1, lenses: [{ name, ranges: [{ label: "One", color: "#111111", startLine: 5, endLine: 7 }] }] });
+  const stampedText = (name) => JSON.stringify(Labels.stampAnchors(bare(name), doc), null, 2) + "\n";
   const sidecar = path.join(dir, ".mymd", "doc.md.json");
   fs.mkdirSync(path.dirname(sidecar));
-  fs.writeFileSync(sidecar, JSON.stringify(bare("Parts")));
   const document = fakeMarkdownDocument(path.join(dir, "doc.md"), doc);
   const host = driveLabelCommands({}, document);
   host.vscode.workspace.getWorkspaceFolder = () => ({ uri: { fsPath: dir, scheme: "file" } });
-  // Reads come from the disk; `rewrite`, once set, lands right after the next read, as an
-  // agent's rewrite would between the stamp's read and its check.
-  let rewrite = null;
-  let readsSince = -1;
+  // Reads come from the disk and are counted from the moment an agent's rewrite lands: either
+  // while the stamp writes its temp file (`onTemp`) or while a rename is refused (`onRefusal`),
+  // as Windows refuses one while another process holds the file (`refusals` of them).
+  let [readsSince, onTemp, onRefusal, refusals] = [-1, null, null, 0];
+  const land = (rewrite) => {
+    fs.writeFileSync(sidecar, JSON.stringify(rewrite));
+    readsSince = 0;
+  };
   host.vscode.workspace.fs.readFile = async (uri) => {
-    const bytes = fs.readFileSync(uri.fsPath);
-    if (uri.fsPath === sidecar) {
-      if (readsSince >= 0) readsSince += 1;
-      if (rewrite) {
-        fs.writeFileSync(sidecar, JSON.stringify(rewrite));
-        [rewrite, readsSince] = [null, 0];
-      }
+    if (path.resolve(uri.fsPath) === sidecar && readsSince >= 0) readsSince += 1;
+    return fs.readFileSync(uri.fsPath);
+  };
+  const { writeFile, rename } = fs.promises;
+  fs.promises.writeFile = async (file, ...rest) => {
+    await writeFile(file, ...rest);
+    if (onTemp && String(file).endsWith(".tmp")) {
+      land(onTemp);
+      onTemp = null;
     }
-    return bytes;
+  };
+  fs.promises.rename = async (...args) => {
+    if (refusals <= 0) return rename(...args);
+    refusals -= 1;
+    if (onRefusal) {
+      land(onRefusal);
+      onRefusal = null;
+    }
+    throw Object.assign(new Error("EPERM: operation not permitted, rename"), { code: "EPERM" });
   };
   const temps = () => fs.readdirSync(path.dirname(sidecar)).filter((name) => name.endsWith(".tmp"));
-  const inode = fs.statSync(sidecar).ino;
+  const errors = () => host.messages.filter((m) => m.kind === "error").length;
+  const text = () => fs.readFileSync(sidecar, "utf8");
   // Real file operations finish only when the event loop gets to them, and the synchronous
   // checks running meanwhile hold it: wait for the outcome, counting ticks rather than
   // clock time, so a long hold does not use the wait up.
@@ -1557,28 +1572,50 @@ check("on disk the stamp lands by renaming a temp file over the sidecar, and lea
       const tick = () => (done() || ++ticks > 500 ? resolve() : setTimeout(tick, 10));
       tick();
     });
-  const reread = () => {
+  let inode;
+  const stampFrom = (name) => {
+    fs.writeFileSync(sidecar, JSON.stringify(bare(name)));
+    [inode, readsSince] = [fs.statSync(sidecar).ino, -1];
     document.version += 1;
     host.activate(document);
   };
-  reread();
-  return until(() => fs.statSync(sidecar).ino !== inode)
+  const renamed = () => fs.statSync(sidecar).ino !== inode;
+  stampFrom("First");
+  return until(renamed)
     .then(() => {
-      const text = fs.readFileSync(sidecar, "utf8");
-      assert(text === JSON.stringify(Labels.stampAnchors(bare("Parts"), doc), null, 2) + "\n", "renamed over the sidecar with the stamp, not rewritten in place: " + text.slice(0, 200));
+      assert(renamed() && text() === stampedText("First"), "renamed over the sidecar with the stamp, not rewritten in place: " + text().slice(0, 120));
       assert(host.written.length === 0 && !temps().length, "no in-place write and no temp left: " + host.written.length + " " + temps());
-      fs.writeFileSync(sidecar, JSON.stringify(bare("Second")));
-      rewrite = bare("Agent");
-      reread();
+      onTemp = bare("Agent");
+      stampFrom("Second");
       return until(() => readsSince >= 1 && !temps().length);
     })
     .then(() => {
-      const text = fs.readFileSync(sidecar, "utf8");
-      assert(readsSince >= 1, "the stamp checked the file again before writing");
-      assert(text === JSON.stringify(bare("Agent")), "the agent's rewrite is kept: " + text.slice(0, 200));
+      assert(readsSince >= 1 && text() === JSON.stringify(bare("Agent")), "a rewrite made while the temp file was written is kept: " + text().slice(0, 120));
       assert(!temps().length, "no temp left when the stamp steps aside: " + temps());
+      refusals = 2;
+      stampFrom("Third");
+      return until(renamed);
     })
-    .finally(() => fs.rmSync(dir, { recursive: true, force: true }));
+    .then(() => {
+      assert(renamed() && text() === stampedText("Third") && !errors() && !temps().length, "a rename refused twice lands on a later try: " + text().slice(0, 120) + " " + errors() + " " + temps());
+      [refusals, onRefusal] = [1, bare("Agent again")];
+      stampFrom("Fourth");
+      return until(() => readsSince >= 1 && !temps().length);
+    })
+    .then(() => {
+      assert(text() === JSON.stringify(bare("Agent again")) && !errors() && !temps().length, "the file is checked again before each try: " + text().slice(0, 120) + " " + errors() + " " + temps());
+      refusals = 99;
+      stampFrom("Fifth");
+      return until(() => errors() && !temps().length);
+    })
+    .then(() => {
+      assert(errors() === 1, "a rename refused for good shows one error, got " + errors());
+      assert(!renamed() && text() === JSON.stringify(bare("Fifth")) && !temps().length, "and leaves the agent's file whole, with no temp: " + text().slice(0, 120) + " " + temps());
+    })
+    .finally(() => {
+      Object.assign(fs.promises, { writeFile, rename });
+      fs.rmSync(dir, { recursive: true, force: true });
+    });
 });
 
 check("a dirty document's file is read only when its sidecar has a range still to stamp", () => {

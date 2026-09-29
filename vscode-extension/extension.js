@@ -289,9 +289,20 @@ async function stampSidecar(document, raw, next) {
       temp = uri.fsPath + "." + process.pid + ".tmp";
       await fs.promises.writeFile(temp, bytes, { flag: "wx" });
     }
-    if (JSON.stringify(await readSidecar(document)) !== JSON.stringify(raw)) return true;
-    if (temp) await fs.promises.rename(temp, uri.fsPath);
-    else await vscode.workspace.fs.writeFile(uri, bytes);
+    // Windows refuses a rename for a moment while another process (a virus scanner) holds
+    // the file: try again, checking the file each time, so nothing is awaited between that
+    // check and the write.
+    for (let attempt = 1; ; attempt += 1) {
+      if (JSON.stringify(await readSidecar(document)) !== JSON.stringify(raw)) return true;
+      try {
+        if (temp) await fs.promises.rename(temp, uri.fsPath);
+        else await vscode.workspace.fs.writeFile(uri, bytes);
+        break;
+      } catch (error) {
+        if (!temp || attempt === 5 || !["EPERM", "EACCES", "EBUSY"].includes(error?.code)) throw error;
+        await new Promise((resolve) => setTimeout(resolve, 100));
+      }
+    }
     temp = null;
     return true;
   } catch (error) {
