@@ -383,9 +383,11 @@ function main(payload) {
   const oldLayout = !inProject && (dialect === "claude" || dialect === "cursor") && process.env.CLAUDE_PROJECT_DIR && fs.existsSync(path.join(ROOT, ".claude", "hooks", "markdown-labels.cjs"));
   // Relative paths are relative to where the agent works. Cursor has run plugin hooks with the
   // plugin folder as cwd (and older builds with the project), so its cwd is trusted only
-  // inside the project. That test compares real paths, so a cwd reached through a symlink (macOS's
-  // /tmp is /private/tmp) still counts; it is re-spelled under ROOT so the per-file test below agrees.
+  // inside the project. The lexical test comes first, so a project folder that links elsewhere
+  // stays the base; only when it fails are real paths compared, so a cwd reached through a symlink
+  // (macOS's /tmp is /private/tmp) still counts, re-spelled under ROOT so the per-file test below agrees.
   const cwd = typeof payload.cwd === "string" && payload.cwd ? payload.cwd : null;
+  const within = (rel) => !(rel.startsWith("..") || path.isAbsolute(rel));
   const real = (dir) => {
     try {
       return fs.realpathSync.native(dir);
@@ -393,9 +395,9 @@ function main(payload) {
       return path.resolve(dir);
     }
   };
-  const fromRoot = cwd && dialect === "cursor" && path.relative(real(ROOT), real(cwd));
-  const inside = typeof fromRoot === "string" && !(fromRoot.startsWith("..") || path.isAbsolute(fromRoot));
-  const base = cwd && dialect !== "cursor" ? cwd : inside ? path.join(ROOT, fromRoot) : inProject ? process.cwd() : ROOT;
+  const lexical = cwd && dialect === "cursor" && within(path.relative(ROOT, cwd));
+  const fromRoot = cwd && dialect === "cursor" && !lexical && path.relative(real(ROOT), real(cwd));
+  const base = cwd && (dialect !== "cursor" || lexical) ? cwd : typeof fromRoot === "string" && within(fromRoot) ? path.join(ROOT, fromRoot) : inProject ? process.cwd() : ROOT;
 
   const notes = [];
   for (const file of writtenFiles(input, base)) {

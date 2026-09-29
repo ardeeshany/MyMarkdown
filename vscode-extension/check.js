@@ -1472,6 +1472,40 @@ check("a document with unsaved edits is stamped against the file on disk, which 
   });
 });
 
+check("a dirty document whose file cannot be read is not stamped, and is stamped once it can be", () => {
+  const doc = "# A\n\nabc\n\n## B\n\ndef\n";
+  const raw = { version: 1, lenses: [{ name: "Parts", ranges: [{ label: "One", color: "#111111", startLine: 5, endLine: 7 }] }] };
+  const document = fakeMarkdownDocument("/ws/doc.md", doc);
+  document.isDirty = true;
+  // No "/ws/doc.md" entry: the fake readFile throws for the document itself.
+  const host = driveLabelCommands({ "/ws/.mymd/doc.md.json": raw }, document);
+  return settle()
+    .then(() => {
+      assert(host.written.length === 0, "no stamp from the buffer when the file cannot be read, got " + host.written.length);
+      document.isDirty = false;
+      document.version += 1;
+      host.activate(document);
+      return settle();
+    })
+    .then(() => {
+      assert(host.written.length === 1, "the failed read must not mark the document as stamped, got " + host.written.length);
+    });
+});
+
+check("two reads of a dirty document in flight together stamp it once", () => {
+  const disk = "# A\n\nabc\n\n## B\n\ndef\n";
+  const raw = { version: 1, lenses: [{ name: "Parts", ranges: [{ label: "One", color: "#111111", startLine: 5, endLine: 7 }] }] };
+  const document = fakeMarkdownDocument("/ws/doc.md", "new\n\n" + disk);
+  document.isDirty = true;
+  // Activation's read is under way; activating the tab starts a second before either has
+  // read the file on disk.
+  const host = driveLabelCommands({ "/ws/.mymd/doc.md.json": raw, "/ws/doc.md": disk }, document);
+  host.activate(document);
+  return settle().then(() => {
+    assert(host.written.length === 1, "exactly one stamp, got " + host.written.length);
+  });
+});
+
 check("a sidecar the agent rewrites while the stamp makes its folder is left to the agent", () => {
   const doc = "# A\n\nabc\n\n## B\n\ndef\n";
   const sidecars = { "/ws/.mymd/doc.md.json": { version: 1, lenses: [{ name: "Parts", ranges: [{ label: "One", color: "#111111", startLine: 5, endLine: 7 }] }] } };
@@ -2183,10 +2217,20 @@ check("Cursor: a relative path resolves against its cwd inside the project, and 
       for (const [name, payload] of [
         ["cwd a symlinked subfolder of the project", cursor(p.root, path.join(link, "docs"), "big.md")],
         ["cwd the project through a symlink", cursor(p.root, link, "docs/big.md")],
+        ["workspace through a symlink, cwd its real subfolder", cursor(link, path.join(p.root, "docs"), "big.md")],
       ]) {
         const out = p.run(payload);
         assert(nudgeIn(out, "additional_context").startsWith("docs/big.md is now"), name + " got " + JSON.stringify(out));
       }
+      // A folder inside the project that links out of it is still where the agent works: the
+      // lexical test comes first, so its relative path is not re-rooted at the workspace.
+      const external = path.join(p.base, "external");
+      fs.mkdirSync(external);
+      fs.copyFileSync(p.doc, path.join(external, "big.md"));
+      fs.copyFileSync(p.doc, path.join(p.root, "big.md"));
+      fs.symlinkSync(external, path.join(p.root, "shared"), process.platform === "win32" ? "junction" : "dir");
+      const out = p.run(cursor(p.root, path.join(p.root, "shared"), "big.md"));
+      assert(nudgeIn(out, "additional_context").startsWith("shared/big.md is now"), "cwd a project folder linked outside it got " + JSON.stringify(out));
     }
   } finally {
     p.cleanup();
