@@ -2171,6 +2171,23 @@ check("Cursor: a relative path resolves against its cwd inside the project, and 
       const out = p.run(payload);
       assert(nudgeIn(out, "additional_context").startsWith("docs/big.md is now"), name + " got " + JSON.stringify(out));
     }
+    // A cwd reached through a symlink (macOS's /tmp is /private/tmp) is still inside the project.
+    const link = path.join(p.base, "link");
+    let linked = true;
+    try {
+      fs.symlinkSync(p.root, link, process.platform === "win32" ? "junction" : "dir");
+    } catch {
+      linked = false;
+    }
+    if (linked) {
+      for (const [name, payload] of [
+        ["cwd a symlinked subfolder of the project", cursor(p.root, path.join(link, "docs"), "big.md")],
+        ["cwd the project through a symlink", cursor(p.root, link, "docs/big.md")],
+      ]) {
+        const out = p.run(payload);
+        assert(nudgeIn(out, "additional_context").startsWith("docs/big.md is now"), name + " got " + JSON.stringify(out));
+      }
+    }
   } finally {
     p.cleanup();
   }

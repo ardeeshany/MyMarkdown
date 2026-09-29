@@ -383,10 +383,19 @@ function main(payload) {
   const oldLayout = !inProject && (dialect === "claude" || dialect === "cursor") && process.env.CLAUDE_PROJECT_DIR && fs.existsSync(path.join(ROOT, ".claude", "hooks", "markdown-labels.cjs"));
   // Relative paths are relative to where the agent works. Cursor has run plugin hooks with the
   // plugin folder as cwd (and older builds with the project), so its cwd is trusted only
-  // inside the project.
+  // inside the project. That test compares real paths, so a cwd reached through a symlink (macOS's
+  // /tmp is /private/tmp) still counts; it is re-spelled under ROOT so the per-file test below agrees.
   const cwd = typeof payload.cwd === "string" && payload.cwd ? payload.cwd : null;
-  const fromRoot = cwd && path.relative(ROOT, cwd);
-  const base = cwd && (dialect !== "cursor" || !(fromRoot.startsWith("..") || path.isAbsolute(fromRoot))) ? cwd : inProject ? process.cwd() : ROOT;
+  const real = (dir) => {
+    try {
+      return fs.realpathSync.native(dir);
+    } catch {
+      return path.resolve(dir);
+    }
+  };
+  const fromRoot = cwd && dialect === "cursor" && path.relative(real(ROOT), real(cwd));
+  const inside = typeof fromRoot === "string" && !(fromRoot.startsWith("..") || path.isAbsolute(fromRoot));
+  const base = cwd && dialect !== "cursor" ? cwd : inside ? path.join(ROOT, fromRoot) : inProject ? process.cwd() : ROOT;
 
   const notes = [];
   for (const file of writtenFiles(input, base)) {
