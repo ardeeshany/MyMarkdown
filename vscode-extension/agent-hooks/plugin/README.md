@@ -16,4 +16,4 @@ README's "Labels from your coding agent" section for the full list):
 
 In a project that has the per-repo install (`npx mymarkdown-hooks init`), this plugin stays
 quiet for the agents that also run the per-project files (Claude Code, Codex, Copilot CLI and VS
-Code agent mode, Cursor and Kiro).
+Code agent mode, and Cursor).

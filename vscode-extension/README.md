@@ -122,7 +122,7 @@ You need Node.js on your `PATH`.
 Instead of setting up each project, install the hook and skill once as a plugin, through
 each agent's own plugin command. It then runs in every project, and stays quiet in a project
 that has the per-project setup above, for the agents that also run those files (Claude Code,
-Codex, Copilot CLI and VS Code agent mode, Cursor and Kiro). Requires Node.js 18 or later.
+Codex, Copilot CLI and VS Code agent mode, and Cursor). Requires Node.js 18 or later.
 
 ```
 Claude Code   claude plugin marketplace add ardeeshany/MyMarkdown
@@ -132,6 +132,8 @@ Cursor        Customize → Browse Marketplace → + Add Marketplace → Import 
               Already installed in Claude Code? Skip this: Cursor imports it and runs the same hook.
 Copilot CLI   copilot plugin marketplace add ardeeshany/MyMarkdown
               copilot plugin install mymarkdown@mymarkdown-plugins
+VS Code       add "chat.pluginLocations": { "<path to a clone of the plugin folder>": true } to your settings
+              (or install it from Agent Plugins in the Extensions view once listed)
 Codex         codex plugin marketplace add ardeeshany/MyMarkdown
               codex plugin add mymarkdown@mymarkdown-plugins
               then in the terminal app, /hooks: trust the hook once

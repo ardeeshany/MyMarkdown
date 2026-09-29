@@ -1073,13 +1073,15 @@ function driveLabelCommands(sidecarByPath, activeDocument, openDocuments) {
       applyEdit: async () => true,
       getWorkspaceFolder: () => ({ uri: { fsPath: "/ws" } }),
       fs: {
+        // A string is a file's text as it is on disk (a Markdown document); anything else is a
+        // sidecar, stored as its parsed JSON.
         readFile: async (uri) => {
           const body = sidecarByPath[uri.fsPath];
           if (body === undefined) throw new Error("no sidecar");
-          return Buffer.from(JSON.stringify(body), "utf8");
+          return Buffer.from(typeof body === "string" ? body : JSON.stringify(body), "utf8");
         },
         writeFile: async (uri, contents) => {
-          written.push({ path: uri.fsPath, body: JSON.parse(contents.toString("utf8")) });
+          written.push({ path: uri.fsPath, body: JSON.parse(contents.toString("utf8")), text: contents.toString("utf8") });
         },
         createDirectory: async () => {},
         delete: async () => {
@@ -1281,6 +1283,8 @@ check("an unanchored sidecar (written by an agent without a hook) is stamped on 
     assert(range.anchor === "## b", "the write carries anchors: " + JSON.stringify(range));
     // The skill tells agents never to write a hash, and stamping adds nothing but anchors.
     assert(!("sourceHash" in host.written[0].body), "no sourceHash is written: " + JSON.stringify(host.written[0].body));
+    // The same bytes the hook's own stamp writes: two-space JSON and a final newline.
+    assert(host.written[0].text === JSON.stringify(Labels.stampAnchors(sidecars["/ws/.mymd/doc.md.json"], doc), null, 2) + "\n", "the stamp's on-disk format: " + JSON.stringify(host.written[0].text));
     // The watcher sees the file it just wrote: no second write.
     sidecars["/ws/.mymd/doc.md.json"] = host.written[0].body;
     host.watchers[0].handlers.change(sidecarUri("/ws/.mymd/doc.md.json"));
@@ -1452,6 +1456,33 @@ check("a stamp that lands lets the agent's next unanchored sidecar be stamped to
       assert(host.written.length === 2, "the agent's new sidecar is stamped as well, got " + host.written.length);
       assert(require("util").isDeepStrictEqual(host.written[1].body, Labels.stampAnchors(next, doc)), "stamped as the agent wrote it: " + JSON.stringify(host.written[1].body));
     });
+});
+
+check("a document with unsaved edits is stamped against the file on disk, which is what the agent counted lines in", () => {
+  const disk = "# A\n\nabc\n\n## B\n\ndef\n";
+  const buffer = "new\n\n" + disk;
+  const raw = { version: 1, lenses: [{ name: "Parts", ranges: [{ label: "One", color: "#111111", startLine: 5, endLine: 7 }] }] };
+  const document = fakeMarkdownDocument("/ws/doc.md", buffer);
+  document.isDirty = true;
+  const host = driveLabelCommands({ "/ws/.mymd/doc.md.json": raw, "/ws/doc.md": disk }, document);
+  return settle().then(() => {
+    assert(host.written.length === 1, "exactly one write, got " + host.written.length);
+    const range = host.written[0].body.lenses[0].ranges[0];
+    assert(range.anchor === "## b" && range.endAnchor === "def", "anchors from the disk text, not the buffer: " + JSON.stringify(range));
+  });
+});
+
+check("a sidecar the agent rewrites while the stamp makes its folder is left to the agent", () => {
+  const doc = "# A\n\nabc\n\n## B\n\ndef\n";
+  const sidecars = { "/ws/.mymd/doc.md.json": { version: 1, lenses: [{ name: "Parts", ranges: [{ label: "One", color: "#111111", startLine: 5, endLine: 7 }] }] } };
+  const host = driveLabelCommands(sidecars, fakeMarkdownDocument("/ws/doc.md", doc));
+  // The agent's rewrite lands before createDirectory resolves: the last await before the write.
+  host.vscode.workspace.fs.createDirectory = async () => {
+    sidecars["/ws/.mymd/doc.md.json"] = { version: 1, lenses: [{ name: "Newer", ranges: [{ label: "Two", color: "#222222", startLine: 1, endLine: 3 }] }] };
+  };
+  return settle().then(() => {
+    assert(host.written.length === 0, "the stamp must not overwrite the agent's rewrite, got " + host.written.length);
+  });
 });
 
 check("the preview keeps drawing the lens right after a stamp write lands", () => {
@@ -1802,6 +1833,8 @@ check("plugin manifests: one name, one version, one description, and a hooks key
     for (const key of ["author", "license"]) assert(m[key], file + " lacks " + key);
   }
   assert(!("url" in readJson(PLUGIN + "/.cursor-plugin/plugin.json").author), "Cursor's manifest schema allows no author url");
+  assert(JSON.stringify(readJson(PLUGIN + "/.codex-plugin/plugin.json").keywords) === '["markdown","labels","vscode","mymarkdown"]', "Codex manifest keywords");
+  assert(readJson(PLUGIN + "/.cursor-plugin/plugin.json").displayName === "MyMarkdown labels", "Cursor manifest displayName");
   const codex = readJson(PLUGIN + "/.codex-plugin/plugin.json").interface || {};
   assert(codex.displayName === "MyMarkdown labels" && codex.shortDescription === "Label the Markdown you write, for the MyMarkdown preview" && codex.category === "Developer Tools" && JSON.stringify(codex.capabilities) === '["Skills","Lifecycle hooks"]', "Codex install-surface interface: " + JSON.stringify(codex));
   for (const file of ["README.md", "LICENSE", "hooks/markdown-labels.cjs", "skills/markdown-labels/SKILL.md", "cursor/hooks.json"]) {
@@ -1825,6 +1858,7 @@ check("marketplace files: each reader's format, the same plugin name and path, n
   assert(augment.version === PKG_VERSION && augment.plugins[0].version === PKG_VERSION, "Augment carries the version");
   const cursor = JSON.parse(fs.readFileSync(path.join(REPO, ".cursor-plugin", "marketplace.json"), "utf8"));
   const bareSource = (source) => source.replace(/^\.\//, "");
+  assert(JSON.stringify(cursor.owner) === '{"name":"MyMarkdown"}' && cursor.metadata && cursor.metadata.description === "Plugins for the MyMarkdown VS Code extension.", "Cursor marketplace owner and metadata: " + JSON.stringify([cursor.owner, cursor.metadata]));
   assert(cursor.name === claude.name && cursor.plugins.length === 1 && cursor.plugins[0].name === "mymarkdown" && cursor.plugins[0].description === claude.plugins[0].description && bareSource(cursor.plugins[0].source) === bareSource(rel), "Cursor marketplace agrees with Claude's: " + JSON.stringify(cursor));
   assert(fs.existsSync(path.join(REPO, rel, ".claude-plugin", "plugin.json")), "every source points at the plugin folder");
 });
@@ -2010,6 +2044,8 @@ function pluginWrites(p) {
     // Either Qoder variable alone is enough to tell it from Claude Code.
     ["Qoder CLI (project variable only)", { hook_event_name: "PostToolUse", tool_name: "Write", tool_input: { file_path: p.doc }, tool_response: {}, cwd: p.root }, { QODER_PROJECT_DIR: p.root, CLAUDE_PROJECT_DIR: p.root }, "hookSpecificOutput", qualified, false],
     ["OpenCode", { agent: "opencode", hook_event_name: "PostToolUse", tool_name: "write", tool_input: { filePath: p.doc }, cwd: p.root }, {}, "hookSpecificOutput", "markdown-labels", false],
+    // The adapter's explicit marker wins over Qoder's environment heuristic.
+    ["OpenCode under Qoder's variables", { agent: "opencode", hook_event_name: "PostToolUse", tool_name: "write", tool_input: { filePath: p.doc }, cwd: p.root }, { QODER_HOOK_SOURCE: "cli", QODER_PROJECT_DIR: p.root }, "hookSpecificOutput", "markdown-labels", false],
   ];
 }
 
@@ -2429,7 +2465,10 @@ check("OpenCode adapter: registers the skill and appends the nudge to a write's 
       const sub = await plugin.server({ directory: path.join(p.root, "docs"), worktree: "/" });
       const relative = { title: "write", output: "Wrote big.md", metadata: {} };
       await sub["tool.execute.after"]({ tool: "write", sessionID: "s", callID: "c", args: { filePath: "big.md", content: "x" } }, relative);
-      includes(relative.output, "big.md is now", "1.x: a relative write from a subfolder resolves against the directory");
+      includes(relative.output, "docs/big.md is now", "1.x: a relative write from a subfolder resolves against the directory");
+      const patched1 = { title: "apply_patch", output: "Applied", metadata: {} };
+      await hooks["tool.execute.after"]({ tool: "apply_patch", sessionID: "s", callID: "c", args: { patchText: "*** Begin Patch\n*** Add File: docs/big.md\n+x\n*** End Patch" } }, patched1);
+      includes(patched1.output, "docs/big.md is now", "1.x: the nudge after an apply_patch");
       // Controller's ruling: OpenCode runs no per-repo hook of its own, so a project's
       // .agents/hooks copy (written for claude/copilot/cursor/kiro) must not silence it, and
       // it must be told its own skill name, not Claude's plugin-namespaced one.
@@ -2527,7 +2566,7 @@ check("Kiro hook files: a prompt nudge on Markdown saves, a command that stamps 
     const sidecar = new RegExp(stamp.matcher);
     assert(stamp.trigger === "PostFileSave", file + ": stamping fires on saves");
     for (const sample of [".mymd/docs/guide.md.json", "/p/.mymd/docs/guide.md.json", "C:\\p\\.mymd\\guide.md.json"]) assert(sidecar.test(sample), file + ": stamping must match the sidecar " + sample);
-    for (const sample of ["/p/docs/guide.md", "/p/x.mymd/a.json"]) assert(!sidecar.test(sample), file + ": stamping must not match " + sample);
+    for (const sample of ["/p/docs/guide.md", "/p/x.mymd/a.json", ".mymd/a.json.bak", "/p/amymd/a.json"]) assert(!sidecar.test(sample), file + ": stamping must not match " + sample);
     assert(stamp.action.type === "command" && stamp.action.command === command && stamp.timeout === 15, file + ": the stamping command: " + stamp.action.command);
     stamp.action.command = "";
     withoutCommand.push(JSON.stringify(data));
@@ -2539,7 +2578,7 @@ check("docs: the README's install lines name the marketplace, the version is one
   // Prose is wrapped, so a phrase is looked for with its line breaks read as spaces.
   const read = (...parts) => fs.readFileSync(path.join(__dirname, ...parts), "utf8").replace(/\s+/g, " ");
   const readme = read("README.md");
-  for (const line of ["claude plugin install mymarkdown@mymarkdown-plugins", "copilot plugin install mymarkdown@mymarkdown-plugins", "codex plugin add mymarkdown@mymarkdown-plugins", "devin plugins install ardeeshany/MyMarkdown#vscode-extension/agent-hooks/plugin", '"plugin": ["mymarkdown-hooks"]', "Import from GitHub", "kiro-cli --v3", "plugin-antigravity", "~/.kiro/hooks", "~/.agents/skills", "Both add the same eight files", "`.claude/skills/` and `.kiro/skills/`", "(Claude Code, Codex, Copilot CLI and VS Code agent mode, Cursor and Kiro)"]) {
+  for (const line of ["claude plugin install mymarkdown@mymarkdown-plugins", "copilot plugin install mymarkdown@mymarkdown-plugins", "codex plugin add mymarkdown@mymarkdown-plugins", "devin plugins install ardeeshany/MyMarkdown#vscode-extension/agent-hooks/plugin", '"plugin": ["mymarkdown-hooks"]', "Import from GitHub", "kiro-cli --v3", "plugin-antigravity", "~/.kiro/hooks", "~/.agents/skills", "Both add the same eight files", "`.claude/skills/` and `.kiro/skills/`", "(Claude Code, Codex, Copilot CLI and VS Code agent mode, and Cursor)", "opencode plugin -g mymarkdown-hooks (1.x)", "opencode plugin add mymarkdown-hooks (2.x)", "Cursor, Codex and Kiro. When an agent", "| Kiro |", '"chat.pluginLocations": { "<path to a clone of the plugin folder>": true }', "Agent Plugins in the Extensions view"]) {
     includes(readme, line, "extension README");
   }
   includes(readme, "Install once for every project", "the section");
@@ -2547,7 +2586,9 @@ check("docs: the README's install lines name the marketplace, the version is one
   includes(npm, "affiliated with the `mymarkdown-cli`", "the npm README disowns the unrelated mymarkdown-* packages");
   includes(npm, '"plugin": ["mymarkdown-hooks"]', "the npm README says it is the OpenCode plugin");
   for (const file of [".kiro/hooks/markdown-labels.json", ".kiro/skills/markdown-labels/SKILL.md"]) includes(npm, file, "the npm README lists every file the installer writes");
-  includes(read(PLUGIN, "README.md"), "(Claude Code, Codex, Copilot CLI and VS Code agent mode, Cursor and Kiro)", "the plugin README names the agents it stays quiet for");
+  for (const line of ["Cursor, Codex and Kiro", "`opencode plugin -g mymarkdown-hooks` (1.x)", "`opencode plugin add mymarkdown-hooks` (2.x)"]) includes(npm, line, "npm README");
+  // Kiro's nudge is a prompt in both of its hook files and fires from each, so it is not in this list.
+  includes(read(PLUGIN, "README.md"), "(Claude Code, Codex, Copilot CLI and VS Code agent mode, and Cursor)", "the plugin README names the agents it stays quiet for");
   for (const copy of [".agents/skills/markdown-labels/SKILL.md", ".claude/skills/markdown-labels/SKILL.md", ".kiro/skills/markdown-labels/SKILL.md"]) {
     assert(fs.readFileSync(path.join(REPO, copy), "utf8") === fs.readFileSync(path.join(__dirname, PLUGIN, "skills/markdown-labels/SKILL.md"), "utf8"), copy + " drifted from the plugin's skill");
   }
@@ -2556,16 +2597,22 @@ check("docs: the README's install lines name the marketplace, the version is one
 check("plugin hook files: one shared Claude-schema entry every reader parses, and Cursor's own file", () => {
   const shared = readJson(PLUGIN + "/hooks/hooks.json");
   assert(Object.keys(shared).join() === "hooks", "Codex accepts only description and hooks at the top level, got " + Object.keys(shared));
+  assert(Object.keys(shared.hooks).join() === "PostToolUse" && shared.hooks.PostToolUse.length === 1, "one event with one group: " + JSON.stringify(shared.hooks));
   const group = shared.hooks.PostToolUse[0];
   assert(group.matcher === "Write|Edit|write|edit|apply_patch|save-file|str-replace-editor|create|str_replace_editor", "the matcher names every reader's write tools, Copilot CLI's create and str_replace_editor too, got " + group.matcher);
+  assert(group.hooks.length === 1, "one hook in the group, got " + group.hooks.length);
   const hook = group.hooks[0];
-  assert(hook.type === "command" && !("timeout" in hook), "no timeout: Augment reads it as milliseconds and kills the hook before Node starts");
+  assert(hook.type === "command", "a command hook");
+  assert(!/"timeout"/.test(JSON.stringify(shared)), "no timeout at any level: Augment reads it as milliseconds and kills the hook before Node starts");
   assert(hook.command === 'node "${CLAUDE_PLUGIN_ROOT}/hooks/markdown-labels.cjs"; exit 0', "the shared command, which a machine without node must not turn into an error after every write: " + hook.command);
-  const stray = fs.readdirSync(path.join(__dirname, PLUGIN, "hooks"), { recursive: true }).filter((file) => /\.json$/i.test(file) && file !== "hooks.json");
+  // An explicit walk: readdirSync's recursive option needs Node 18.17, and engines says 18.
+  const walk = (dir) => fs.readdirSync(dir, { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? walk(path.join(dir, e.name)).map((f) => e.name + "/" + f) : [e.name]));
+  const stray = walk(path.join(__dirname, PLUGIN, "hooks")).filter((file) => /\.json$/i.test(file) && file !== "hooks.json");
   assert(stray.length === 0, "Augment loads every JSON file under hooks/, so hooks.json must be the only one: " + stray);
   const cursor = readJson(PLUGIN + "/cursor/hooks.json");
   assert(cursor.version === 1 && Object.keys(cursor.hooks).join() === "postToolUse" && cursor.hooks.postToolUse.length === 1, "Cursor's own schema, one postToolUse entry");
   const entry = cursor.hooks.postToolUse[0];
+  assert(Object.keys(entry).sort().join() === "command,matcher,timeout", "Cursor's entry has only command, matcher and timeout: " + Object.keys(entry));
   assert(entry.command === 'node "${CURSOR_PLUGIN_ROOT}/hooks/markdown-labels.cjs"', "Cursor's command, quoted so a plugin path with a space still runs: " + entry.command);
   assert(entry.matcher === "Write" && entry.timeout === 15, "Cursor's one write tool, 15 s");
 });
@@ -2811,6 +2858,8 @@ check("agent hooks installer: configs are not pointed at a hook script that coul
     }
     const run = spawnSync(process.execPath, [HOOK_CLI, "init", project.root], { encoding: "utf8" });
     assert(run.status === 1 && !run.stdout.includes("pick the hook up"), "no success line when the hook is not active: " + run.stdout);
+    // A skill is worth having without the hook, so no skill copy is skipped with it.
+    for (const target of Hooks.TARGETS) if (target.dest.endsWith("SKILL.md")) assert(!target.runsHook, target.dest + " must not be marked runsHook");
   } finally {
     project.cleanup();
   }

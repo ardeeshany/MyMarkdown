@@ -266,16 +266,19 @@ async function writeSidecar(document, lenses) {
 /**
  * Write `next`, the stamped copy of `raw`, over the sidecar — unless the file is no longer
  * `raw`: then the agent rewrote it since the read, the watcher brings that content, and the
- * older copy must not overwrite it. The lens cache is left alone, since the stamped file
- * reads back at the same positions, so the bars do not flicker off until a reread. Resolves
- * true when the write landed or was skipped for that reason, false when it failed.
+ * older copy must not overwrite it. The folder is made before that check, so nothing is
+ * awaited between it and the write. The lens cache is left alone, since a range that starts
+ * and ends on content lines reads back at the same position, so the bars do not flicker off
+ * until a reread; one that begins or ends on blank lines is re-found from its anchor lines
+ * at that reread, as every range the extension writes itself is. Resolves true when the
+ * write landed or was skipped for that reason, false when it failed.
  */
 async function stampSidecar(document, raw, next) {
   try {
     const uri = sidecarUri(document);
     if (!uri) return false;
-    if (JSON.stringify(await readSidecar(document)) !== JSON.stringify(raw)) return true;
     await vscode.workspace.fs.createDirectory(vscode.Uri.joinPath(uri, ".."));
+    if (JSON.stringify(await readSidecar(document)) !== JSON.stringify(raw)) return true;
     await vscode.workspace.fs.writeFile(uri, Buffer.from(JSON.stringify(next, null, 2) + "\n", "utf8"));
     return true;
   } catch (error) {
@@ -312,9 +315,20 @@ async function lensesFor(document, { stamp = true } = {}) {
   // unless a range can actually GAIN an anchor on the current text, or such a range would be
   // rewritten on every single reread, forever, for as long as the document stays open.
   if (stamp && labelsEnabled() && !stamped.has(key)) {
+    // The agent counted lines in the file it wrote, so a buffer with unsaved edits would put
+    // the anchors on the wrong lines: stamp against the file on disk instead, or not at all.
+    let base = text;
+    if (document.isDirty) {
+      try {
+        base = Buffer.from(await vscode.workspace.fs.readFile(document.uri)).toString("utf8");
+      } catch {
+        base = null;
+      }
+    }
     let next = null;
     try {
-      next = Labels.stampAnchors(raw, text);
+      // Checked again: another read may have started a stamp while this one read the file.
+      if (base !== null && !stamped.has(key)) next = Labels.stampAnchors(raw, base);
     } catch {
       // A file nested too deeply to copy is still read; it is just never stamped.
     }
