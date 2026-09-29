@@ -1,0 +1,15 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit|write|edit|apply_patch|save-file|str-replace-editor|create|str_replace_editor",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/markdown-labels.cjs\"; exit 0"
+          }
+        ]
+      }
+    ]
+  }
+}

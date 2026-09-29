@@ -43,7 +43,7 @@ function normalizeAnchor(line) {
 
 /** The first line with something on it, searching forward from `from` and not past `to`. */
 function firstContentLine(lines, from, to) {
-  for (let i = from; i <= to && i < lines.length; i += 1) {
+  for (let i = Math.max(0, from); i <= to && i < lines.length; i += 1) {
     if (String(lines[i] ?? "").trim()) return i;
   }
   return -1;
@@ -68,9 +68,13 @@ function anchorsFor(lines, startLine, endLine) {
   const to = endLine - 1;
   const first = firstContentLine(lines, from, to);
   const last = lastContentLine(lines, from, to);
+  // The line before the closing one: with it, a closing line that repeats (a ``` or ---)
+  // can be told apart from a copy of it in the section after.
+  const before = last > first ? lastContentLine(lines, first, last - 1) : -1;
   return {
     anchor: first === -1 ? "" : normalizeAnchor(lines[first]),
     endAnchor: last === -1 ? "" : normalizeAnchor(lines[last]),
+    prevAnchor: before === -1 ? "" : normalizeAnchor(lines[before]),
   };
 }
 
@@ -96,12 +100,31 @@ function locateRange(keys, range) {
   }
   if (!starts.length) return null;
 
+  // Where the closing line would be if the range's text had only moved: `span` below the
+  // opening line, less the blank lines the range ended on (the closing anchor is the last
+  // line with something on it).
+  const ownEnd = (start) => {
+    let end = Math.min(start + span, keys.length - 1);
+    while (end > start && !keys[end]) end -= 1;
+    return end;
+  };
+  const contentBefore = (at) => {
+    let j = at - 1;
+    while (j >= 0 && !keys[j]) j -= 1;
+    return j < 0 ? "" : keys[j];
+  };
+
   // The closing line is searched forward from the opening one and no further than the span
   // it used to have (plus slack), so a line that moved to the end of the file cannot stretch
-  // the range over everything in between.
+  // the range over everything in between. The range's own closing line is taken first when
+  // it and the line before it both still match: a closing line like ``` usually repeats
+  // inside the range, and the first match would cut it short. Otherwise the first match.
   const endFor = (start) => {
     if (!range.endAnchor) return start + span;
     const limit = Math.min(keys.length - 1, start + span + END_SLACK);
+    const expected = Math.min(ownEnd(start), limit);
+    const ownText = !range.prevAnchor || contentBefore(expected) === range.prevAnchor;
+    if (keys[expected] === range.endAnchor && ownText) return expected;
     for (let j = start; j <= limit; j += 1) {
       if (keys[j] === range.endAnchor) return j;
     }
@@ -125,7 +148,7 @@ function locateRange(keys, range) {
   for (const start of starts) {
     const end = endFor(start);
     if (end === -1) continue;
-    const expected = start + span;
+    const expected = range.endAnchor ? ownEnd(start) : start + span;
     candidates.push({
       start,
       end,
@@ -182,6 +205,7 @@ function sanitizeRanges(rawRanges, lineCount) {
       endLine: end,
       anchor: String(raw.anchor ?? ""),
       endAnchor: String(raw.endAnchor ?? ""),
+      prevAnchor: String(raw.prevAnchor ?? ""),
     });
   }
 
@@ -251,6 +275,7 @@ function storedRanges(rawList) {
       endLine: end,
       anchor: String(raw.anchor ?? ""),
       endAnchor: String(raw.endAnchor ?? ""),
+      prevAnchor: String(raw.prevAnchor ?? ""),
     });
   }
   return out;
@@ -342,6 +367,32 @@ function writeLabels(documentText, lenses, existing) {
   };
 }
 
+/**
+ * The agent's own sidecar with anchors added to each range that has none and can gain one
+ * from `documentText`, and nothing else changed: every other key, lens, range and value,
+ * over-limit or unknown, is kept as written. Opening a document must not rewrite what an
+ * agent wrote into the reader's sanitised view of it. The hook's stamp() does the same, so
+ * either one may stamp a file first. Null when `raw` is not a sidecar or nothing would change.
+ * @param {unknown} raw parsed sidecar JSON, or anything at all
+ * @param {string} documentText the document as it is right now
+ */
+function stampAnchors(raw, documentText) {
+  if (!raw || typeof raw !== "object" || !Array.isArray(raw.lenses)) return null;
+  const lines = String(documentText ?? "").split("\n");
+  const next = structuredClone(raw);
+  let changed = false;
+  for (const lens of next.lenses) {
+    for (const range of Array.isArray(lens?.ranges) ? lens.ranges : []) {
+      if (!range || typeof range !== "object" || range.anchor) continue;
+      const anchors = anchorsFor(lines, Math.trunc(Number(range.startLine)), Math.trunc(Number(range.endLine)));
+      if (!anchors.anchor) continue;
+      Object.assign(range, anchors);
+      changed = true;
+    }
+  }
+  return changed ? next : null;
+}
+
 /** The sidecar path for a document, mirroring its path under a single hidden folder. */
 function sidecarPath(relativePath, storageFolder) {
   const clean = String(relativePath ?? "")
@@ -362,6 +413,7 @@ function numberLines(text) {
 module.exports = {
   readLabels,
   writeLabels,
+  stampAnchors,
   sanitizeRanges,
   reanchorRanges,
   anchorsFor,

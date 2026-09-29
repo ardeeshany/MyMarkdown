@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "hooks": {
+    "postToolUse": [
+      {
+        "command": "node \"${CURSOR_PLUGIN_ROOT}/hooks/markdown-labels.cjs\"",
+        "matcher": "Write",
+        "timeout": 15
+      }
+    ]
+  }
+}

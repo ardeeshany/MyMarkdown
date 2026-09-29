@@ -1,0 +1,14 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "mymarkdown-plugins",
+  "description": "Plugins for the MyMarkdown VS Code extension.",
+  "owner": { "name": "MyMarkdown", "url": "https://github.com/ardeeshany/MyMarkdown" },
+  "plugins": [
+    {
+      "name": "mymarkdown",
+      "description": "Have coding agents label the Markdown they write, for the MyMarkdown VS Code extension. Runs a Node hook after each Markdown write; nothing leaves your machine. Requires Node.js 18 or later.",
+      "source": "./vscode-extension/agent-hooks/plugin",
+      "category": "productivity"
+    }
+  ]
+}

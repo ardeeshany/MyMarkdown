@@ -1,0 +1,12 @@
+{
+  "name": "mymarkdown-plugins",
+  "interface": { "displayName": "MyMarkdown plugins" },
+  "plugins": [
+    {
+      "name": "mymarkdown",
+      "source": { "source": "local", "path": "./vscode-extension/agent-hooks/plugin" },
+      "policy": { "installation": "AVAILABLE", "authentication": "ON_USE" },
+      "category": "Developer Tools"
+    }
+  ]
+}
