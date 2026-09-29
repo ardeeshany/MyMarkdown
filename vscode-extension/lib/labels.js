@@ -367,6 +367,32 @@ function writeLabels(documentText, lenses, existing) {
   };
 }
 
+/**
+ * The agent's own sidecar with anchors added to each range that has none and can gain one
+ * from `documentText`, and nothing else changed: every other key, lens, range and value,
+ * over-limit or unknown, is kept as written. Opening a document must not rewrite what an
+ * agent wrote into the reader's sanitised view of it. The hook's stamp() does the same, so
+ * either one may stamp a file first. Null when `raw` is not a sidecar or nothing would change.
+ * @param {unknown} raw parsed sidecar JSON, or anything at all
+ * @param {string} documentText the document as it is right now
+ */
+function stampAnchors(raw, documentText) {
+  if (!raw || typeof raw !== "object" || !Array.isArray(raw.lenses)) return null;
+  const lines = String(documentText ?? "").split("\n");
+  const next = structuredClone(raw);
+  let changed = false;
+  for (const lens of next.lenses) {
+    for (const range of Array.isArray(lens?.ranges) ? lens.ranges : []) {
+      if (!range || typeof range !== "object" || range.anchor) continue;
+      const anchors = anchorsFor(lines, Math.trunc(Number(range.startLine)), Math.trunc(Number(range.endLine)));
+      if (!anchors.anchor) continue;
+      Object.assign(range, anchors);
+      changed = true;
+    }
+  }
+  return changed ? next : null;
+}
+
 /** The sidecar path for a document, mirroring its path under a single hidden folder. */
 function sidecarPath(relativePath, storageFolder) {
   const clean = String(relativePath ?? "")
@@ -387,6 +413,7 @@ function numberLines(text) {
 module.exports = {
   readLabels,
   writeLabels,
+  stampAnchors,
   sanitizeRanges,
   reanchorRanges,
   anchorsFor,

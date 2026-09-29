@@ -264,11 +264,32 @@ async function writeSidecar(document, lenses) {
 }
 
 /**
- * Documents that already had their once-only stamp attempt: added before the write starts,
- * so a second read arriving while it is still in flight cannot fire a second one, and left
- * in place afterward unless the write actually landed. A write that fails shows its own
- * error and must not be retried on every later edit, so only success clears the entry — a
- * sidecar with real anchors will not look unanchored on the next read anyway.
+ * Write `next`, the stamped copy of `raw`, over the sidecar — unless the file is no longer
+ * `raw`: then the agent rewrote it since the read, the watcher brings that content, and the
+ * older copy must not overwrite it. The lens cache is left alone, since the stamped file
+ * reads back at the same positions, so the bars do not flicker off until a reread. Resolves
+ * true when the write landed or was skipped for that reason, false when it failed.
+ */
+async function stampSidecar(document, raw, next) {
+  try {
+    const uri = sidecarUri(document);
+    if (!uri) return false;
+    if (JSON.stringify(await readSidecar(document)) !== JSON.stringify(raw)) return true;
+    await vscode.workspace.fs.createDirectory(vscode.Uri.joinPath(uri, ".."));
+    await vscode.workspace.fs.writeFile(uri, Buffer.from(JSON.stringify(next, null, 2) + "\n", "utf8"));
+    return true;
+  } catch (error) {
+    vscode.window.showErrorMessage("MyMarkdown: could not save labels — " + (error?.message || error));
+    return false;
+  }
+}
+
+/**
+ * Documents with a stamp in progress or failed: added before the write starts, so a second
+ * read arriving while it is still in flight cannot fire a second one, and cleared only when
+ * the write landed or was skipped because the file changed, so the agent's next sidecar can
+ * be stamped in turn. A write that fails shows its own error and must not be retried on
+ * every later edit, so it keeps its entry.
  */
 const stamped = new Set();
 
@@ -278,23 +299,22 @@ async function lensesFor(document) {
   const cached = lensCache.get(key);
   if (cached && cached.version === document.version) return cached.lenses;
   const raw = await readSidecar(document);
-  const { lenses } = Labels.readLabels(raw, document.getText());
+  const text = document.getText();
+  const { lenses } = Labels.readLabels(raw, text);
   lensCache.set(key, { version: document.version, lenses });
   // A range with no anchor was written by hand or by an agent with no hook — but some ranges
-  // (blank lines, or one sanitising clamped onto the file's empty last line) never carry any
-  // content to anchor to and will always come back with anchor: "", however often they are
-  // restamped. Test whether a range could actually GAIN an anchor on the current text, not
-  // just whether it lacks one, or such a range would be rewritten on every single reread,
-  // forever, for as long as the document stays open.
-  const lines = document.getText().split("\n");
-  const unanchored = lenses.some(
-    (lens) => lens.ranges.some((range) => !range.anchor && Labels.anchorsFor(lines, range.startLine, range.endLine).anchor),
-  );
-  if (unanchored && !stamped.has(key)) {
-    stamped.add(key);
-    writeSidecar(document, []).then((ok) => {
-      if (ok) stamped.delete(key);
-    });
+  // (blank lines, or lines past the end of the file) never carry any content to anchor to and
+  // would stay anchor-less however often they were restamped. stampAnchors returns null
+  // unless a range can actually GAIN an anchor on the current text, or such a range would be
+  // rewritten on every single reread, forever, for as long as the document stays open.
+  if (labelsEnabled() && !stamped.has(key)) {
+    const next = Labels.stampAnchors(raw, text);
+    if (next) {
+      stamped.add(key);
+      stampSidecar(document, raw, next).then((ok) => {
+        if (ok) stamped.delete(key);
+      });
+    }
   }
   return lenses;
 }

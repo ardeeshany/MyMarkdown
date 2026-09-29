@@ -1278,7 +1278,9 @@ check("an unanchored sidecar (written by an agent without a hook) is stamped on 
   return settle().then(() => {
     assert(host.written.length === 1, "exactly one write, got " + host.written.length);
     const range = host.written[0].body.lenses[0].ranges[0];
-    assert(range.anchor === "## b" && host.written[0].body.sourceHash, "the write carries anchors and a hash: " + JSON.stringify(range));
+    assert(range.anchor === "## b", "the write carries anchors: " + JSON.stringify(range));
+    // The skill tells agents never to write a hash, and stamping adds nothing but anchors.
+    assert(!("sourceHash" in host.written[0].body), "no sourceHash is written: " + JSON.stringify(host.written[0].body));
     // The watcher sees the file it just wrote: no second write.
     sidecars["/ws/.mymd/doc.md.json"] = host.written[0].body;
     host.watchers[0].handlers.change(sidecarUri("/ws/.mymd/doc.md.json"));
@@ -1289,8 +1291,8 @@ check("an unanchored sidecar (written by an agent without a hook) is stamped on 
 });
 
 check("a range with no content line to anchor to is never written, however often the sidecar is reread", () => {
-  // Lines 1-8 split by "\n"; startLine 20/endLine 25 sanitises down to line 8, the empty
-  // string left after the trailing newline - there is no content there to ever anchor to.
+  // Lines 1-8 split by "\n"; startLine 20/endLine 25 lies past the end of the file, so there
+  // is no content there to ever anchor to.
   const doc = "# A\n\nabc\n\n## B\n\ndef\n";
   const sidecars = { "/ws/.mymd/doc.md.json": { version: 1, lenses: [{ name: "Parts", ranges: [{ label: "One", color: "#111111", startLine: 20, endLine: 25 }] }] } };
   const host = driveLabelCommands(sidecars, fakeMarkdownDocument("/ws/doc.md", doc));
@@ -1331,7 +1333,7 @@ check("a lens mixing a stampable range with one that can never gain an anchor is
     assert(host.written.length === 1, "exactly one write, got " + host.written.length);
     const ranges = host.written[0].body.lenses[0].ranges;
     assert(ranges[0].anchor === "## b", "the stampable range gets its anchor: " + JSON.stringify(ranges[0]));
-    assert(ranges[1].anchor === "", "the blank range stays anchor-less, not retried forever: " + JSON.stringify(ranges[1]));
+    assert(!("anchor" in ranges[1]), "the blank range is left exactly as the agent wrote it: " + JSON.stringify(ranges[1]));
     sidecars["/ws/.mymd/doc.md.json"] = host.written[0].body;
     host.watchers[0].handlers.change(sidecarUri("/ws/.mymd/doc.md.json"));
     return settle();
@@ -1361,6 +1363,106 @@ check("a stamp write that fails shows one error and is not retried after a later
     assert(host.written.length === 0, "still nothing written after the edit");
     const errors = host.messages.filter((m) => m.kind === "error");
     assert(errors.length === 1, "no second error after the edit, got " + errors.length);
+  });
+});
+
+check("stamping on read adds anchors to the agent's sidecar and loses nothing else from it", () => {
+  const doc = "# A\n\nabc\n\n## B\n\ndef\n";
+  const anchored = (n) => ({ label: "Part " + n, color: "#111111", startLine: 1, endLine: 3, anchor: "# a", endAnchor: "abc", prevAnchor: "# a" });
+  const raw = {
+    version: 1,
+    note: "a key the extension does not know",
+    lenses: [
+      {
+        name: "Parts",
+        ranges: [
+          { label: "Fresh", color: "#444444", startLine: 5, endLine: 7, reviewer: "an unknown range key" },
+          ...Array.from({ length: 45 }, (_, i) => anchored(i)),
+          { label: "Three word label", color: "#222222", startLine: 1, endLine: 1, anchor: "# a", endAnchor: "# a", prevAnchor: "" },
+          // Its opening line is gone from the document: the reader drops it, the file must not.
+          { label: "Stale", color: "#333333", startLine: 3, endLine: 3, anchor: "a line that no longer exists", endAnchor: "", prevAnchor: "" },
+        ],
+      },
+      ...Array.from({ length: 12 }, (_, i) => ({ name: "Lens " + i, ranges: [anchored(i)] })),
+    ],
+  };
+  const expected = JSON.parse(JSON.stringify(raw));
+  Object.assign(expected.lenses[0].ranges[0], { anchor: "## b", endAnchor: "def", prevAnchor: "## b" });
+  const host = driveLabelCommands({ "/ws/.mymd/doc.md.json": raw }, fakeMarkdownDocument("/ws/doc.md", doc));
+  return settle().then(() => {
+    assert(host.written.length === 1, "exactly one write, got " + host.written.length);
+    assert(require("util").isDeepStrictEqual(host.written[0].body, expected), "only the one range's anchors are added: " + JSON.stringify(host.written[0].body).slice(0, 400));
+  });
+});
+
+check("with labels disabled, reading a sidecar never writes it", () => {
+  const doc = "# A\n\nabc\n\n## B\n\ndef\n";
+  const sidecars = { "/ws/.mymd/doc.md.json": { version: 1, lenses: [{ name: "Parts", ranges: [{ label: "One", color: "#111111", startLine: 5, endLine: 7 }] }] } };
+  const document = fakeMarkdownDocument("/ws/doc.md", doc);
+  const host = driveLabelCommands(sidecars, document);
+  // Activation's own read has not landed yet: it awaits the file first.
+  host.configStore["labels.enabled"] = false;
+  return settle()
+    .then(() => {
+      host.watchers[0].handlers.change(sidecarUri("/ws/.mymd/doc.md.json"));
+      return settle();
+    })
+    .then(() => {
+      host.activate(document);
+      return settle();
+    })
+    .then(() => {
+      assert(host.written.length === 0, "\"Disable labels completely\" means no writes either, got " + host.written.length);
+    });
+});
+
+check("a sidecar the agent rewrites between the read and the stamp is left to the agent", () => {
+  const doc = "# A\n\nabc\n\n## B\n\ndef\n";
+  const first = { version: 1, lenses: [{ name: "Parts", ranges: [{ label: "One", color: "#111111", startLine: 5, endLine: 7 }] }] };
+  const second = { version: 1, lenses: [{ name: "Newer", ranges: [{ label: "Two", color: "#222222", startLine: 1, endLine: 3 }] }] };
+  // Activation's read is already under way and sees the old file; every read after it, the
+  // stamp's own check included, sees the agent's rewrite.
+  const host = driveLabelCommands({ "/ws/.mymd/doc.md.json": first }, fakeMarkdownDocument("/ws/doc.md", doc));
+  host.vscode.workspace.fs.readFile = async () => Buffer.from(JSON.stringify(second), "utf8");
+  return settle()
+    .then(() => {
+      assert(host.written.length === 0, "the older content must not overwrite the agent's, got " + host.written.length);
+      host.watchers[0].handlers.change(sidecarUri("/ws/.mymd/doc.md.json"));
+      return settle();
+    })
+    .then(() => {
+      assert(host.written.length === 1, "the rewrite, once read, is stamped, got " + host.written.length);
+      assert(require("util").isDeepStrictEqual(host.written[0].body, Labels.stampAnchors(second, doc)), "the new content is what gets stamped: " + JSON.stringify(host.written[0].body));
+    });
+});
+
+check("a stamp that lands lets the agent's next unanchored sidecar be stamped too", () => {
+  const doc = "# A\n\nabc\n\n## B\n\ndef\n";
+  const sidecars = { "/ws/.mymd/doc.md.json": { version: 1, lenses: [{ name: "Parts", ranges: [{ label: "One", color: "#111111", startLine: 5, endLine: 7 }] }] } };
+  const host = driveLabelCommands(sidecars, fakeMarkdownDocument("/ws/doc.md", doc));
+  const next = { version: 1, lenses: [{ name: "Newer", ranges: [{ label: "Two", color: "#222222", startLine: 1, endLine: 3 }] }] };
+  return settle()
+    .then(() => {
+      assert(host.written.length === 1, "the first sidecar is stamped, got " + host.written.length);
+      sidecars["/ws/.mymd/doc.md.json"] = next;
+      host.watchers[0].handlers.change(sidecarUri("/ws/.mymd/doc.md.json"));
+      return settle();
+    })
+    .then(() => {
+      assert(host.written.length === 2, "the agent's new sidecar is stamped as well, got " + host.written.length);
+      assert(require("util").isDeepStrictEqual(host.written[1].body, Labels.stampAnchors(next, doc)), "stamped as the agent wrote it: " + JSON.stringify(host.written[1].body));
+    });
+});
+
+check("the preview keeps drawing the lens right after a stamp write lands", () => {
+  const doc = "# A\n\nabc\n\n## B\n\ndef\n";
+  const document = fakeMarkdownDocument("/ws/doc.md", doc);
+  const sidecars = { "/ws/.mymd/doc.md.json": { version: 1, lenses: [{ name: "Parts", ranges: [{ label: "One", color: "#111111", startLine: 5, endLine: 7 }] }] } };
+  const host = driveLabelCommands(sidecars, document);
+  const engine = host.api.extendMarkdownIt(new MarkdownIt());
+  return settle().then(() => {
+    assert(host.written.length === 1, "the stamp write landed, got " + host.written.length);
+    includes(engine.render(doc, { currentDocument: document.uri }), 'id="mymd-labels"', "the render straight after the stamp");
   });
 });
 
@@ -1716,6 +1818,40 @@ check("plugin hook: finds the project from the agent's context, never from where
     p.run({ tool_name: "Write", tool_input: { file_path: sidecar }, tool_response: {}, cwd: p.root });
     assert(fs.readFileSync(sidecar, "utf8") === once, "a second stamping run changes nothing");
     assert(fs.statSync(sidecar).mtimeMs === mtime, "a second stamping run does not rewrite the sidecar");
+  } finally {
+    p.cleanup();
+  }
+});
+
+check("the extension stamps a sidecar exactly as the hook's own stamp does", () => {
+  const p = pluginRepo();
+  try {
+    const raw = {
+      version: 1,
+      extra: { kept: true },
+      lenses: [
+        {
+          name: "L",
+          ranges: [
+            { label: "One", color: "#111111", startLine: 1, endLine: 3 },
+            { label: "Kept", color: "#222222", startLine: 5, endLine: 5, anchor: "## one", endAnchor: "## one", prevAnchor: "", note: 1 },
+            { label: "Blank", color: "#333333", startLine: 2, endLine: 2 },
+            { label: "Strings", color: "#444444", startLine: "9", endLine: "11.7" },
+          ],
+        },
+        "not a lens",
+        { name: "M", ranges: [null, 3, { label: "Past", color: "#555555", startLine: 99, endLine: 120 }] },
+      ],
+    };
+    const sidecar = path.join(p.root, ".mymd", "docs", "big.md.json");
+    fs.mkdirSync(path.dirname(sidecar), { recursive: true });
+    fs.writeFileSync(sidecar, JSON.stringify(raw));
+    p.run({ tool_name: "Write", tool_input: { file_path: sidecar }, tool_response: {}, cwd: p.root });
+    const hook = JSON.parse(fs.readFileSync(sidecar, "utf8"));
+    const extension = Labels.stampAnchors(raw, fs.readFileSync(p.doc, "utf8"));
+    assert(hook.lenses[0].ranges[0].anchor === "# guide", "the hook stamped the file: " + JSON.stringify(hook.lenses[0].ranges[0]));
+    assert(require("util").isDeepStrictEqual(extension, hook), "the same file from both: " + JSON.stringify(extension) + " vs " + JSON.stringify(hook));
+    assert(Labels.stampAnchors(hook, fs.readFileSync(p.doc, "utf8")) === null, "a stamped file has nothing left to stamp");
   } finally {
     p.cleanup();
   }
