@@ -2194,18 +2194,30 @@ check("OpenCode adapter: registers the skill and appends the nudge to a write's 
   try {
     // An OpenCode started inside another agent's session inherits that agent's project variable;
     // the hook must still take the project OpenCode names. A separate process carries the
-    // variable, since this runner does not await a check before running the next one.
+    // variables, since this runner does not await a check before running the next one. It sets
+    // each name the hook reads in turn, from this list rather than the adapter's, so dropping
+    // any one from the adapter fails here.
+    const names = ["CLAUDE_PROJECT_DIR", "QODER_PROJECT_DIR", "DEVIN_PROJECT_DIR", "COPILOT_PROJECT_DIR", "AUGMENT_PROJECT_DIR", "CURSOR_PROJECT_DIR"];
     const elsewhere = fs.mkdtempSync(path.join(os.tmpdir(), "mymd-elsewhere-"));
     const script =
       `const { default: plugin } = await import(${JSON.stringify(url)});` +
       `const hooks = await plugin.server({ directory: ${JSON.stringify(p.root)}, worktree: ${JSON.stringify(p.root)} });` +
-      `const output = { title: "write", output: "Wrote docs/big.md", metadata: {} };` +
-      `await hooks["tool.execute.after"]({ tool: "write", sessionID: "s", callID: "c", args: { filePath: ${JSON.stringify(p.doc)}, content: "x" } }, output);` +
-      `process.stdout.write(output.output);`;
-    const inherited = spawnSync(process.execPath, ["--input-type=module", "-e", script], { env: { ...process.env, CLAUDE_PROJECT_DIR: elsewhere }, encoding: "utf8" });
+      `const outputs = {};` +
+      `for (const key of ${JSON.stringify(names)}) {` +
+      `  process.env[key] = ${JSON.stringify(elsewhere)};` +
+      `  const output = { title: "write", output: "Wrote docs/big.md", metadata: {} };` +
+      `  await hooks["tool.execute.after"]({ tool: "write", sessionID: "s", callID: "c", args: { filePath: ${JSON.stringify(p.doc)}, content: "x" } }, output);` +
+      `  delete process.env[key];` +
+      `  outputs[key] = output.output;` +
+      `}` +
+      `process.stdout.write(JSON.stringify(outputs));`;
+    const clean = { ...process.env };
+    for (const key of names) delete clean[key];
+    const inherited = spawnSync(process.execPath, ["--input-type=module", "-e", script], { env: clean, encoding: "utf8" });
     fs.rmSync(elsewhere, { recursive: true, force: true });
     assert(inherited.status === 0, "the env probe exits 0: " + inherited.stderr);
-    includes(inherited.stdout, "docs/big.md is now", "1.x: an inherited CLAUDE_PROJECT_DIR does not take the project from OpenCode");
+    const outputs = JSON.parse(inherited.stdout);
+    for (const key of names) includes(outputs[key], "docs/big.md is now", "1.x: an inherited " + key + " does not take the project from OpenCode");
 
     return import(url).then(async (mod) => {
       const plugin = mod.default;
@@ -2262,6 +2274,40 @@ check("OpenCode adapter: registers the skill and appends the nudge to a write's 
     p.cleanup();
     throw error;
   }
+});
+
+check("OpenCode adapter: the hook runs in its own folder, not the project or the host's working directory", () => {
+  // Windows looks a bare "node" up in the working directory before PATH, so the spawn must not
+  // run in a project. A stub hook reports its own working directory as the nudge.
+  const p = pluginRepo();
+  const home = path.join(p.base, "stub", "plugin");
+  const mjs = path.join(home, "opencode", "mymarkdown.mjs");
+  fs.mkdirSync(path.dirname(mjs), { recursive: true });
+  fs.mkdirSync(path.join(home, "hooks"));
+  fs.mkdirSync(path.join(home, "skills"));
+  fs.copyFileSync(path.join(__dirname, PLUGIN, "opencode", "mymarkdown.mjs"), mjs);
+  fs.writeFileSync(path.join(home, "hooks", "markdown-labels.cjs"), "process.stdout.write(JSON.stringify({ hookSpecificOutput: { additionalContext: 'cwd=' + process.cwd() } }));\n");
+  const expected = "cwd=" + fs.realpathSync(path.join(home, "hooks"));
+  const project = fs.realpathSync(p.root);
+  return import(require("url").pathToFileURL(mjs).href)
+    .then(async ({ default: plugin }) => {
+      const hooks = await plugin.server({ directory: p.root, worktree: p.root });
+      const output = { title: "write", output: "Wrote docs/big.md", metadata: {} };
+      await hooks["tool.execute.after"]({ tool: "write", sessionID: "s", callID: "c", args: { filePath: p.doc, content: "x" } }, output);
+      includes(output.output, expected, "1.x: the hook's working directory");
+      assert(!output.output.includes(project), "1.x: the hook must not run in the project: " + output.output);
+      let after;
+      await plugin.setup({
+        location: { directory: p.root },
+        tool: { hook: async (name, fn) => { if (name === "execute.after") after = fn; } },
+        skill: { transform: async (fn) => fn({ add: () => {} }) },
+      });
+      const event = { tool: "write", status: "completed", input: { path: p.doc, content: "x" }, result: { content: "Wrote docs/big.md" } };
+      await after(event);
+      includes(String(event.result.content), expected, "2.x: the hook's working directory");
+      assert(!String(event.result.content).includes(project), "2.x: the hook must not run in the project: " + event.result.content);
+    })
+    .finally(() => p.cleanup());
 });
 
 check("Kiro hook files: a prompt nudge on Markdown saves, a command that stamps sidecars, the global and per-repo forms", () => {
