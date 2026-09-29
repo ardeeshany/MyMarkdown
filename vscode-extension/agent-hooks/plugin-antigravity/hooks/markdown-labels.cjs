@@ -401,7 +401,7 @@ function main(payload) {
   const ours = cwd && dialect === "cursor" && (within(path.relative(own, cwd)) || within(path.relative(real(own), real(cwd))));
   const lexical = cwd && dialect === "cursor" && !ours && within(path.relative(ROOT, cwd));
   const fromRoot = cwd && dialect === "cursor" && !ours && !lexical && path.relative(real(ROOT), real(cwd));
-  const base = cwd && (dialect !== "cursor" || lexical) ? cwd : typeof fromRoot === "string" && within(fromRoot) ? path.join(ROOT, fromRoot) : inProject ? process.cwd() : ROOT;
+  const base = cwd && (dialect !== "cursor" || lexical) ? cwd : typeof fromRoot === "string" && within(fromRoot) ? path.join(ROOT, fromRoot) : inProject && !ours ? process.cwd() : ROOT;
 
   const notes = [];
   for (const file of writtenFiles(input, base)) {

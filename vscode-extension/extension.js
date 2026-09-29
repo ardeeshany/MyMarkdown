@@ -1,4 +1,5 @@
 const vscode = require("vscode");
+const fs = require("fs");
 const path = require("path");
 const MD = require("./lib/mymarkdown.js");
 const { mymarkdownPlugin } = require("./lib/preview-plugin.js");
@@ -266,34 +267,38 @@ async function writeSidecar(document, lenses) {
 /**
  * Write `next`, the stamped copy of `raw`, over the sidecar — unless the file is no longer
  * `raw`: then the agent rewrote it since the read, the watcher brings that content, and the
- * older copy must not overwrite it. As in the hook, the bytes go to a temp file renamed over
- * the sidecar, so a write that fails midway (a full disk) cannot leave the agent's file cut
- * short; the folder and the temp file are made before that check, so nothing is awaited
- * between it and the rename. The lens cache is left alone, since a range that starts
- * and ends on content lines reads back at the same position, so the bars do not flicker off
- * until a reread; one that begins or ends on blank lines is re-found from its anchor lines
- * at that reread, as every range the extension writes itself is. Resolves true when the
- * write landed or was skipped for that reason, false when it failed.
+ * older copy must not overwrite it. On disk the bytes go, as in the hook, to a temp file
+ * renamed over the sidecar, so a write that fails midway (a full disk) cannot leave the
+ * agent's file cut short. workspace.fs cannot replace a file in one step (its rename deletes
+ * the target first), so any other scheme is written in place. The folder and the temp file
+ * are made before that check, so nothing is awaited between it and the write. The lens
+ * cache is left alone, since a range that starts and ends on content lines reads back at
+ * the same position, so the bars do not flicker off until a reread; one that begins or ends
+ * on blank lines is re-found from its anchor lines at that reread, as every range the
+ * extension writes itself is. Resolves true when the write landed or was skipped for that
+ * reason, false when it failed.
  */
 async function stampSidecar(document, raw, next) {
   let temp = null;
-  const dropTemp = () => temp && vscode.workspace.fs.delete(temp).then(undefined, () => {});
   try {
     const uri = sidecarUri(document);
     if (!uri) return false;
-    temp = vscode.Uri.joinPath(uri, "..", path.basename(uri.fsPath) + "." + process.pid + ".tmp");
+    const bytes = Buffer.from(JSON.stringify(next, null, 2) + "\n", "utf8");
     await vscode.workspace.fs.createDirectory(vscode.Uri.joinPath(uri, ".."));
-    await vscode.workspace.fs.writeFile(temp, Buffer.from(JSON.stringify(next, null, 2) + "\n", "utf8"));
-    if (JSON.stringify(await readSidecar(document)) !== JSON.stringify(raw)) {
-      dropTemp();
-      return true;
+    if (uri.scheme === "file") {
+      temp = uri.fsPath + "." + process.pid + ".tmp";
+      await fs.promises.writeFile(temp, bytes, { flag: "wx" });
     }
-    await vscode.workspace.fs.rename(temp, uri, { overwrite: true });
+    if (JSON.stringify(await readSidecar(document)) !== JSON.stringify(raw)) return true;
+    if (temp) await fs.promises.rename(temp, uri.fsPath);
+    else await vscode.workspace.fs.writeFile(uri, bytes);
+    temp = null;
     return true;
   } catch (error) {
-    dropTemp();
     vscode.window.showErrorMessage("MyMarkdown: could not save labels — " + (error?.message || error));
     return false;
+  } finally {
+    if (temp) fs.promises.unlink(temp).catch(() => {});
   }
 }
 

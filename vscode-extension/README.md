@@ -163,7 +163,8 @@ Cursor's Cloud Agents and Windsurf's cloud sessions do not run a user plugin's h
 uninstall are each agent's own plugin commands. The install lines for Cursor, Windsurf,
 Augment, Qoder, OpenCode, Antigravity and Kiro, and VS Code's plugin install, follow each
 tool's documentation and shipped code but have not been run end to end; Claude Code and
-Copilot CLI have. Please report what you find.
+Copilot CLI have, and Codex's as far as installing the plugin and listing its hook. Please
+report what you find.
 
 Then each agent may need one step of its own:
 

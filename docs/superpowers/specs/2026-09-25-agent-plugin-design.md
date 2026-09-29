@@ -284,8 +284,9 @@ adds anchors to the raw sidecar exactly as the hook's `stamp()` does and changes
 else. The first draft rewrote the file from the reader's sanitised view, which deleted
 stale ranges, lenses past the caps and unknown fields from the agent's file; the audit
 removed that. The stamp runs only while labels are enabled, re-reads the file first and
-leaves it alone if the agent changed it since, writes through a temp file renamed over the
-sidecar as the hook does, keeps the lens cache (a range that starts and ends on content lines
+leaves it alone if the agent changed it since, writes a file on disk through a temp file
+renamed over it as the hook does (`workspace.fs` cannot replace a file in one step: its rename
+deletes the target first, so other schemes are written in place), keeps the lens cache (a range that starts and ends on content lines
 reads back at the same position; one that begins or ends on blank lines is re-found from its
 anchor lines at the next reread), and never runs from a label command's own read, whose
 write would otherwise be undone. A document with unsaved edits is stamped against its file
