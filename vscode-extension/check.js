@@ -1503,10 +1503,10 @@ function pluginRepo() {
   fs.copyFileSync(path.join(REPO, "vscode-extension", "agent-hooks", "plugin", "hooks", "markdown-labels.cjs"), script);
   const doc = path.join(root, "docs", "big.md");
   fs.writeFileSync(doc, "# Guide\n\n## One\n\n" + "word ".repeat(420) + "\n\n## Two\n\nend\n");
-  const run = (payload, { args = [], env = {} } = {}) => {
+  const run = (payload, { args = [], env = {}, preload } = {}) => {
     const inherited = { ...process.env };
-    for (const key of ["CLAUDE_PROJECT_DIR", "DEVIN_PROJECT_DIR", "COPILOT_PROJECT_DIR", "AUGMENT_PROJECT_DIR", "CURSOR_PROJECT_DIR", "COPILOT_CLI"]) delete inherited[key];
-    const result = spawnSync(process.execPath, [script, ...args], { input: JSON.stringify(payload), env: { ...inherited, ...env }, cwd: path.dirname(script), encoding: "utf8" });
+    for (const key of ["CLAUDE_PROJECT_DIR", "DEVIN_PROJECT_DIR", "COPILOT_PROJECT_DIR", "AUGMENT_PROJECT_DIR", "CURSOR_PROJECT_DIR", "QODER_PROJECT_DIR", "QODER_HOOK_SOURCE", "COPILOT_CLI"]) delete inherited[key];
+    const result = spawnSync(process.execPath, [...(preload ? ["-r", preload] : []), script, ...args], { input: JSON.stringify(payload), env: { ...inherited, ...env }, cwd: path.dirname(script), encoding: "utf8" });
     assert(result.status === 0, "the hook must always exit 0, got " + result.status + ": " + result.stderr);
     return result.stdout ? JSON.parse(result.stdout) : null;
   };
@@ -1546,7 +1546,7 @@ check("label hook: each agent's write gets the nudge, in the format that agent r
     for (const [name, payload, opts] of cases) {
       const out = repo.run({ hook_event_name: "PostToolUse", cwd: repo.root, ...payload }, opts);
       const context = "toolName" in payload ? out?.additionalContext : out?.hookSpecificOutput?.additionalContext;
-      assert(context && context.includes("docs/big.md is now") && context.includes("markdown-labels skill"), name + " got " + JSON.stringify(out));
+      assert(context && context.includes("docs/big.md is now") && context.includes("Run the markdown-labels skill"), name + " got " + JSON.stringify(out));
     }
   } finally {
     repo.cleanup();
@@ -1702,7 +1702,7 @@ check("plugin hook: finds the project from the agent's context, never from where
     fs.copyFileSync(p.doc, outside);
     assert(p.run({ tool_name: "Write", tool_input: { file_path: outside }, tool_response: {}, cwd: p.root }) === null, "a file outside the project is ignored");
     // The nudge names the plugin's skill the way Claude Code lists it.
-    includes(claudeContext(p.run(write, { env: { CLAUDE_PROJECT_DIR: p.root } })), "mymarkdown:markdown-labels", "the skill name under a Claude plugin");
+    includes(claudeContext(p.run(write, { env: { CLAUDE_PROJECT_DIR: p.root } })), "Run the mymarkdown:markdown-labels skill", "the skill name under a Claude plugin");
     // Stamping lands under the project, and stamping twice changes nothing (two copies may run).
     const sidecar = path.join(p.root, ".mymd", "docs", "big.md.json");
     fs.mkdirSync(path.dirname(sidecar), { recursive: true });
@@ -1710,8 +1710,13 @@ check("plugin hook: finds the project from the agent's context, never from where
     p.run({ tool_name: "Write", tool_input: { file_path: sidecar }, tool_response: {}, cwd: p.root });
     const once = fs.readFileSync(sidecar, "utf8");
     assert(JSON.parse(once).lenses[0].ranges[0].anchor === "# guide", "stamped under the project root");
+    // Back-dated, so a rewrite of the same bytes would still show as a new mtime.
+    const past = new Date(Date.now() - 3600 * 1000);
+    fs.utimesSync(sidecar, past, past);
+    const mtime = fs.statSync(sidecar).mtimeMs;
     p.run({ tool_name: "Write", tool_input: { file_path: sidecar }, tool_response: {}, cwd: p.root });
     assert(fs.readFileSync(sidecar, "utf8") === once, "a second stamping run changes nothing");
+    assert(fs.statSync(sidecar).mtimeMs === mtime, "a second stamping run does not rewrite the sidecar");
   } finally {
     p.cleanup();
   }
@@ -1763,14 +1768,14 @@ check("plugin hook: every agent's payload shape reaches the nudge, in that agent
       // relative path must resolve against workspace_roots, not against cwd.
       ["Cursor relative file_path", { hook_event_name: "postToolUse", cursor_version: "3.21.18", conversation_id: "c2", workspace_roots: [p.root], cwd: path.dirname(p.script), tool_name: "Write", tool_input: { file_path: "docs/big.md", content: "x" }, tool_output: "{}" }, {}, "additional_context", "/markdown-labels"],
       // Augment: paths relative to the workspace, listed in file_changes.
-      ["Augment", { hook_event_name: "PostToolUse", tool_name: "save-file", tool_input: {}, file_changes: [{ path: "docs/big.md" }], workspace_roots: [p.root] }, { AUGMENT_PROJECT_DIR: p.root }, "hookSpecificOutput", "markdown-labels"],
-      // Qoder CLI: Claude's shape.
-      ["Qoder CLI", { hook_event_name: "PostToolUse", tool_name: "Write", tool_input: { file_path: p.doc }, cwd: p.root }, {}, "hookSpecificOutput", "markdown-labels"],
+      ["Augment", { hook_event_name: "PostToolUse", tool_name: "save-file", tool_input: {}, file_changes: [{ path: "docs/big.md" }], workspace_roots: [p.root] }, { AUGMENT_PROJECT_DIR: p.root }, "hookSpecificOutput", "mymarkdown:markdown-labels"],
+      // Qoder CLI: Claude's shape, told apart only by the variables it sets for its hooks.
+      ["Qoder CLI", { hook_event_name: "PostToolUse", tool_name: "Write", tool_input: { file_path: p.doc }, cwd: p.root }, { QODER_HOOK_SOURCE: "cli", QODER_PROJECT_DIR: p.root, CLAUDE_PROJECT_DIR: p.root }, "hookSpecificOutput", "mymarkdown:markdown-labels"],
     ];
     for (const [name, payload, env, field, skill] of cases) {
       const out = p.run(payload, { env });
       const text = out && (field === "hookSpecificOutput" ? out.hookSpecificOutput && out.hookSpecificOutput.additionalContext : out[field]);
-      assert(text && text.includes("docs/big.md is now") && text.includes(skill), name + " got " + JSON.stringify(out));
+      assert(text && text.includes("docs/big.md is now") && text.includes(`Run the ${skill} skill`), name + " got " + JSON.stringify(out));
       if (field === "additional_context") assert(!("hookSpecificOutput" in out), "Cursor gets the flat field only");
     }
     // A Devin write that failed is not a document to label.
@@ -1788,6 +1793,163 @@ check("plugin hook: every agent's payload shape reaches the nudge, in that agent
   }
 });
 
+const UNSTAMPED = JSON.stringify({ version: 1, lenses: [{ name: "L", ranges: [{ label: "One", color: "#111111", startLine: 1, endLine: 3 }] }] });
+
+/** The nudge in whichever field the agent reads it from, or "" when there is none. */
+const nudgeIn = (out, field) => (out && (field === "hookSpecificOutput" ? out.hookSpecificOutput && out.hookSpecificOutput.additionalContext : out[field])) || "";
+
+/**
+ * One write of p.doc per agent, as each hands it to the plugin copy: the payload, the
+ * environment, the field the nudge lands in, the skill it names, and whether a per-repo copy in
+ * .agents/hooks runs for that agent (and so speaks for it).
+ */
+function pluginWrites(p) {
+  const patch = "*** Begin Patch\n*** Update File: docs/big.md\n@@\n-a\n+b\n*** End Patch";
+  const qualified = "mymarkdown:markdown-labels";
+  return [
+    ["Claude Code", { hook_event_name: "PostToolUse", tool_name: "Write", tool_input: { file_path: p.doc }, tool_response: {}, cwd: p.root }, { CLAUDE_PROJECT_DIR: p.root }, "hookSpecificOutput", qualified, true],
+    ["Codex", { hook_event_name: "PostToolUse", tool_name: "apply_patch", tool_input: { command: patch }, tool_response: "", cwd: p.root }, {}, "hookSpecificOutput", qualified, true],
+    ["Copilot CLI camelCase", { toolName: "edit", toolArgs: { path: p.doc, old_str: "a", new_str: "b" }, cwd: p.root }, {}, "additionalContext", "markdown-labels", true],
+    ["Copilot CLI snake_case", { hook_event_name: "PostToolUse", session_id: "s", timestamp: 1, cwd: p.root, traceparent: "00-1-2-01", tool_name: "Write", tool_input: { path: p.doc, file_text: "x" }, tool_result: {} }, { CLAUDE_PROJECT_DIR: p.root, COPILOT_PROJECT_DIR: p.root }, "additionalContext", "markdown-labels", true],
+    ["Cursor", { hook_event_name: "postToolUse", cursor_version: "3.21.18", conversation_id: "c1", workspace_roots: [p.root], cwd: path.dirname(p.script), tool_name: "Write", tool_input: { file_path: p.doc, content: "x" }, tool_output: "{}" }, {}, "additional_context", "/markdown-labels", true],
+    ["Devin", { hook_event_name: "PostToolUse", tool_name: "write", tool_input: { file_path: p.doc }, tool_response: { success: true } }, { DEVIN_PROJECT_DIR: p.root }, "hookSpecificOutput", qualified, false],
+    ["Augment", { hook_event_name: "PostToolUse", tool_name: "save-file", tool_input: {}, file_changes: [{ path: "docs/big.md" }], workspace_roots: [p.root] }, { AUGMENT_PROJECT_DIR: p.root }, "hookSpecificOutput", qualified, false],
+    ["Qoder CLI", { hook_event_name: "PostToolUse", tool_name: "Write", tool_input: { file_path: p.doc }, tool_response: {}, cwd: p.root }, { QODER_HOOK_SOURCE: "cli", CLAUDE_PROJECT_DIR: p.root }, "hookSpecificOutput", qualified, false],
+    ["OpenCode", { agent: "opencode", hook_event_name: "PostToolUse", tool_name: "write", tool_input: { filePath: p.doc }, cwd: p.root }, {}, "hookSpecificOutput", "markdown-labels", false],
+  ];
+}
+
+check("plugin hook: stays quiet exactly where a per-repo copy runs for that agent, and names the skill as each agent lists it", () => {
+  const p = pluginRepo();
+  const tmp = { TMPDIR: p.base, TEMP: p.base, TMP: p.base };
+  try {
+    const own = path.join(p.root, ".agents", "hooks", "markdown-labels.cjs");
+    const sidecar = path.join(p.root, ".mymd", "docs", "big.md.json");
+    for (const present of [true, false]) {
+      const state = present ? "with a per-repo copy" : "without a per-repo copy";
+      if (present) {
+        fs.mkdirSync(path.dirname(own), { recursive: true });
+        fs.writeFileSync(own, "// the project's own copy\n");
+      } else {
+        fs.rmSync(path.join(p.root, ".agents"), { recursive: true, force: true });
+      }
+      for (const [name, payload, env, field, skill, yields] of pluginWrites(p)) {
+        const out = p.run(payload, { env });
+        if (present && yields) {
+          assert(out === null, `${name} ${state} must stay quiet, got ` + JSON.stringify(out));
+          continue;
+        }
+        const text = nudgeIn(out, field);
+        assert(text.startsWith("docs/big.md is now") && text.includes(`Run the ${skill} skill`), `${name} ${state} got ` + JSON.stringify(out));
+        if (field !== "hookSpecificOutput") assert(Object.keys(out).join() === field, `${name} gets exactly { ${field} }, got ` + JSON.stringify(out));
+      }
+      // Kiro: its per-repo copy stamps the sidecar, so the plugin copy must not.
+      fs.mkdirSync(path.dirname(sidecar), { recursive: true });
+      fs.writeFileSync(sidecar, UNSTAMPED);
+      p.run({ hook_event_name: "PostFileSave", session_id: "s", cwd: p.root, file_path: sidecar });
+      const anchor = JSON.parse(fs.readFileSync(sidecar, "utf8")).lenses[0].ranges[0].anchor;
+      assert(present ? anchor === undefined : anchor === "# guide", `Kiro ${state}: anchor ` + JSON.stringify(anchor));
+      // An unanchored range counts as a label, so the sidecar must go before the next nudge.
+      fs.rmSync(path.join(p.root, ".mymd"), { recursive: true, force: true });
+      // Antigravity has no per-repo copy: the marker is left and delivered either way.
+      const conv = present ? "yield-with" : "yield-without";
+      p.run({ stepIdx: 1, toolCall: { name: "write_to_file", args: { TargetFile: p.doc, CodeContent: "x" } }, conversationId: conv, workspacePaths: [p.root] }, { env: tmp });
+      const inject = p.run({ invocationNum: 2, initialNumSteps: 1, conversationId: conv, workspacePaths: [p.root] }, { env: tmp });
+      const message = (inject && inject.injectSteps && inject.injectSteps[0].userMessage) || "";
+      assert(message.startsWith("docs/big.md is now") && message.includes("Run the mymarkdown:markdown-labels skill"), `Antigravity ${state} got ` + JSON.stringify(inject));
+    }
+  } finally {
+    p.cleanup();
+  }
+});
+
+check("plugin hook: stays quiet for the older .claude/hooks per-repo copy only where Claude's settings run it", () => {
+  const p = pluginRepo();
+  try {
+    fs.mkdirSync(path.join(p.root, ".claude", "hooks"), { recursive: true });
+    fs.writeFileSync(path.join(p.root, ".claude", "hooks", "markdown-labels.cjs"), "// upstream's per-repo copy\n");
+    const writes = Object.fromEntries(pluginWrites(p).map(([name, ...rest]) => [name, rest]));
+    for (const [name, env, quiet] of [
+      ["Claude Code", { CLAUDE_PROJECT_DIR: p.root }, true],
+      ["Cursor", { CLAUDE_PROJECT_DIR: p.root }, true],
+      ["Codex", {}, false],
+      ["Copilot CLI snake_case", { CLAUDE_PROJECT_DIR: p.root }, false],
+      ["Qoder CLI", { QODER_HOOK_SOURCE: "cli", CLAUDE_PROJECT_DIR: p.root }, false],
+    ]) {
+      const [payload, , field, skill] = writes[name];
+      const out = p.run(payload, { env });
+      if (quiet) assert(out === null, name + " is spoken for by .claude/hooks, got " + JSON.stringify(out));
+      else assert(nudgeIn(out, field).includes(`Run the ${skill} skill`), name + " runs no .claude/hooks copy and must be nudged, got " + JSON.stringify(out));
+    }
+  } finally {
+    p.cleanup();
+  }
+});
+
+check("plugin hook: the project variable beats the payload's workspace, which beats the git top above cwd", () => {
+  const p = pluginRepo();
+  try {
+    const b = path.join(p.root, "b");
+    const c = path.join(b, "c");
+    fs.mkdirSync(path.join(c, "docs"), { recursive: true });
+    fs.mkdirSync(path.join(c, ".git"));
+    const doc = path.join(c, "docs", "big.md");
+    fs.copyFileSync(p.doc, doc);
+    const write = { hook_event_name: "PostToolUse", tool_name: "Write", tool_input: { file_path: doc }, tool_response: {}, cwd: path.join(c, "docs") };
+    for (const [name, extra, env, shown] of [
+      ["CLAUDE_PROJECT_DIR over workspace_roots", { workspace_roots: [b] }, { CLAUDE_PROJECT_DIR: p.root }, "b/c/docs/big.md is now"],
+      ["QODER_PROJECT_DIR alone", { workspace_roots: [b] }, { QODER_PROJECT_DIR: p.root }, "b/c/docs/big.md is now"],
+      ["workspace_roots over the git top above cwd", { workspace_roots: [b] }, {}, "c/docs/big.md is now"],
+      ["the git top above cwd", {}, {}, "docs/big.md is now"],
+    ]) {
+      const out = p.run({ ...write, ...extra }, { env });
+      assert(nudgeIn(out, "hookSpecificOutput").startsWith(shown), name + ": expected " + shown + ", got " + JSON.stringify(out));
+    }
+  } finally {
+    p.cleanup();
+  }
+});
+
+check("Cursor: a relative path resolves against its cwd inside the project, and against the workspace otherwise", () => {
+  const cursor = (root, cwd, file) => ({ hook_event_name: "postToolUse", cursor_version: "3.21.18", conversation_id: "c1", workspace_roots: [root], cwd, tool_name: "Write", tool_input: { file_path: file, content: "x" }, tool_output: "{}" });
+  const p = pluginRepo();
+  try {
+    for (const [name, payload] of [
+      ["cwd a subfolder of the project", cursor(p.root, path.join(p.root, "docs"), "big.md")],
+      ["cwd the plugin folder", cursor(p.root, path.dirname(p.script), "docs/big.md")],
+    ]) {
+      const out = p.run(payload);
+      assert(nudgeIn(out, "additional_context").startsWith("docs/big.md is now"), name + " got " + JSON.stringify(out));
+    }
+  } finally {
+    p.cleanup();
+  }
+  const repo = hookRepo();
+  try {
+    const out = repo.run(cursor(repo.root, path.join(repo.root, "docs"), "big.md"));
+    const text = nudgeIn(out, "additional_context");
+    assert(text.startsWith("docs/big.md is now") && text.includes("Run the markdown-labels skill"), "per-repo Cursor, relative path from a subfolder, got " + JSON.stringify(out));
+  } finally {
+    repo.cleanup();
+  }
+});
+
+check("Kiro: the root is its working folder, even below the git top", () => {
+  const p = pluginRepo();
+  try {
+    const workspace = path.join(p.root, "ws");
+    fs.mkdirSync(path.join(workspace, ".mymd"), { recursive: true });
+    fs.copyFileSync(p.doc, path.join(workspace, "doc.md"));
+    const sidecar = path.join(workspace, ".mymd", "doc.md.json");
+    fs.writeFileSync(sidecar, UNSTAMPED);
+    p.run({ hook_event_name: "PostFileSave", session_id: "s", cwd: workspace, file_path: ".mymd/doc.md.json" });
+    const range = JSON.parse(fs.readFileSync(sidecar, "utf8")).lenses[0].ranges[0];
+    assert(range.anchor === "# guide", "the workspace's own sidecar gains anchors: " + JSON.stringify(range));
+  } finally {
+    p.cleanup();
+  }
+});
+
 check("Antigravity: PostToolUse stamps and leaves a marker, PostInvocation delivers the nudge once, non-tool steps are harmless", () => {
   const p = pluginRepo();
   // Sandboxed onto p.base (cleaned up with the rest of it): the marker's own per-user rule,
@@ -1795,7 +1957,7 @@ check("Antigravity: PostToolUse stamps and leaves a marker, PostInvocation deliv
   // All three: os.tmpdir() reads TEMP/TMP on win32 and ignores TMPDIR outright.
   const tmp = { env: { TMPDIR: p.base, TEMP: p.base, TMP: p.base } };
   const owner = typeof process.getuid === "function" ? String(process.getuid()) : os.userInfo().username;
-  const markerPath = (conv) => path.join(p.base, "mymarkdown-labels-" + owner, conv);
+  const markerPath = (conv) => path.join(p.base, "mymarkdown-labels-" + owner, "c-" + conv);
   // A marker file for `conv` wherever it actually landed - agnostic to the exact scheme, so
   // it also finds a pre-fix, owner-less marker when this check is run against old code.
   const findMarker = (conv) => {
@@ -1822,7 +1984,7 @@ check("Antigravity: PostToolUse stamps and leaves a marker, PostInvocation deliv
     assert(fs.existsSync(marker), "a non-tool step must not consume the marker");
     const inject = p.run({ invocationNum: 2, initialNumSteps: 3, conversationId: "conv-1", workspacePaths: [p.root] }, tmp);
     assert(inject && inject.injectSteps && inject.injectSteps[0].userMessage.includes("docs/big.md is now"), "PostInvocation carries the nudge: " + JSON.stringify(inject));
-    includes(inject.injectSteps[0].userMessage, "mymarkdown:markdown-labels", "the skill as Antigravity lists it");
+    includes(inject.injectSteps[0].userMessage, "Run the mymarkdown:markdown-labels skill", "the skill as Antigravity lists it");
     assert(JSON.stringify(p.run({ invocationNum: 3, initialNumSteps: 3, conversationId: "conv-1" }, tmp)) === "{}", "delivered once");
     assert(JSON.stringify(p.run({ stepIdx: 5, toolCall: null, conversationId: "conv-1" }, tmp)) === "{}", "a non-tool step with no marker either");
     // The root comes from the written file's repository when workspacePaths is empty.
@@ -1906,11 +2068,90 @@ check("Antigravity folder: its own manifest and hook schema, copies of the hook 
   for (const entry of [hooks.PostToolUse[0].hooks[0], hooks.PostInvocation[0]]) {
     assert(entry.type === "command" && entry.command === "node hooks/markdown-labels.cjs" && entry.timeout === 15, "relative command, 15 s: " + JSON.stringify(entry));
   }
+  // PreInvocation is the one slot confirmed to reach the model; it answers with an ephemeralMessage.
+  const pre = hooks.PreInvocation;
+  assert(Array.isArray(pre) && pre.length === 1 && !("hooks" in pre[0]), "a flat PreInvocation entry: " + JSON.stringify(pre));
+  assert(pre[0].type === "command" && pre[0].command === "node hooks/markdown-labels.cjs --ephemeral" && pre[0].timeout === 15, "PreInvocation runs the hook with --ephemeral, 15 s: " + JSON.stringify(pre[0]));
   for (const file of ["hooks/markdown-labels.cjs", "skills/markdown-labels/SKILL.md"]) {
     assert(fs.readFileSync(path.join(__dirname, dir, file), "utf8") === fs.readFileSync(path.join(__dirname, PLUGIN, file), "utf8"), file + " has drifted from the plugin's copy");
   }
   assert(!fs.existsSync(path.join(__dirname, dir, "hooks", "hooks.json")), "no Claude-schema hook file here: agy would fail to parse it");
   assert(readJson("agent-hooks/package.json").files.includes("plugin-antigravity/"), "shipped in the npm package");
+});
+
+check("Antigravity: PreInvocation answers with an ephemeralMessage, and the marker's folder and file are held safe", () => {
+  const p = pluginRepo();
+  const sandbox = (dir) => ({ TMPDIR: dir, TEMP: dir, TMP: dir });
+  const tmp = sandbox(p.base);
+  const owner = typeof process.getuid === "function" ? String(process.getuid()) : os.userInfo().username;
+  const dir = path.join(p.base, "mymarkdown-labels-" + owner);
+  const write = (conv, opts = {}) => p.run({ stepIdx: 1, toolCall: { name: "write_to_file", args: { TargetFile: p.doc, CodeContent: "x" } }, conversationId: conv, workspacePaths: [p.root] }, { env: tmp, ...opts });
+  const invoke = (conv, opts = {}) => p.run({ invocationNum: 2, initialNumSteps: 1, conversationId: conv, workspacePaths: [p.root] }, { env: tmp, ...opts });
+  try {
+    // --ephemeral (PreInvocation): the same nudge under ephemeralMessage, consumed so the
+    // PostInvocation that follows has nothing left to repeat.
+    assert(JSON.stringify(write("eph")) === "{}", "the tool step answers {}");
+    const eph = invoke("eph", { args: ["--ephemeral"] });
+    assert(eph && Object.keys(eph).join() === "injectSteps" && eph.injectSteps.length === 1 && Object.keys(eph.injectSteps[0]).join() === "ephemeralMessage", "--ephemeral answers one ephemeralMessage step: " + JSON.stringify(eph));
+    assert(eph.injectSteps[0].ephemeralMessage.startsWith("docs/big.md is now"), "the ephemeral step carries the nudge");
+    assert(JSON.stringify(invoke("eph")) === "{}", "whichever invocation event runs first delivers it, once");
+
+    // A conversation id that is a Windows device name must not name the marker file.
+    write("CON");
+    assert(fs.readdirSync(dir).includes("c-CON"), "the marker file is prefixed: " + fs.readdirSync(dir));
+    invoke("CON");
+
+    // The same document written twice before one invocation is one line, not two.
+    write("twice");
+    write("twice");
+    const twice = invoke("twice");
+    assert(twice && twice.injectSteps && twice.injectSteps[0].userMessage.split("\n").length === 1, "one line for one document: " + JSON.stringify(twice));
+
+    if (process.platform !== "win32") {
+      // An owned folder left group- or world-open (an earlier run under a looser umask) is closed again.
+      fs.chmodSync(dir, 0o777);
+      write("mode");
+      assert((fs.statSync(dir).mode & 0o777) === 0o700, "the marker folder is left at 0700, got " + (fs.statSync(dir).mode & 0o777).toString(8));
+      assert(invoke("mode").injectSteps, "and is still used");
+    }
+
+    // A marker folder planted as a symlink is refused: nothing is read, consumed or written through it.
+    const planted = fs.mkdtempSync(path.join(p.base, "planted-"));
+    for (const name of ["c-sym", "sym"]) fs.writeFileSync(path.join(planted, name), "PLANTED\n");
+    const symTmp = fs.mkdtempSync(path.join(p.base, "sym-tmp-"));
+    let linked = true;
+    try {
+      fs.symlinkSync(planted, path.join(symTmp, "mymarkdown-labels-" + owner), "junction");
+    } catch {
+      linked = false; // Windows without the right to make one; nothing to assert.
+    }
+    if (linked) {
+      assert(JSON.stringify(invoke("sym", { env: sandbox(symTmp) })) === "{}", "a symlinked marker folder is not read");
+      assert(JSON.stringify(write("sym2", { env: sandbox(symTmp) })) === "{}", "a write through a symlinked folder still answers {}");
+      assert(fs.readdirSync(planted).sort().join() === "c-sym,sym" && fs.readFileSync(path.join(planted, "c-sym"), "utf8") === "PLANTED\n", "nothing written or consumed through the symlink: " + fs.readdirSync(planted));
+    }
+
+    if (typeof process.getuid === "function") {
+      // A folder owned by someone else is refused: the hook is made to believe it runs as another uid.
+      const preload = path.join(p.base, "other-uid.cjs");
+      fs.writeFileSync(preload, "const real = process.getuid(); process.getuid = () => real + 1;\n");
+      const foreignTmp = fs.mkdtempSync(path.join(p.base, "foreign-tmp-"));
+      const foreign = path.join(foreignTmp, "mymarkdown-labels-" + (process.getuid() + 1));
+      fs.mkdirSync(foreign);
+      fs.writeFileSync(path.join(foreign, "c-foreign"), "PLANTED\n");
+      assert(JSON.stringify(invoke("foreign", { env: sandbox(foreignTmp), preload })) === "{}", "a foreign-owned marker folder is not read");
+      assert(JSON.stringify(write("foreign2", { env: sandbox(foreignTmp), preload })) === "{}", "a write with a foreign-owned folder still answers {}");
+      assert(fs.readdirSync(foreign).join() === "c-foreign", "nothing consumed or written in a foreign folder: " + fs.readdirSync(foreign));
+    }
+
+    // A temporary folder that is really a file: both steps still answer exactly {}.
+    const notADir = path.join(p.base, "not-a-dir");
+    fs.writeFileSync(notADir, "");
+    assert(JSON.stringify(write("file", { env: sandbox(notADir) })) === "{}", "the tool step answers {}");
+    assert(JSON.stringify(invoke("file", { env: sandbox(notADir) })) === "{}", "the invocation answers {}");
+  } finally {
+    p.cleanup();
+  }
 });
 
 check("OpenCode adapter: registers the skill and appends the nudge to a write's result, in both API generations", () => {

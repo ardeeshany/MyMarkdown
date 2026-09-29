@@ -1,16 +1,24 @@
 #!/usr/bin/env node
 /*
-  Trigger for the markdown-labels skill, shared by every coding agent this repo wires up:
+  Trigger for the markdown-labels skill, shared by every coding agent this repo wires up.
+  It is installed one of two ways.
+
+  Per repo, at .agents/hooks/, run from each agent's own config:
 
     Claude Code, Cursor  .claude/settings.json
     GitHub Copilot CLI   .github/hooks/markdown-labels.json
     VS Code agent mode   .github/hooks/markdown-labels.json (VS Code reads Copilot's format)
     Codex                .codex/hooks.json
+    Kiro                 .kiro/hooks/markdown-labels.json
 
   Each config runs it through the same one-line `node -e` launcher, which finds this file
   from $CLAUDE_PROJECT_DIR, or else by walking up from wherever the agent runs it. A path
   written the usual way would need one shell's syntax, and the agents use bash, sh,
   PowerShell or cmd depending on the platform; some start in a subfolder.
+
+  As a plugin, once per machine: one folder that each agent's plugin system reads. The
+  project then comes from what the agent tells the hook, and the hook stays quiet wherever
+  a per-repo copy already runs for that agent.
 
   A skill only runs when the agent remembers to reach for it. This hook makes the trigger
   the harness's job instead: after any write to a Markdown file, it checks whether the
@@ -54,10 +62,13 @@ function gitTop(dir) {
 }
 
 /** The project root for this run, and whether this copy of the hook lives inside it. */
-function projectRoot(payload) {
+function projectRoot(payload, dialect) {
   if (IN_PROJECT) return { root: OWN_ROOT, inProject: true };
+  // Kiro sets none of the variables below, and its cwd is always the first workspace root,
+  // which is where the skill writes .mymd/ even when the git top sits above it.
+  if (dialect === "kiro" && typeof payload.cwd === "string" && payload.cwd) return { root: path.resolve(payload.cwd), inProject: false };
   const env = process.env;
-  const fromEnv = env.CLAUDE_PROJECT_DIR || env.DEVIN_PROJECT_DIR || env.COPILOT_PROJECT_DIR || env.AUGMENT_PROJECT_DIR || env.CURSOR_PROJECT_DIR;
+  const fromEnv = env.CLAUDE_PROJECT_DIR || env.QODER_PROJECT_DIR || env.DEVIN_PROJECT_DIR || env.COPILOT_PROJECT_DIR || env.AUGMENT_PROJECT_DIR || env.CURSOR_PROJECT_DIR;
   const workspace = (Array.isArray(payload.workspace_roots) && typeof payload.workspace_roots[0] === "string" && payload.workspace_roots[0]) || (Array.isArray(payload.workspacePaths) && typeof payload.workspacePaths[0] === "string" && payload.workspacePaths[0]);
   const written = typeof payload.cwd === "string" && payload.cwd ? payload.cwd : (payload.toolCall && payload.toolCall.args && typeof payload.toolCall.args.TargetFile === "string" && payload.toolCall.args.TargetFile ? path.dirname(payload.toolCall.args.TargetFile) : null);
   return { root: path.resolve(fromEnv || workspace || (written ? gitTop(written) : process.cwd())), inProject: false };
@@ -72,7 +83,8 @@ function markerFor(payload) {
   if (typeof payload.conversationId !== "string" || !payload.conversationId) return null;
   const owner = typeof process.getuid === "function" ? String(process.getuid()) : os.userInfo().username;
   const dir = path.join(os.tmpdir(), "mymarkdown-labels-" + owner);
-  return { dir, file: path.join(dir, payload.conversationId.replace(/[^\w.-]/g, "_")) };
+  // Prefixed, so an id such as CON or NUL never names a Windows device.
+  return { dir, file: path.join(dir, "c-" + payload.conversationId.replace(/[^\w.-]/g, "_")) };
 }
 
 /** True once `dir` exists, owned by us and not a symlink - never throws. */
@@ -81,7 +93,11 @@ function ownedDir(dir) {
     fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
     const stat = fs.lstatSync(dir);
     if (stat.isSymbolicLink()) return false;
-    return typeof process.getuid !== "function" || stat.uid === process.getuid();
+    if (typeof process.getuid !== "function") return true;
+    if (stat.uid !== process.getuid()) return false;
+    // Ours, but maybe made earlier under a looser umask: close it before trusting it.
+    if (stat.mode & 0o077) fs.chmodSync(dir, 0o700);
+    return true;
   } catch {
     return false;
   }
@@ -100,7 +116,8 @@ function notASymlink(file) {
 function skillName(dialect, inProject) {
   if (inProject) return "markdown-labels";
   if (dialect === "cursor") return "/markdown-labels";
-  if (dialect === "claude" || dialect === "devin" || dialect === "antigravity") return "mymarkdown:markdown-labels";
+  // Qoder's Skill tool matches the plugin-qualified name exactly; a bare name costs a failed call.
+  if (["claude", "devin", "antigravity", "qoder", "augment"].includes(dialect)) return "mymarkdown:markdown-labels";
   return "markdown-labels";
 }
 
@@ -118,7 +135,8 @@ const WRITE_TOOLS = new Set([
 
 // These are the dialects whose per-repo config the installer writes, or that run it anyway:
 // Cursor loads .claude/settings.json too, setting CLAUDE_PROJECT_DIR for Claude compatibility.
-// Devin, Augment and Antigravity have no per-repo copy running, so they never yield to one.
+// Devin, Augment, Qoder (it loads hooks only from .qoder/settings*.json) and Antigravity have
+// no per-repo copy running, so they never yield to one.
 const YIELDS = new Set(["claude", "copilot", "cursor", "kiro"]);
 
 // Same anchors as anchorsFor in vscode-extension/lib/labels.js; check.js holds them equal.
@@ -262,6 +280,9 @@ function detect(payload) {
     return { dialect: "antigravity", tool: call ? call.name : null, input: target ? { file_path: target } : {}, event: "invocationNum" in payload ? "invocation" : "tool" };
   }
   if ("toolName" in payload) return { dialect: "copilot", tool: payload.toolName, input: payload.toolArgs };
+  // Copilot CLI running the plugin's Claude-schema hooks.json: Claude Code, Codex and VS Code
+  // send tool_response, Cursor tool_output; only Copilot sends tool_result.
+  if ("tool_result" in payload && !("tool_response" in payload)) return { dialect: "copilot", tool: payload.tool_name, input: payload.tool_input };
   if (payload.hook_event_name === "PostFileSave" && typeof payload.file_path === "string") {
     return { dialect: "kiro", tool: "Write", input: { file_path: payload.file_path } };
   }
@@ -278,6 +299,9 @@ function detect(payload) {
   // Code), but it runs no per-repo hook of its own, so it must never yield to one and must
   // get its own skill name - both keyed off a dialect of its own, not the claude fall-through.
   if (payload.agent === "opencode") return { dialect: "opencode", tool, input };
+  // Qoder CLI's payload is byte-identical to Claude Code's, so the variables it sets only in
+  // hook subprocesses are the one way to tell it apart.
+  if (process.env.QODER_HOOK_SOURCE || process.env.QODER_PROJECT_DIR) return { dialect: "qoder", tool, input };
   // Devin never sends a cwd; Codex and Claude Code always do. Without that check, a shared
   // tool name (apply_patch) would call Codex Devin, and Codex's own per-repo copy in
   // .codex/hooks.json would never get the chance to yield to it.
@@ -320,7 +344,11 @@ function main(payload) {
       // One or more writes may have appended their own nudge since the last invocation;
       // repeats (the same file nudged twice) collapse to one line.
       const lines = raw ? [...new Set(raw.split("\n").map((line) => line.trim()).filter(Boolean))] : [];
-      process.stdout.write(lines.length ? JSON.stringify({ injectSteps: [{ userMessage: lines.join("\n") }] }) : "{}");
+      // PreInvocation runs with --ephemeral: PostInvocation may fire before its invocation's
+      // tools finish, and PreInvocation's ephemeralMessage is the slot known to reach the model.
+      // Whichever runs first consumes the marker, so the nudge still arrives once.
+      const key = process.argv.includes("--ephemeral") ? "ephemeralMessage" : "userMessage";
+      process.stdout.write(lines.length ? JSON.stringify({ injectSteps: [{ [key]: lines.join("\n") }] }) : "{}");
       return;
     }
     // PostToolUse cannot inject context, so it must always answer {} - printed once, up
@@ -346,13 +374,18 @@ function main(payload) {
   if (!input || typeof input !== "object") return;
   if (tool === "str_replace_editor" && input.command === "view") return;
 
-  const { root: ROOT, inProject } = projectRoot(payload);
+  const { root: ROOT, inProject } = projectRoot(payload, dialect);
   // A project with its own per-repo install is that copy's business; two nudges help nobody.
   // Only true when a per-repo copy actually runs for this dialect (see YIELDS above).
   if (!inProject && YIELDS.has(dialect) && fs.existsSync(path.join(ROOT, ".agents", "hooks", "markdown-labels.cjs"))) return;
-  // Relative paths are relative to where the agent works, which as a plugin is never here -
-  // except for Cursor, whose cwd is always the plugin folder itself, never the project.
-  const base = (dialect !== "cursor" && typeof payload.cwd === "string" && payload.cwd) || (inProject ? process.cwd() : ROOT);
+  // The older per-repo layout runs from .claude/settings.json, which only Claude Code and Cursor read with CLAUDE_PROJECT_DIR set.
+  if (!inProject && (dialect === "claude" || dialect === "cursor") && process.env.CLAUDE_PROJECT_DIR && fs.existsSync(path.join(ROOT, ".claude", "hooks", "markdown-labels.cjs"))) return;
+  // Relative paths are relative to where the agent works. Cursor has run plugin hooks with the
+  // plugin folder as cwd (and older builds with the project), so its cwd is trusted only
+  // inside the project.
+  const cwd = typeof payload.cwd === "string" && payload.cwd ? payload.cwd : null;
+  const fromRoot = cwd && path.relative(ROOT, cwd);
+  const base = cwd && (dialect !== "cursor" || !(fromRoot.startsWith("..") || path.isAbsolute(fromRoot))) ? cwd : inProject ? process.cwd() : ROOT;
 
   const notes = [];
   for (const file of writtenFiles(input, base)) {

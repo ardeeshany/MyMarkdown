@@ -6,6 +6,7 @@
         "hooks": [{ "type": "command", "command": "node hooks/markdown-labels.cjs", "timeout": 15 }]
       }
     ],
+    "PreInvocation": [{ "type": "command", "command": "node hooks/markdown-labels.cjs --ephemeral", "timeout": 15 }],
     "PostInvocation": [{ "type": "command", "command": "node hooks/markdown-labels.cjs", "timeout": 15 }]
   }
 }
