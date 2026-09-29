@@ -266,22 +266,32 @@ async function writeSidecar(document, lenses) {
 /**
  * Write `next`, the stamped copy of `raw`, over the sidecar — unless the file is no longer
  * `raw`: then the agent rewrote it since the read, the watcher brings that content, and the
- * older copy must not overwrite it. The folder is made before that check, so nothing is
- * awaited between it and the write. The lens cache is left alone, since a range that starts
+ * older copy must not overwrite it. As in the hook, the bytes go to a temp file renamed over
+ * the sidecar, so a write that fails midway (a full disk) cannot leave the agent's file cut
+ * short; the folder and the temp file are made before that check, so nothing is awaited
+ * between it and the rename. The lens cache is left alone, since a range that starts
  * and ends on content lines reads back at the same position, so the bars do not flicker off
  * until a reread; one that begins or ends on blank lines is re-found from its anchor lines
  * at that reread, as every range the extension writes itself is. Resolves true when the
  * write landed or was skipped for that reason, false when it failed.
  */
 async function stampSidecar(document, raw, next) {
+  let temp = null;
+  const dropTemp = () => temp && vscode.workspace.fs.delete(temp).then(undefined, () => {});
   try {
     const uri = sidecarUri(document);
     if (!uri) return false;
+    temp = vscode.Uri.joinPath(uri, "..", path.basename(uri.fsPath) + "." + process.pid + ".tmp");
     await vscode.workspace.fs.createDirectory(vscode.Uri.joinPath(uri, ".."));
-    if (JSON.stringify(await readSidecar(document)) !== JSON.stringify(raw)) return true;
-    await vscode.workspace.fs.writeFile(uri, Buffer.from(JSON.stringify(next, null, 2) + "\n", "utf8"));
+    await vscode.workspace.fs.writeFile(temp, Buffer.from(JSON.stringify(next, null, 2) + "\n", "utf8"));
+    if (JSON.stringify(await readSidecar(document)) !== JSON.stringify(raw)) {
+      dropTemp();
+      return true;
+    }
+    await vscode.workspace.fs.rename(temp, uri, { overwrite: true });
     return true;
   } catch (error) {
+    dropTemp();
     vscode.window.showErrorMessage("MyMarkdown: could not save labels — " + (error?.message || error));
     return false;
   }
@@ -317,10 +327,12 @@ async function lensesFor(document, { stamp = true } = {}) {
   if (stamp && labelsEnabled() && !stamped.has(key)) {
     // The agent counted lines in the file it wrote, so a buffer with unsaved edits would put
     // the anchors on the wrong lines: stamp against the file on disk instead, or not at all.
+    // That file is read only when some range still lacks an anchor, not on every edit.
     let base = text;
     if (document.isDirty) {
+      const bare = Array.isArray(raw?.lenses) && raw.lenses.some((lens) => Array.isArray(lens?.ranges) && lens.ranges.some((range) => range && typeof range === "object" && !range.anchor));
       try {
-        base = Buffer.from(await vscode.workspace.fs.readFile(document.uri)).toString("utf8");
+        base = bare ? Buffer.from(await vscode.workspace.fs.readFile(document.uri)).toString("utf8") : null;
       } catch {
         base = null;
       }

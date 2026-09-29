@@ -46,7 +46,7 @@ and the Antigravity folder, which `check.js` holds equal to it:
 
 ```
 vscode-extension/agent-hooks/plugin/
-  .claude-plugin/plugin.json        Claude Code; also read by Copilot CLI (a legacy plugin), Devin, Augment, Positron
+  .claude-plugin/plugin.json        Claude Code; also read by Copilot CLI (a legacy plugin), VS Code, Devin, Augment, Positron
   .codex-plugin/plugin.json         Codex: the same fields plus its install-surface `interface`
   .cursor-plugin/plugin.json        Cursor, read before the others; its `hooks` key points at cursor/hooks.json
   .qoder-plugin/plugin.json         Qoder CLI
@@ -146,7 +146,8 @@ and every reader has a sane default (Augment's shipped code). `; exit 0` keeps a
 without Node from seeing an error after every write.
 
 Every agent that reads this file sets `CLAUDE_PLUGIN_ROOT`: Claude Code and Codex document
-it; Copilot CLI sets it for plugin hooks; Qoder CLI sets it in its shipped code, though its
+it; Copilot CLI sets it for plugin hooks; VS Code agent mode expands and sets it for a
+Claude-format plugin (its 1.139.1 code); Qoder CLI sets it in its shipped code, though its
 docs name only `QODER_PLUGIN_ROOT`; Augment documents it as an alias of its own names; Devin
 sets it since CLI v3000.5.20, the release that also made it run plugin hooks.
 
@@ -240,11 +241,14 @@ that folder.
 
 **Relative paths** resolve against the payload's `cwd`. Cursor has run plugin hooks with the
 plugin folder as `cwd` (and 2.5.x with the project), so its `cwd` is trusted only when it is
-inside the project; otherwise the root is the base.
+inside the project (lexically, or else by real path) and outside the plugin's own folder,
+which can itself lie in the project; otherwise the root is the base.
 
 **Yielding to a per-repo install.** Running as a plugin, if `<root>/.agents/hooks/markdown-labels.cjs`
 exists the hook stays quiet, for the agents that also run those per-project files: Claude
-Code, Codex, Copilot CLI and VS Code agent mode, Cursor and Kiro. Devin, Augment, Qoder
+Code, Codex, Copilot CLI and VS Code agent mode, and Cursor. For Kiro the script leaves only
+the stamping to the per-repo copy: Kiro's nudge is a prompt in each hook file, so both would
+fire, and its global and per-repo installs are not combined. Devin, Augment, Qoder
 (which loads hooks only from `.qoder/settings*.json`), Antigravity and OpenCode run no
 per-repo copy and never yield. Next to the older `.claude/hooks` per-repo layout, which
 Claude Code and Cursor run and which nudges but never stamps, the plugin leaves only the
@@ -262,10 +266,12 @@ answered with a top-level `additionalContext`, the only field it passes on), Dev
 answer), Kiro (`PostFileSave`'s `file_path` and `cwd`, stamping only), OpenCode (Claude
 shape with `agent: "opencode"`, from the adapter).
 
-**Naming the skill.** Agents list a plugin's skill differently: Claude Code, Devin, Qoder,
-Augment and Antigravity as `mymarkdown:markdown-labels` (Qoder's Skill tool matches only
-that exact name), Cursor as `/markdown-labels`, and the others, and every per-repo copy, as
-`markdown-labels`. The nudge names it the way the agent the payload came from lists it.
+**Naming the skill.** Agents list a plugin's skill differently: Claude Code, Codex, Devin,
+Qoder, Augment and Antigravity as `mymarkdown:markdown-labels` (Qoder's Skill tool matches
+only that exact name; Codex 0.158's skill loader prefixes a plugin's skills with its name),
+Cursor as `/markdown-labels`, and the others, and every per-repo copy, as
+`markdown-labels`. VS Code agent mode, which sends Claude Code's shape, is told the
+qualified name too; how it lists a plugin's skill is unverified. The nudge names it the way the agent the payload came from lists it.
 
 Thresholds, the stamping of anchors into agent-written sidecars, and the nudge text are
 otherwise unchanged.
@@ -278,9 +284,13 @@ adds anchors to the raw sidecar exactly as the hook's `stamp()` does and changes
 else. The first draft rewrote the file from the reader's sanitised view, which deleted
 stale ranges, lenses past the caps and unknown fields from the agent's file; the audit
 removed that. The stamp runs only while labels are enabled, re-reads the file first and
-leaves it alone if the agent changed it since, keeps the lens cache (the stamped file reads
-back at the same positions), and never runs from a label command's own read, whose write
-would otherwise be undone. Skills-only agents, Kiro's prompt-driven skill runs and any
+leaves it alone if the agent changed it since, writes through a temp file renamed over the
+sidecar as the hook does, keeps the lens cache (a range that starts and ends on content lines
+reads back at the same position; one that begins or ends on blank lines is re-found from its
+anchor lines at the next reread), and never runs from a label command's own read, whose
+write would otherwise be undone. A document with unsaved edits is stamped against its file
+on disk, which is what the agent counted lines in, and only when a range still lacks an
+anchor; when that read fails, the stamp is skipped. Skills-only agents, Kiro's prompt-driven skill runs and any
 hookless write are covered; the hook's own stamping stays, since it happens sooner.
 
 ## Installing
@@ -309,7 +319,8 @@ OpenCode      add "plugin": ["mymarkdown-hooks"] to ~/.config/opencode/opencode.
 Antigravity   agy plugin install https://github.com/ardeeshany/MyMarkdown/vscode-extension/agent-hooks/plugin-antigravity
               (needs git), or copy that folder to ~/.gemini/config/plugins/mymarkdown/; then restart Antigravity
 Kiro          copy kiro/markdown-labels.json and hooks/markdown-labels.cjs to ~/.kiro/hooks/, and
-              skills/markdown-labels to ~/.kiro/skills/ (copies, not symlinks); kiro-cli only with --v3
+              skills/markdown-labels to ~/.kiro/skills/ (copies, not symlinks); kiro-cli only with --v3;
+              use this or the per-project setup, not both
 Any other     cp -r skills/markdown-labels ~/.agents/skills/   (skill only, no nudge)
 ```
 

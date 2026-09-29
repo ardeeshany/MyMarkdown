@@ -383,9 +383,11 @@ function main(payload) {
   const oldLayout = !inProject && (dialect === "claude" || dialect === "cursor") && process.env.CLAUDE_PROJECT_DIR && fs.existsSync(path.join(ROOT, ".claude", "hooks", "markdown-labels.cjs"));
   // Relative paths are relative to where the agent works. Cursor has run plugin hooks with the
   // plugin folder as cwd (and older builds with the project), so its cwd is trusted only
-  // inside the project. The lexical test comes first, so a project folder that links elsewhere
-  // stays the base; only when it fails are real paths compared, so a cwd reached through a symlink
-  // (macOS's /tmp is /private/tmp) still counts, re-spelled under ROOT so the per-file test below agrees.
+  // inside the project, and never inside this plugin's own folder, which can itself lie in the
+  // project (a home folder opened as the workspace, a plugin linked in from a checkout). The
+  // lexical test comes first, so a project folder that links elsewhere stays the base; only when
+  // it fails are real paths compared, so a cwd reached through a symlink (macOS's /tmp is
+  // /private/tmp) still counts, re-spelled under ROOT so the per-file test below agrees.
   const cwd = typeof payload.cwd === "string" && payload.cwd ? payload.cwd : null;
   const within = (rel) => !(rel.startsWith("..") || path.isAbsolute(rel));
   const real = (dir) => {
@@ -395,8 +397,10 @@ function main(payload) {
       return path.resolve(dir);
     }
   };
-  const lexical = cwd && dialect === "cursor" && within(path.relative(ROOT, cwd));
-  const fromRoot = cwd && dialect === "cursor" && !lexical && path.relative(real(ROOT), real(cwd));
+  const own = path.resolve(__dirname, "..");
+  const ours = cwd && dialect === "cursor" && (within(path.relative(own, cwd)) || within(path.relative(real(own), real(cwd))));
+  const lexical = cwd && dialect === "cursor" && !ours && within(path.relative(ROOT, cwd));
+  const fromRoot = cwd && dialect === "cursor" && !ours && !lexical && path.relative(real(ROOT), real(cwd));
   const base = cwd && (dialect !== "cursor" || lexical) ? cwd : typeof fromRoot === "string" && within(fromRoot) ? path.join(ROOT, fromRoot) : inProject ? process.cwd() : ROOT;
 
   const notes = [];

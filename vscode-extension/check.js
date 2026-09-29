@@ -631,6 +631,7 @@ check("the manifest and the extension host agree", () => {
         },
         writeFile: async () => {},
         createDirectory: async () => {},
+        rename: async () => {},
         delete: async () => {},
       },
     },
@@ -965,6 +966,8 @@ function driveLabelCommands(sidecarByPath, activeDocument, openDocuments) {
   const editorListeners = [];
   const changeListeners = [];
   let statusItem;
+  const temps = {};
+  const renames = [];
   let deleted = false;
 
   const stub = {
@@ -1080,12 +1083,21 @@ function driveLabelCommands(sidecarByPath, activeDocument, openDocuments) {
           if (body === undefined) throw new Error("no sidecar");
           return Buffer.from(typeof body === "string" ? body : JSON.stringify(body), "utf8");
         },
+        // A temp file counts as written only once it is renamed over its target.
         writeFile: async (uri, contents) => {
-          written.push({ path: uri.fsPath, body: JSON.parse(contents.toString("utf8")), text: contents.toString("utf8") });
+          const entry = { path: uri.fsPath, body: JSON.parse(contents.toString("utf8")), text: contents.toString("utf8") };
+          if (uri.fsPath.endsWith(".tmp")) temps[uri.fsPath] = entry;
+          else written.push(entry);
+        },
+        rename: async (from, to) => {
+          renames.push({ from: from.fsPath, to: to.fsPath });
+          written.push({ ...temps[from.fsPath], path: to.fsPath });
+          delete temps[from.fsPath];
         },
         createDirectory: async () => {},
-        delete: async () => {
-          deleted = true;
+        delete: async (uri) => {
+          if (uri.fsPath.endsWith(".tmp")) delete temps[uri.fsPath];
+          else deleted = true;
         },
       },
     },
@@ -1131,6 +1143,8 @@ function driveLabelCommands(sidecarByPath, activeDocument, openDocuments) {
       for (const listener of changeListeners) listener({ document });
     },
     written,
+    temps,
+    renames,
     deleted: () => deleted,
     refreshes,
     watchers,
@@ -1285,6 +1299,10 @@ check("an unanchored sidecar (written by an agent without a hook) is stamped on 
     assert(!("sourceHash" in host.written[0].body), "no sourceHash is written: " + JSON.stringify(host.written[0].body));
     // The same bytes the hook's own stamp writes: two-space JSON and a final newline.
     assert(host.written[0].text === JSON.stringify(Labels.stampAnchors(sidecars["/ws/.mymd/doc.md.json"], doc), null, 2) + "\n", "the stamp's on-disk format: " + JSON.stringify(host.written[0].text));
+    // Written beside the sidecar and renamed over it, as the hook does, so a write that fails
+    // midway cannot cut the agent's file short.
+    const [move] = host.renames;
+    assert(host.renames.length === 1 && move.to === "/ws/.mymd/doc.md.json" && path.posix.normalize(move.from) === "/ws/.mymd/doc.md.json." + process.pid + ".tmp", "the stamp lands by a rename: " + JSON.stringify(host.renames));
     // The watcher sees the file it just wrote: no second write.
     sidecars["/ws/.mymd/doc.md.json"] = host.written[0].body;
     host.watchers[0].handlers.change(sidecarUri("/ws/.mymd/doc.md.json"));
@@ -1506,17 +1524,56 @@ check("two reads of a dirty document in flight together stamp it once", () => {
   });
 });
 
-check("a sidecar the agent rewrites while the stamp makes its folder is left to the agent", () => {
+check("a sidecar the agent rewrites while the stamp makes its folder or its temp file is left to the agent", () => {
   const doc = "# A\n\nabc\n\n## B\n\ndef\n";
-  const sidecars = { "/ws/.mymd/doc.md.json": { version: 1, lenses: [{ name: "Parts", ranges: [{ label: "One", color: "#111111", startLine: 5, endLine: 7 }] }] } };
-  const host = driveLabelCommands(sidecars, fakeMarkdownDocument("/ws/doc.md", doc));
-  // The agent's rewrite lands before createDirectory resolves: the last await before the write.
-  host.vscode.workspace.fs.createDirectory = async () => {
-    sidecars["/ws/.mymd/doc.md.json"] = { version: 1, lenses: [{ name: "Newer", ranges: [{ label: "Two", color: "#222222", startLine: 1, endLine: 3 }] }] };
-  };
-  return settle().then(() => {
-    assert(host.written.length === 0, "the stamp must not overwrite the agent's rewrite, got " + host.written.length);
+  const runs = ["createDirectory", "writeFile"].map((step) => () => {
+    const sidecars = { "/ws/.mymd/doc.md.json": { version: 1, lenses: [{ name: "Parts", ranges: [{ label: "One", color: "#111111", startLine: 5, endLine: 7 }] }] } };
+    const host = driveLabelCommands(sidecars, fakeMarkdownDocument("/ws/doc.md", doc));
+    // The agent's rewrite lands before this step resolves, ahead of the check before the rename.
+    const original = host.vscode.workspace.fs[step];
+    host.vscode.workspace.fs[step] = async (...args) => {
+      sidecars["/ws/.mymd/doc.md.json"] = { version: 1, lenses: [{ name: "Newer", ranges: [{ label: "Two", color: "#222222", startLine: 1, endLine: 3 }] }] };
+      return original(...args);
+    };
+    return settle().then(() => {
+      assert(host.written.length === 0, step + ": the stamp must not overwrite the agent's rewrite, got " + host.written.length);
+      assert(!Object.keys(host.temps).length, step + ": the temp file is left behind: " + Object.keys(host.temps));
+    });
   });
+  return runs.reduce((chain, run) => chain.then(run), Promise.resolve());
+});
+
+check("a dirty document's file is read only when its sidecar has a range still to stamp", () => {
+  const disk = "# A\n\nabc\n\n## B\n\ndef\n";
+  const bare = { version: 1, lenses: [{ name: "Parts", ranges: [{ label: "One", color: "#111111", startLine: 5, endLine: 7 }] }] };
+  const runs = [
+    ["no sidecar", {}],
+    ["every range anchored", { "/ws/.mymd/doc.md.json": Labels.stampAnchors(bare, disk) }],
+  ].map(([name, sidecars]) => () => {
+    const document = fakeMarkdownDocument("/ws/doc.md", "new\n\n" + disk);
+    document.isDirty = true;
+    const host = driveLabelCommands({ ...sidecars, "/ws/doc.md": disk }, document);
+    let reads = 0;
+    const read = host.vscode.workspace.fs.readFile;
+    host.vscode.workspace.fs.readFile = async (uri) => {
+      if (uri.fsPath === "/ws/doc.md") reads += 1;
+      return read(uri);
+    };
+    const edits = [1, 2, 3].reduce(
+      (chain) =>
+        chain.then(() => {
+          document.version += 1;
+          host.edit(document);
+          return settle();
+        }),
+      settle(),
+    );
+    return edits.then(() => {
+      assert(reads === 0, name + ": the file was read " + reads + " times for nothing");
+      assert(host.written.length === 0, name + ": nothing to stamp, got " + host.written.length);
+    });
+  });
+  return runs.reduce((chain, run) => chain.then(run), Promise.resolve());
 });
 
 check("the preview keeps drawing the lens right after a stamp write lands", () => {
@@ -1713,10 +1770,10 @@ function pluginRepo() {
   fs.copyFileSync(path.join(REPO, "vscode-extension", "agent-hooks", "plugin", "hooks", "markdown-labels.cjs"), script);
   const doc = path.join(root, "docs", "big.md");
   fs.writeFileSync(doc, "# Guide\n\n## One\n\n" + "word ".repeat(420) + "\n\n## Two\n\nend\n");
-  const run = (payload, { args = [], env = {}, preload } = {}) => {
+  const run = (payload, { args = [], env = {}, preload, hook = script } = {}) => {
     const inherited = { ...process.env };
     for (const key of ["CLAUDE_PROJECT_DIR", "DEVIN_PROJECT_DIR", "COPILOT_PROJECT_DIR", "AUGMENT_PROJECT_DIR", "CURSOR_PROJECT_DIR", "QODER_PROJECT_DIR", "QODER_HOOK_SOURCE", "COPILOT_CLI"]) delete inherited[key];
-    const result = spawnSync(process.execPath, [...(preload ? ["-r", preload] : []), script, ...args], { input: JSON.stringify(payload), env: { ...inherited, ...env }, cwd: path.dirname(script), encoding: "utf8" });
+    const result = spawnSync(process.execPath, [...(preload ? ["-r", preload] : []), hook, ...args], { input: JSON.stringify(payload), env: { ...inherited, ...env }, cwd: path.dirname(hook), encoding: "utf8" });
     assert(result.status === 0, "the hook must always exit 0, got " + result.status + ": " + result.stderr);
     return result.stdout ? JSON.parse(result.stdout) : null;
   };
@@ -1964,9 +2021,16 @@ check("the extension stamps a sidecar exactly as the hook's own stamp does", () 
     fs.writeFileSync(sidecar, JSON.stringify(raw));
     p.run({ tool_name: "Write", tool_input: { file_path: sidecar }, tool_response: {}, cwd: p.root });
     const hook = JSON.parse(fs.readFileSync(sidecar, "utf8"));
-    const started = Date.now();
-    const extension = Labels.stampAnchors(raw, fs.readFileSync(p.doc, "utf8"));
-    assert(Date.now() - started < 1000, "stamping takes " + (Date.now() - started) + " ms");
+    // In a child with a time limit: a scan from -1e308 that never ends then fails here, by
+    // name, instead of hanging the whole run.
+    const child = spawnSync(
+      process.execPath,
+      ["-e", "const t = Date.now(); const r = require(process.argv[1]).stampAnchors(JSON.parse(process.argv[2]), require('fs').readFileSync(process.argv[3], 'utf8')); console.log(JSON.stringify({ ms: Date.now() - t, r }))", path.join(__dirname, "lib", "labels.js"), JSON.stringify(raw), p.doc],
+      { encoding: "utf8", timeout: 10000 },
+    );
+    assert(child.status === 0, "stamping never finished: " + (child.signal || child.stderr));
+    const { ms, r: extension } = JSON.parse(child.stdout);
+    assert(ms < 1000, "stamping takes " + ms + " ms");
     assert(hook.lenses[0].ranges[0].anchor === "# guide", "the hook stamped the file: " + JSON.stringify(hook.lenses[0].ranges[0]));
     assert(extension.lenses[0].ranges[3].anchor === "## two" && extension.lenses[0].ranges[3].endAnchor === "end", "fractional lines are cut to whole ones: " + JSON.stringify(extension.lenses[0].ranges[3]));
     for (const i of [4, 5, 6]) assert(extension.lenses[0].ranges[i].anchor === "# guide", "scanned from line 1: " + JSON.stringify(extension.lenses[0].ranges[i]));
@@ -2242,6 +2306,20 @@ check("Cursor: a relative path resolves against its cwd inside the project, and 
       fs.symlinkSync(external, path.join(p.root, "shared"), process.platform === "win32" ? "junction" : "dir");
       const out = p.run(cursor(p.root, path.join(p.root, "shared"), "big.md"));
       assert(nudgeIn(out, "additional_context").startsWith("shared/big.md is now"), "cwd a project folder linked outside it got " + JSON.stringify(out));
+      // Cursor runs a plugin's hooks from the plugin's folder, which may sit inside the project
+      // itself: that cwd is never where the agent works, however it is reached.
+      const inside = path.join(p.root, "plugin");
+      fs.mkdirSync(path.join(inside, "hooks"), { recursive: true });
+      fs.copyFileSync(p.script, path.join(inside, "hooks", "markdown-labels.cjs"));
+      const installed = path.join(p.base, "installed");
+      fs.symlinkSync(inside, installed, process.platform === "win32" ? "junction" : "dir");
+      for (const [name, cwd, hook] of [
+        ["the plugin's folder inside the workspace", inside, path.join(inside, "hooks", "markdown-labels.cjs")],
+        ["the plugin linked in from the workspace", installed, path.join(installed, "hooks", "markdown-labels.cjs")],
+      ]) {
+        const out = p.run(cursor(p.root, cwd, "docs/big.md"), { hook });
+        assert(nudgeIn(out, "additional_context").startsWith("docs/big.md is now"), "cwd " + name + " got " + JSON.stringify(out));
+      }
     }
   } finally {
     p.cleanup();

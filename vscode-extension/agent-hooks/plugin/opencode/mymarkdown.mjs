@@ -83,7 +83,7 @@ async function server({ directory }) {
 }
 
 async function setup(ctx) {
-  if (!ctx?.tool?.hook || !ctx.skill?.transform) return; // 1.x calls setup too, with its own ctx
+  if (!ctx?.tool?.hook || !ctx.skill?.transform) return; // 1.x never calls setup; this only guards a malformed ctx
   const cwd = ctx.location?.directory;
   await ctx.skill.transform((editor) => {
     for (const skill of skills()) {
