@@ -2183,12 +2183,20 @@ check("plugin hook: the project variable beats the payload's workspace, which be
     for (const [name, extra, env, shown] of [
       ["CLAUDE_PROJECT_DIR over workspace_roots", { workspace_roots: [b] }, { CLAUDE_PROJECT_DIR: p.root }, "b/c/docs/big.md is now"],
       ["QODER_PROJECT_DIR alone", { workspace_roots: [b] }, { QODER_PROJECT_DIR: p.root }, "b/c/docs/big.md is now"],
+      ["CURSOR_PROJECT_DIR alone", { workspace_roots: [b] }, { CURSOR_PROJECT_DIR: p.root }, "b/c/docs/big.md is now"],
+      ["AUGMENT_PROJECT_DIR alone", { workspace_roots: [b] }, { AUGMENT_PROJECT_DIR: p.root }, "b/c/docs/big.md is now"],
       ["workspace_roots over the git top above cwd", { workspace_roots: [b] }, {}, "c/docs/big.md is now"],
+      // Antigravity and Windsurf name their workspace in workspacePaths instead.
+      ["workspacePaths over the git top above cwd", { workspacePaths: [b] }, {}, "c/docs/big.md is now"],
       ["the git top above cwd", {}, {}, "docs/big.md is now"],
     ]) {
       const out = p.run({ ...write, ...extra }, { env });
       assert(nudgeIn(out, "hookSpecificOutput").startsWith(shown), name + ": expected " + shown + ", got " + JSON.stringify(out));
     }
+    // Augment's paths are relative to its first workspace root, or to its project variable
+    // when the payload lists no workspace.
+    const augment = p.run({ hook_event_name: "PostToolUse", tool_name: "save-file", tool_input: {}, file_changes: [{ path: "docs/big.md" }] }, { env: { AUGMENT_PROJECT_DIR: p.root } });
+    assert(nudgeIn(augment, "hookSpecificOutput").startsWith("docs/big.md is now"), "Augment with no workspace_roots got " + JSON.stringify(augment));
   } finally {
     p.cleanup();
   }
@@ -2201,6 +2209,9 @@ check("Cursor: a relative path resolves against its cwd inside the project, and 
     for (const [name, payload] of [
       ["cwd a subfolder of the project", cursor(p.root, path.join(p.root, "docs"), "big.md")],
       ["cwd the plugin folder", cursor(p.root, path.dirname(p.script), "docs/big.md")],
+      // Either key alone is enough to tell Cursor apart from the Claude-shaped fall-through.
+      ["postToolUse without cursor_version", (({ cursor_version, ...rest }) => rest)(cursor(p.root, p.root, "docs/big.md"))],
+      ["cursor_version under another event name", { ...cursor(p.root, p.root, "docs/big.md"), hook_event_name: "PostToolUse" }],
     ]) {
       const out = p.run(payload);
       assert(nudgeIn(out, "additional_context").startsWith("docs/big.md is now"), name + " got " + JSON.stringify(out));
@@ -2417,6 +2428,23 @@ check("Antigravity: PreInvocation answers with an ephemeralMessage, and the mark
     write("twice");
     const twice = invoke("twice");
     assert(twice && twice.injectSteps && twice.injectSteps[0].userMessage.split("\n").length === 1, "one line for one document: " + JSON.stringify(twice));
+
+    // An id carrying path separators and dots is flattened into one file inside the folder.
+    write("../x/y");
+    assert(fs.readdirSync(dir).includes("c-.._x_y"), "the id's separators are replaced inside the marker folder: " + fs.readdirSync(dir));
+    assert(invoke("../x/y").injectSteps, "and the nudge is delivered from there");
+
+    // A marker that cannot be read (here a folder in its place) still answers exactly {}.
+    fs.mkdirSync(path.join(dir, "c-isdir"));
+    assert(JSON.stringify(invoke("isdir")) === "{}", "an unreadable marker answers {}");
+
+    // A marker file planted as a symlink is not appended through by the next write.
+    const target = path.join(p.base, "planted-marker.txt");
+    fs.writeFileSync(target, "PLANTED\n");
+    if (fileSymlink(target, path.join(dir, "c-link"))) {
+      assert(JSON.stringify(write("link")) === "{}", "a write beside a symlinked marker still answers {}");
+      assert(fs.readFileSync(target, "utf8") === "PLANTED\n", "nothing appended through a symlinked marker");
+    } // else: Windows without Developer Mode can't create the symlink; nothing to assert here.
 
     if (process.platform !== "win32") {
       // An owned folder left group- or world-open (an earlier run under a looser umask) is closed again.
@@ -2639,7 +2667,7 @@ check("docs: the README's install lines name the marketplace, the version is one
   // Prose is wrapped, so a phrase is looked for with its line breaks read as spaces.
   const read = (...parts) => fs.readFileSync(path.join(__dirname, ...parts), "utf8").replace(/\s+/g, " ");
   const readme = read("README.md");
-  for (const line of ["claude plugin install mymarkdown@mymarkdown-plugins", "copilot plugin install mymarkdown@mymarkdown-plugins", "codex plugin add mymarkdown@mymarkdown-plugins", "devin plugins install ardeeshany/MyMarkdown#vscode-extension/agent-hooks/plugin", '"plugin": ["mymarkdown-hooks"]', "Import from GitHub", "kiro-cli --v3", "plugin-antigravity", "~/.kiro/hooks", "~/.agents/skills", "Both add the same eight files", "`.claude/skills/` and `.kiro/skills/`", "(Claude Code, Codex, Copilot CLI and VS Code agent mode, and Cursor)", "opencode plugin -g mymarkdown-hooks (1.x)", "opencode plugin add mymarkdown-hooks (2.x)", "Cursor, Codex and Kiro. When an agent", "| Kiro |", '"chat.pluginLocations": { "<path to a clone of the plugin folder>": true }', "Agent Plugins in the Extensions view"]) {
+  for (const line of ["claude plugin install mymarkdown@mymarkdown-plugins", "copilot plugin install mymarkdown@mymarkdown-plugins", "codex plugin add mymarkdown@mymarkdown-plugins", "devin plugins install ardeeshany/MyMarkdown#vscode-extension/agent-hooks/plugin", '"plugin": ["mymarkdown-hooks"]', "Import from GitHub", "kiro-cli --v3", "plugin-antigravity", "~/.kiro/hooks", "~/.agents/skills", "Both add the same eight files", "`.claude/skills/` and `.kiro/skills/`", "(Claude Code, Codex, Copilot CLI and VS Code agent mode, and Cursor)", "opencode plugin -g mymarkdown-hooks (1.x)", "opencode plugin add mymarkdown-hooks (2.x)", "Cursor, Codex and Kiro. When an agent", "| Kiro |", "(Windsurf's skill does follow you there)", '"chat.pluginLocations": { "<path to a clone of the plugin folder>": true }', "Agent Plugins in the Extensions view"]) {
     includes(readme, line, "extension README");
   }
   includes(readme, "Install once for every project", "the section");

@@ -158,11 +158,12 @@ marketplace clones the repository (Claude Code users can pass
 `--sparse vscode-extension/agent-hooks/plugin .claude-plugin`). Labels land in `.mymd/` in the
 project the agent reports: its project variable, else its workspace, else the top of the git
 repository around its working folder (for Kiro, its workspace); open that folder in VS Code.
-Cursor's Cloud Agents and Windsurf's cloud sessions do not run user plugins; the per-project
-setup covers them. Update and uninstall are each agent's own plugin commands. The install
-lines for Cursor, Windsurf, Augment, Qoder, OpenCode, Antigravity and Kiro, and VS Code's
-plugin install, follow each tool's documentation and shipped code but have not been run end
-to end; Claude Code and Copilot CLI have. Please report what you find.
+Cursor's Cloud Agents and Windsurf's cloud sessions do not run a user plugin's hooks
+(Windsurf's skill does follow you there); the per-project setup covers them. Update and
+uninstall are each agent's own plugin commands. The install lines for Cursor, Windsurf,
+Augment, Qoder, OpenCode, Antigravity and Kiro, and VS Code's plugin install, follow each
+tool's documentation and shipped code but have not been run end to end; Claude Code and
+Copilot CLI have. Please report what you find.
 
 Then each agent may need one step of its own:
 
