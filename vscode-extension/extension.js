@@ -665,7 +665,7 @@ async function installAgentHooks() {
     return;
   }
   vscode.window.showInformationMessage(
-    `MyMarkdown: label hooks installed in ${folder.name}.${kept} New Claude Code, Copilot and Cursor ` +
+    `MyMarkdown: label hooks installed in ${folder.name}.${kept} New Claude Code, Copilot, Cursor and Kiro ` +
       "sessions there pick them up; Codex asks you to approve the hook once, in /hooks.",
   );
 }

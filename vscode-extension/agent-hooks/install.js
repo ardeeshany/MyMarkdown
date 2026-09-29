@@ -14,22 +14,23 @@ const os = require("os");
 const path = require("path");
 const { isDeepStrictEqual } = require("util");
 
+/** The folder TARGETS' `from` paths are relative to. */
 const TEMPLATES = __dirname;
-/** The plugin folder: the only copy of the hook and skill, and what the installer copies from. */
-const PLUGIN_DIR = path.join(__dirname, "plugin");
 const HOOK = ".agents/hooks/markdown-labels.cjs";
 
 /**
  * Where each file goes, relative to the project root, and the template it comes from.
  * Claude Code reads only .claude/skills; Copilot, VS Code and Codex read .agents/skills.
  * Cursor reads both, and reads Claude Code's hooks from .claude/settings.json.
- * Kiro reads any file in .kiro/hooks, so ours is a file of its own, never merged.
+ * Kiro reads only .kiro/skills and .kiro/hooks (any file there, so ours is a file of its own,
+ * never merged).
  * `runsHook`: the file registers the hook script, so it is only worth writing with it.
  */
 const TARGETS = [
   { dest: HOOK, from: "plugin/hooks/markdown-labels.cjs" },
   { dest: ".agents/skills/markdown-labels/SKILL.md", from: "plugin/skills/markdown-labels/SKILL.md" },
   { dest: ".claude/skills/markdown-labels/SKILL.md", from: "plugin/skills/markdown-labels/SKILL.md" },
+  { dest: ".kiro/skills/markdown-labels/SKILL.md", from: "plugin/skills/markdown-labels/SKILL.md" },
   { dest: ".claude/settings.json", from: "files/claude-settings.json", merge: true, runsHook: true },
   { dest: ".github/hooks/markdown-labels.json", from: "files/copilot-hooks.json", runsHook: true },
   { dest: ".codex/hooks.json", from: "files/codex-hooks.json", merge: true, runsHook: true },
@@ -217,4 +218,4 @@ function installAgentHooks(root, { force = false } = {}) {
 /** Results that leave some agent without the hook: the ones to tell the user about. */
 const brokenResults = (results) => results.filter((result) => ["invalid", "skipped", "failed"].includes(result.status));
 
-module.exports = { installAgentHooks, brokenResults, sameFolder, TARGETS, PLUGIN_DIR };
+module.exports = { installAgentHooks, brokenResults, sameFolder, TARGETS };

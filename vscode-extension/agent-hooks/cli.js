@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 // `npx mymarkdown-hooks init`: the command-line way into install.js, for projects worked on
-// with Claude Code, Copilot, Cursor or Codex and no VS Code open.
+// with Claude Code, GitHub Copilot (CLI and VS Code agent mode), Cursor, Codex and Kiro, without
+// VS Code open.
 "use strict";
 
 const fs = require("fs");
@@ -10,8 +11,8 @@ const { installAgentHooks, brokenResults, sameFolder } = require("./install.js")
 
 const USAGE = `Usage: mymarkdown-hooks init [project-dir] [--force]
 
-Sets up coding agents (Claude Code, GitHub Copilot CLI and VS Code agent mode, Cursor,
-Codex) to label the Markdown they write, for the MyMarkdown VS Code extension.
+Sets up coding agents (Claude Code, GitHub Copilot (CLI and VS Code agent mode), Cursor,
+Codex and Kiro) to label the Markdown they write, for the MyMarkdown VS Code extension.
 
 With no project-dir it installs at the top of the git repository you are in, or in the
 current folder outside one. Existing files are never overwritten: the hook entry is merged

@@ -1622,7 +1622,7 @@ check("label hook: a skill-written sidecar gets anchors on save, follows its tex
   }
 });
 
-check("label hook wiring: every agent points at the one script, and both skill copies match", () => {
+check("label hook wiring: every agent points at the one script, and the skill copies match", () => {
   const read = (file) => fs.readFileSync(path.join(REPO, file), "utf8");
   const claude = JSON.parse(read(".claude/settings.json")).hooks.PostToolUse[0].hooks[0].command;
   const copilot = JSON.parse(read(".github/hooks/markdown-labels.json")).hooks.postToolUse[0];
@@ -1631,10 +1631,9 @@ check("label hook wiring: every agent points at the one script, and both skill c
     includes(command, ".agents/hooks/markdown-labels.cjs", name + " command");
   }
   includes(claude, "--claude-settings", "Claude Code command");
-  assert(
-    read(".claude/skills/markdown-labels/SKILL.md") === read(".agents/skills/markdown-labels/SKILL.md"),
-    ".claude/skills/markdown-labels/SKILL.md has drifted from .agents/skills/markdown-labels/SKILL.md",
-  );
+  for (const copy of [".claude/skills/markdown-labels/SKILL.md", ".kiro/skills/markdown-labels/SKILL.md"]) {
+    assert(read(copy) === read(".agents/skills/markdown-labels/SKILL.md"), copy + " has drifted from .agents/skills/markdown-labels/SKILL.md");
+  }
 });
 
 const readJson = (rel) => JSON.parse(fs.readFileSync(path.join(__dirname, rel), "utf8"));
@@ -2287,7 +2286,7 @@ check("docs: the README's install lines name the marketplace, the version is one
   const npm = fs.readFileSync(path.join(__dirname, "agent-hooks", "README.md"), "utf8");
   includes(npm, "affiliated with the `mymarkdown-cli`", "the npm README disowns the unrelated mymarkdown-* packages");
   includes(npm, "opencode plugin add mymarkdown-hooks", "the npm README says it is the OpenCode plugin");
-  for (const copy of [".agents/skills/markdown-labels/SKILL.md", ".claude/skills/markdown-labels/SKILL.md"]) {
+  for (const copy of [".agents/skills/markdown-labels/SKILL.md", ".claude/skills/markdown-labels/SKILL.md", ".kiro/skills/markdown-labels/SKILL.md"]) {
     assert(fs.readFileSync(path.join(REPO, copy), "utf8") === fs.readFileSync(path.join(__dirname, PLUGIN, "skills/markdown-labels/SKILL.md"), "utf8"), copy + " drifted from the plugin's skill");
   }
 });
@@ -2332,11 +2331,11 @@ function scratchProject() {
 const statuses = (results) => Object.fromEntries(results.map((result) => [result.file, result.status]));
 const template = (dest) => fs.readFileSync(path.join(__dirname, "agent-hooks", Hooks.TARGETS.find((t) => t.dest === dest).from), "utf8");
 
-check("agent hooks installer: an empty project gets all seven files, and running it again changes nothing", () => {
+check("agent hooks installer: an empty project gets all eight files, and running it again changes nothing", () => {
   const project = scratchProject();
   try {
     const first = Hooks.installAgentHooks(project.root);
-    assert(first.length === 7 && first.every((result) => result.status === "created"), JSON.stringify(first));
+    assert(first.length === 8 && first.every((result) => result.status === "created"), JSON.stringify(first));
     for (const target of Hooks.TARGETS) {
       assert(project.read(target.dest) === template(target.dest), target.dest + " should be the template");
     }
@@ -2545,7 +2544,7 @@ check("agent hooks installer: configs are not pointed at a hook script that coul
     project.put(".agents", "a file where the folder should be\n");
     const results = statuses(Hooks.installAgentHooks(project.root));
     assert(results[".agents/hooks/markdown-labels.cjs"] === "failed", JSON.stringify(results));
-    for (const config of [".claude/settings.json", ".github/hooks/markdown-labels.json", ".codex/hooks.json"]) {
+    for (const config of [".claude/settings.json", ".github/hooks/markdown-labels.json", ".codex/hooks.json", ".kiro/hooks/markdown-labels.json"]) {
       assert(results[config] === "skipped" && !fs.existsSync(project.file(config)), config + " must not register a missing script");
     }
     const run = spawnSync(process.execPath, [HOOK_CLI, "init", project.root], { encoding: "utf8" });
@@ -2621,6 +2620,7 @@ check("mymarkdown-hooks CLI: init installs at the git root from a subfolder, and
     includes(cli(["init"]).stdout, "Already up to date", "a second run");
     const help = cli(["--help"]);
     assert(help.status === 0 && help.stdout.startsWith("Usage: mymarkdown-hooks init"), "--help: " + help.stdout);
+    includes(help.stdout.replace(/\s+/g, " "), "Claude Code, GitHub Copilot (CLI and VS Code agent mode), Cursor, Codex and Kiro", "--help names every agent");
     assert(cli([]).status === 1 && cli(["install"]).status === 1 && cli(["init", "--yes"]).status === 1, "bad usage exits 1");
 
     project.put(".codex/hooks.json", "not json");
@@ -2661,7 +2661,9 @@ check("Install Label Hooks command: installs into the open folder, and replaces 
     })
     .then(() => {
       assert(fs.existsSync(project.file(".agents/hooks/markdown-labels.cjs")), "installed into the only folder");
-      includes(host.messages.pop().text, "label hooks installed in proj", "the confirmation");
+      const confirmation = host.messages.pop().text;
+      includes(confirmation, "label hooks installed in proj", "the confirmation");
+      includes(confirmation, "New Claude Code, Copilot, Cursor and Kiro sessions there pick them up", "the confirmation names every agent");
       project.put(".agents/hooks/markdown-labels.cjs", "// edited\n");
       host.queueWarningAnswer(undefined); // the modal dismissed
       return run();
