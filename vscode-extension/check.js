@@ -1814,7 +1814,11 @@ function pluginWrites(p) {
     ["Cursor", { hook_event_name: "postToolUse", cursor_version: "3.21.18", conversation_id: "c1", workspace_roots: [p.root], cwd: path.dirname(p.script), tool_name: "Write", tool_input: { file_path: p.doc, content: "x" }, tool_output: "{}" }, {}, "additional_context", "/markdown-labels", true],
     ["Devin", { hook_event_name: "PostToolUse", tool_name: "write", tool_input: { file_path: p.doc }, tool_response: { success: true } }, { DEVIN_PROJECT_DIR: p.root }, "hookSpecificOutput", qualified, false],
     ["Augment", { hook_event_name: "PostToolUse", tool_name: "save-file", tool_input: {}, file_changes: [{ path: "docs/big.md" }], workspace_roots: [p.root] }, { AUGMENT_PROJECT_DIR: p.root }, "hookSpecificOutput", qualified, false],
+    // A payload that carries tool_response is never Copilot's, whatever else it carries.
+    ["Claude Code with a tool_result field", { hook_event_name: "PostToolUse", tool_name: "Write", tool_input: { file_path: p.doc }, tool_response: {}, tool_result: {}, cwd: p.root }, { CLAUDE_PROJECT_DIR: p.root }, "hookSpecificOutput", qualified, true],
     ["Qoder CLI", { hook_event_name: "PostToolUse", tool_name: "Write", tool_input: { file_path: p.doc }, tool_response: {}, cwd: p.root }, { QODER_HOOK_SOURCE: "cli", CLAUDE_PROJECT_DIR: p.root }, "hookSpecificOutput", qualified, false],
+    // Either Qoder variable alone is enough to tell it from Claude Code.
+    ["Qoder CLI (project variable only)", { hook_event_name: "PostToolUse", tool_name: "Write", tool_input: { file_path: p.doc }, tool_response: {}, cwd: p.root }, { QODER_PROJECT_DIR: p.root, CLAUDE_PROJECT_DIR: p.root }, "hookSpecificOutput", qualified, false],
     ["OpenCode", { agent: "opencode", hook_event_name: "PostToolUse", tool_name: "write", tool_input: { filePath: p.doc }, cwd: p.root }, {}, "hookSpecificOutput", "markdown-labels", false],
   ];
 }
@@ -1881,8 +1885,28 @@ check("plugin hook: stays quiet for the older .claude/hooks per-repo copy only w
       if (quiet) assert(out === null, name + " is spoken for by .claude/hooks, got " + JSON.stringify(out));
       else assert(nudgeIn(out, field).includes(`Run the ${skill} skill`), name + " runs no .claude/hooks copy and must be nudged, got " + JSON.stringify(out));
     }
+    // Only the nudge is spoken for: that older copy never stamps, so the plugin still does.
+    const sidecar = path.join(p.root, ".mymd", "docs", "big.md.json");
+    fs.mkdirSync(path.dirname(sidecar), { recursive: true });
+    for (const name of ["Claude Code", "Cursor"]) {
+      fs.writeFileSync(sidecar, UNSTAMPED);
+      const [payload] = writes[name];
+      p.run({ ...payload, tool_input: { ...payload.tool_input, file_path: sidecar } }, { env: { CLAUDE_PROJECT_DIR: p.root } });
+      const anchor = JSON.parse(fs.readFileSync(sidecar, "utf8")).lenses[0].ranges[0].anchor;
+      assert(anchor === "# guide", name + "'s sidecar write still gains anchors next to .claude/hooks, got " + JSON.stringify(anchor));
+    }
   } finally {
     p.cleanup();
+  }
+  // A per-repo copy is the one that runs, so it never yields to the older copy beside it.
+  const repo = hookRepo();
+  try {
+    fs.mkdirSync(path.join(repo.root, ".claude", "hooks"), { recursive: true });
+    fs.writeFileSync(path.join(repo.root, ".claude", "hooks", "markdown-labels.cjs"), "// upstream's per-repo copy\n");
+    const out = repo.run({ hook_event_name: "PostToolUse", tool_name: "Write", tool_input: { file_path: repo.doc }, tool_response: {}, cwd: repo.root }, { env: { CLAUDE_PROJECT_DIR: repo.root } });
+    assert(nudgeIn(out, "hookSpecificOutput").includes("Run the markdown-labels skill"), "the per-repo copy still nudges, got " + JSON.stringify(out));
+  } finally {
+    repo.cleanup();
   }
 });
 
@@ -2109,10 +2133,12 @@ check("Antigravity: PreInvocation answers with an ephemeralMessage, and the mark
 
     if (process.platform !== "win32") {
       // An owned folder left group- or world-open (an earlier run under a looser umask) is closed again.
-      fs.chmodSync(dir, 0o777);
-      write("mode");
-      assert((fs.statSync(dir).mode & 0o777) === 0o700, "the marker folder is left at 0700, got " + (fs.statSync(dir).mode & 0o777).toString(8));
-      assert(invoke("mode").injectSteps, "and is still used");
+      for (const mode of [0o770, 0o707]) {
+        fs.chmodSync(dir, mode);
+        write("mode");
+        assert((fs.statSync(dir).mode & 0o777) === 0o700, "a marker folder at " + mode.toString(8) + " is left at 0700, got " + (fs.statSync(dir).mode & 0o777).toString(8));
+        assert(invoke("mode").injectSteps, "and is still used");
+      }
     }
 
     // A marker folder planted as a symlink is refused: nothing is read, consumed or written through it.

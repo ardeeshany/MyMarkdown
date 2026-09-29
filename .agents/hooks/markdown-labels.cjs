@@ -378,8 +378,9 @@ function main(payload) {
   // A project with its own per-repo install is that copy's business; two nudges help nobody.
   // Only true when a per-repo copy actually runs for this dialect (see YIELDS above).
   if (!inProject && YIELDS.has(dialect) && fs.existsSync(path.join(ROOT, ".agents", "hooks", "markdown-labels.cjs"))) return;
-  // The older per-repo layout runs from .claude/settings.json, which only Claude Code and Cursor read with CLAUDE_PROJECT_DIR set.
-  if (!inProject && (dialect === "claude" || dialect === "cursor") && process.env.CLAUDE_PROJECT_DIR && fs.existsSync(path.join(ROOT, ".claude", "hooks", "markdown-labels.cjs"))) return;
+  // The older per-repo layout runs from .claude/settings.json, which only Claude Code and Cursor
+  // read with CLAUDE_PROJECT_DIR set. That copy nudges but never stamps, so only the nudge is left to it.
+  const oldLayout = !inProject && (dialect === "claude" || dialect === "cursor") && process.env.CLAUDE_PROJECT_DIR && fs.existsSync(path.join(ROOT, ".claude", "hooks", "markdown-labels.cjs"));
   // Relative paths are relative to where the agent works. Cursor has run plugin hooks with the
   // plugin folder as cwd (and older builds with the project), so its cwd is trusted only
   // inside the project.
@@ -403,6 +404,7 @@ function main(payload) {
       }
       continue;
     }
+    if (oldLayout) continue;
     if (!MARKDOWN.test(relative) || parts.includes("node_modules") || parts.includes(".git")) continue;
     const note = nudge(root, file, relative, skillName(dialect, inProject));
     if (note) notes.push(note);
