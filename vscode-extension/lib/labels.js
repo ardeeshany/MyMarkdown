@@ -43,7 +43,7 @@ function normalizeAnchor(line) {
 
 /** The first line with something on it, searching forward from `from` and not past `to`. */
 function firstContentLine(lines, from, to) {
-  for (let i = from; i <= to && i < lines.length; i += 1) {
+  for (let i = Math.max(0, from); i <= to && i < lines.length; i += 1) {
     if (String(lines[i] ?? "").trim()) return i;
   }
   return -1;

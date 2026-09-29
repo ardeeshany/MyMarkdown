@@ -250,7 +250,7 @@ async function writeSidecar(document, lenses) {
   // Feed writeLabels the already re-anchored lenses, not the raw file: the raw file's
   // ranges may no longer point at the right lines, and writing them straight back out
   // would stamp a fresh hash over positions that were never corrected.
-  const existing = { lenses: await lensesFor(document) };
+  const existing = { lenses: await lensesFor(document, { stamp: false }) };
   const next = Labels.writeLabels(document.getText(), lenses, existing);
   try {
     await vscode.workspace.fs.createDirectory(vscode.Uri.joinPath(uri, ".."));
@@ -293,8 +293,12 @@ async function stampSidecar(document, raw, next) {
  */
 const stamped = new Set();
 
-/** Every lens for a document, re-anchored against its current text. */
-async function lensesFor(document) {
+/**
+ * Every lens for a document, re-anchored against its current text. `stamp: false` is for
+ * writeSidecar's own read: a stamp started there would land after its write and put the
+ * older file back, and the file it writes carries anchors on every range anyway.
+ */
+async function lensesFor(document, { stamp = true } = {}) {
   const key = document.uri.toString();
   const cached = lensCache.get(key);
   if (cached && cached.version === document.version) return cached.lenses;
@@ -307,8 +311,13 @@ async function lensesFor(document) {
   // would stay anchor-less however often they were restamped. stampAnchors returns null
   // unless a range can actually GAIN an anchor on the current text, or such a range would be
   // rewritten on every single reread, forever, for as long as the document stays open.
-  if (labelsEnabled() && !stamped.has(key)) {
-    const next = Labels.stampAnchors(raw, text);
+  if (stamp && labelsEnabled() && !stamped.has(key)) {
+    let next = null;
+    try {
+      next = Labels.stampAnchors(raw, text);
+    } catch {
+      // A file nested too deeply to copy is still read; it is just never stamped.
+    }
     if (next) {
       stamped.add(key);
       stampSidecar(document, raw, next).then((ok) => {

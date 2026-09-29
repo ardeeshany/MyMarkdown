@@ -1466,6 +1466,49 @@ check("the preview keeps drawing the lens right after a stamp write lands", () =
   });
 });
 
+check("a label command's own write is not undone by a stamp its read set off", () => {
+  const doc = "# A\n\nabc\n\n## B\n\ndef\n";
+  const document = fakeMarkdownDocument("/ws/doc.md", doc);
+  const sidecars = {};
+  const host = driveLabelCommands(sidecars, document);
+  host.vscode.workspace.fs.writeFile = async (uri, contents) => {
+    sidecars[uri.fsPath] = JSON.parse(contents.toString("utf8"));
+    host.written.push({ path: uri.fsPath, body: sidecars[uri.fsPath] });
+  };
+  host.vscode.window.showInputBox = async () => "Q";
+  const reply = JSON.stringify({ items: [{ label: "New", color: "#222222", startLine: 1, endLine: 3 }] });
+  host.vscode.lm.selectChatModels = async () => [{ sendRequest: async () => ({ text: [reply] }) }];
+  return settle()
+    .then(() => {
+      // An agent with no hook writes an unanchored sidecar, and the person types while the
+      // model runs: the command's own read finds a stale cache and a stampable file.
+      sidecars["/ws/.mymd/doc.md.json"] = { version: 1, lenses: [{ name: "Agent", ranges: [{ label: "One", color: "#111111", startLine: 5, endLine: 7 }] }] };
+      document.version += 1;
+      return host.handlers["mymarkdown.labelDocument"]();
+    })
+    .then(() => settle())
+    .then(() => {
+      const names = sidecars["/ws/.mymd/doc.md.json"].lenses.map((lens) => lens.name);
+      assert(names.join() === "Agent,Q", "the new lens survives, got " + names.join() + " after " + host.written.length + " writes");
+    });
+});
+
+check("a sidecar too deeply nested to copy still reads, and is simply not stamped", () => {
+  const doc = "# A\n\nabc\n\n## B\n\ndef\n";
+  const body = '{"version":1,"x":' + "[".repeat(20000) + "]".repeat(20000) +
+    ',"lenses":[{"name":"Parts","ranges":[{"label":"One","color":"#111111","startLine":5,"endLine":7}]}]}';
+  const host = driveLabelCommands({}, fakeMarkdownDocument("/ws/doc.md", doc));
+  // Activation's read is already under way and finds no file; the watcher's read finds this one.
+  host.vscode.workspace.fs.readFile = async () => Buffer.from(body, "utf8");
+  return settle().then(() => {
+    host.watchers[0].handlers.change(sidecarUri("/ws/.mymd/doc.md.json"));
+    return settle();
+  }).then(() => {
+    assert(host.written.length === 0, "nothing written, got " + host.written.length);
+    assert(host.status().text === "$(tag) Parts", "the lens still reaches the status bar, got " + host.status().text);
+  });
+});
+
 check("changing labels.storagePath re-points the watcher and rereads labels from the new folder", () => {
   const doc = "# A\n\nabc\n";
   const lens = (name) =>
@@ -1836,10 +1879,15 @@ check("the extension stamps a sidecar exactly as the hook's own stamp does", () 
             { label: "One", color: "#111111", startLine: 1, endLine: 3 },
             { label: "Kept", color: "#222222", startLine: 5, endLine: 5, anchor: "## one", endAnchor: "## one", prevAnchor: "", note: 1 },
             { label: "Blank", color: "#333333", startLine: 2, endLine: 2 },
-            { label: "Strings", color: "#444444", startLine: "9", endLine: "11.7" },
+            { label: "Strings", color: "#444444", startLine: "7.9", endLine: "9.5" },
+            // Far before the file's first line: both must start the scan at line 1, at once.
+            { label: "Far", color: "#666666", startLine: -1e9, endLine: 3 },
+            { label: "Farther", color: "#777777", startLine: -1e308, endLine: 3 },
+            { label: "Endless", color: "#888888", startLine: "-Infinity", endLine: 3 },
           ],
         },
         "not a lens",
+        { name: "N", ranges: { not: "an array" } },
         { name: "M", ranges: [null, 3, { label: "Past", color: "#555555", startLine: 99, endLine: 120 }] },
       ],
     };
@@ -1848,8 +1896,15 @@ check("the extension stamps a sidecar exactly as the hook's own stamp does", () 
     fs.writeFileSync(sidecar, JSON.stringify(raw));
     p.run({ tool_name: "Write", tool_input: { file_path: sidecar }, tool_response: {}, cwd: p.root });
     const hook = JSON.parse(fs.readFileSync(sidecar, "utf8"));
+    const started = Date.now();
     const extension = Labels.stampAnchors(raw, fs.readFileSync(p.doc, "utf8"));
+    assert(Date.now() - started < 1000, "stamping takes " + (Date.now() - started) + " ms");
     assert(hook.lenses[0].ranges[0].anchor === "# guide", "the hook stamped the file: " + JSON.stringify(hook.lenses[0].ranges[0]));
+    assert(extension.lenses[0].ranges[3].anchor === "## two" && extension.lenses[0].ranges[3].endAnchor === "end", "fractional lines are cut to whole ones: " + JSON.stringify(extension.lenses[0].ranges[3]));
+    for (const i of [4, 5, 6]) assert(extension.lenses[0].ranges[i].anchor === "# guide", "scanned from line 1: " + JSON.stringify(extension.lenses[0].ranges[i]));
+    for (const notSidecar of [{ version: 1 }, { lenses: {} }, { lenses: "x" }]) {
+      assert(Labels.stampAnchors(notSidecar, "# a\n") === null, "not a sidecar, nothing to stamp: " + JSON.stringify(notSidecar));
+    }
     assert(require("util").isDeepStrictEqual(extension, hook), "the same file from both: " + JSON.stringify(extension) + " vs " + JSON.stringify(hook));
     assert(Labels.stampAnchors(hook, fs.readFileSync(p.doc, "utf8")) === null, "a stamped file has nothing left to stamp");
   } finally {
