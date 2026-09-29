@@ -1991,7 +1991,11 @@ check("Kiro hook files: a prompt nudge on Markdown saves, a command that stamps 
     // Kiro compiles the matcher with no flags, so case must be handled inside the pattern.
     const markdown = new RegExp(prompt.matcher);
     assert(prompt.trigger === "PostFileSave", file + ": the nudge fires on saves");
-    for (const sample of ["docs/guide.md", "README.MD", "a.Markdown", "notes.mdtxt", "/p/NOTES.MDTEXT", "x.mdx", "notes.txt", "md"]) {
+    // Every extension the hook knows, in lower, upper and capitalised case, so a dropped alternative or a lost
+    // character class fails here, plus the brief's fixed samples and near misses.
+    const extensions = body.match(/\(([^)]+)\)/)[1].split("|");
+    const samples = extensions.flatMap((ext) => ["a." + ext, "a." + ext.toUpperCase(), "a." + ext[0].toUpperCase() + ext.slice(1)]);
+    for (const sample of [...samples, "docs/guide.md", "README.MD", "a.Markdown", "notes.mdtxt", "/p/NOTES.MDTEXT", "x.mdx", "notes.txt", "md"]) {
       assert(markdown.test(sample) === MARKDOWN.test(sample), file + ": the nudge matcher disagrees with the hook's MARKDOWN on " + sample);
     }
     assert(prompt.action.type === "agent", file + ": an agent prompt");
@@ -2034,7 +2038,7 @@ check("plugin hook files: one shared Claude-schema entry every reader parses, an
   const cursor = readJson(PLUGIN + "/cursor/hooks.json");
   assert(cursor.version === 1 && Object.keys(cursor.hooks).join() === "postToolUse" && cursor.hooks.postToolUse.length === 1, "Cursor's own schema, one postToolUse entry");
   const entry = cursor.hooks.postToolUse[0];
-  includes(entry.command, "${CURSOR_PLUGIN_ROOT}/hooks/markdown-labels.cjs", "Cursor's command");
+  assert(entry.command === 'node "${CURSOR_PLUGIN_ROOT}/hooks/markdown-labels.cjs"', "Cursor's command, quoted so a plugin path with a space still runs: " + entry.command);
   assert(entry.matcher === "Write" && entry.timeout === 15, "Cursor's one write tool, 15 s");
 });
 
