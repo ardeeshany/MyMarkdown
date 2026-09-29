@@ -15,4 +15,5 @@ README's "Labels from your coding agent" section for the full list):
     devin plugins install ardeeshany/MyMarkdown#vscode-extension/agent-hooks/plugin
 
 In a project that has the per-repo install (`npx mymarkdown-hooks init`), this plugin stays
-quiet (for the agents that read the per-project files: Claude Code, Copilot, Cursor and Kiro).
+quiet for the agents that also run the per-project files (Claude Code, Codex, Copilot CLI and VS
+Code agent mode, Cursor and Kiro).

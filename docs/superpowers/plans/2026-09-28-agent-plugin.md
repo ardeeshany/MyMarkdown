@@ -1,5 +1,7 @@
 # Agent Plugin Implementation Plan
 
+> Some decisions here were revised by the fix wave of 2026-09-29 after the PR audit; the design spec describes the shipped result.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Install the label hook and skill once per machine, through each agent's own plugin system, so every project gets labelled with no per-repo files.

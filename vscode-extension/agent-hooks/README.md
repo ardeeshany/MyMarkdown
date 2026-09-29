@@ -12,14 +12,16 @@ npx mymarkdown-hooks init
 
 Run it anywhere inside a git repository, or at the root of a project that is not one. It installs at
 the top of the git repository (or in the current folder outside one), for Claude Code, GitHub
-Copilot CLI and VS Code agent mode, Cursor and Codex. That should be the folder you open in VS Code
-and start your agents from:
+Copilot CLI and VS Code agent mode, Cursor, Codex and Kiro. That should be the folder you open in VS
+Code and start your agents from:
 
 - `.agents/hooks/markdown-labels.cjs` — the hook, shared by every agent
-- `.agents/skills/markdown-labels/SKILL.md` and `.claude/skills/markdown-labels/SKILL.md` — the skill
+- `.agents/skills/markdown-labels/SKILL.md`, `.claude/skills/markdown-labels/SKILL.md` and
+  `.kiro/skills/markdown-labels/SKILL.md` — the skill
 - `.claude/settings.json` — the hook entry for Claude Code and Cursor
 - `.github/hooks/markdown-labels.json` — for Copilot CLI and VS Code agent mode
 - `.codex/hooks.json` — for Codex
+- `.kiro/hooks/markdown-labels.json` — for Kiro
 
 Nothing you have is overwritten. The hook entry is merged into an existing `.claude/settings.json`
 or `.codex/hooks.json`, and a file that differs from this version is left alone unless you pass
@@ -34,6 +36,8 @@ Coding Agents**.
 
 The same folder is a plugin for Claude Code, Codex, Copilot, Cursor, Windsurf and others,
 installed once per machine; see the extension README's "Install once for every project".
-This package is also the OpenCode plugin: `opencode plugin add mymarkdown-hooks`.
+This package is also the OpenCode plugin: add `"plugin": ["mymarkdown-hooks"]` to
+`~/.config/opencode/opencode.json`, or run `opencode plugin -g mymarkdown-hooks` (1.x) or
+`opencode plugin add mymarkdown-hooks` (2.x).
 
 Not affiliated with the `mymarkdown-cli` or `mymarkdown-mcp` packages on npm.

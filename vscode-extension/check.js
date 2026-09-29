@@ -2536,14 +2536,18 @@ check("Kiro hook files: a prompt nudge on Markdown saves, a command that stamps 
 });
 
 check("docs: the README's install lines name the marketplace, the version is one everywhere, and copies are in step", () => {
-  const readme = fs.readFileSync(path.join(__dirname, "README.md"), "utf8");
-  for (const line of ["claude plugin install mymarkdown@mymarkdown-plugins", "copilot plugin install mymarkdown@mymarkdown-plugins", "codex plugin add mymarkdown@mymarkdown-plugins", "devin plugins install ardeeshany/MyMarkdown#vscode-extension/agent-hooks/plugin", "opencode plugin add mymarkdown-hooks", "plugin-antigravity", "~/.kiro/hooks", "~/.agents/skills"]) {
+  // Prose is wrapped, so a phrase is looked for with its line breaks read as spaces.
+  const read = (...parts) => fs.readFileSync(path.join(__dirname, ...parts), "utf8").replace(/\s+/g, " ");
+  const readme = read("README.md");
+  for (const line of ["claude plugin install mymarkdown@mymarkdown-plugins", "copilot plugin install mymarkdown@mymarkdown-plugins", "codex plugin add mymarkdown@mymarkdown-plugins", "devin plugins install ardeeshany/MyMarkdown#vscode-extension/agent-hooks/plugin", '"plugin": ["mymarkdown-hooks"]', "Import from GitHub", "kiro-cli --v3", "plugin-antigravity", "~/.kiro/hooks", "~/.agents/skills", "Both add the same eight files", "`.claude/skills/` and `.kiro/skills/`", "(Claude Code, Codex, Copilot CLI and VS Code agent mode, Cursor and Kiro)"]) {
     includes(readme, line, "extension README");
   }
   includes(readme, "Install once for every project", "the section");
-  const npm = fs.readFileSync(path.join(__dirname, "agent-hooks", "README.md"), "utf8");
+  const npm = read("agent-hooks", "README.md");
   includes(npm, "affiliated with the `mymarkdown-cli`", "the npm README disowns the unrelated mymarkdown-* packages");
-  includes(npm, "opencode plugin add mymarkdown-hooks", "the npm README says it is the OpenCode plugin");
+  includes(npm, '"plugin": ["mymarkdown-hooks"]', "the npm README says it is the OpenCode plugin");
+  for (const file of [".kiro/hooks/markdown-labels.json", ".kiro/skills/markdown-labels/SKILL.md"]) includes(npm, file, "the npm README lists every file the installer writes");
+  includes(read(PLUGIN, "README.md"), "(Claude Code, Codex, Copilot CLI and VS Code agent mode, Cursor and Kiro)", "the plugin README names the agents it stays quiet for");
   for (const copy of [".agents/skills/markdown-labels/SKILL.md", ".claude/skills/markdown-labels/SKILL.md", ".kiro/skills/markdown-labels/SKILL.md"]) {
     assert(fs.readFileSync(path.join(REPO, copy), "utf8") === fs.readFileSync(path.join(__dirname, PLUGIN, "skills/markdown-labels/SKILL.md"), "utf8"), copy + " drifted from the plugin's skill");
   }

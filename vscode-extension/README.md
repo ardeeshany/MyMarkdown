@@ -89,11 +89,11 @@ section, and a label whose text you delete quietly disappears.
 
 Coding agents can label the Markdown they write, so the labels are there the first time
 you open a document. MyMarkdown ships a `markdown-labels` skill and a small hook for Claude
-Code, GitHub Copilot (CLI and VS Code agent mode), Cursor and Codex. When an agent saves a
-document of 400 or more words with at least two headings and no labels yet, the hook tells
-it to run the skill. The skill writes three lenses to `.mymd/`, the hook ties each label to
-its text so it survives later edits, and the open preview picks them up as soon as they are
-saved.
+Code, GitHub Copilot (CLI and VS Code agent mode), Cursor, Codex and Kiro. When an agent
+saves a document of 400 or more words with at least two headings and no labels yet, the
+hook tells it to run the skill. The skill writes three lenses to `.mymd/`, the hook ties
+each label to its text so it survives later edits, and the open preview picks them up as
+soon as they are saved.
 
 The hook and skill live in each project, so set them up once per project, either way:
 
@@ -102,10 +102,11 @@ The hook and skill live in each project, so set them up once per project, either
 - From a terminal at the project root (or anywhere inside it, if it is a git repository),
   with no editor needed, run `npx mymarkdown-hooks init`.
 
-Both add the same seven files: the hook (`.agents/hooks/markdown-labels.cjs`), the skill
-(in `.agents/skills/` and `.claude/skills/`), and one small config entry each for Claude
-Code and Cursor (`.claude/settings.json`), Copilot (`.github/hooks/markdown-labels.json`),
-Codex (`.codex/hooks.json`), and Kiro (`.kiro/hooks/markdown-labels.json`). The command installs into the folder open in VS Code;
+Both add the same eight files: the hook (`.agents/hooks/markdown-labels.cjs`), the skill
+(in `.agents/skills/`, `.claude/skills/` and `.kiro/skills/`), and one small config entry
+each for Claude Code and Cursor (`.claude/settings.json`), Copilot
+(`.github/hooks/markdown-labels.json`), Codex (`.codex/hooks.json`) and Kiro
+(`.kiro/hooks/markdown-labels.json`). The command installs into the folder open in VS Code;
 `npx` installs at the top of the git repository you run it in. Labels show up when that
 folder is also the one you open in VS Code and start your agents from (Copilot CLI always
 reads the top of the git repository).
@@ -120,39 +121,46 @@ You need Node.js on your `PATH`.
 
 Instead of setting up each project, install the hook and skill once as a plugin, through
 each agent's own plugin command. It then runs in every project, and stays quiet in a project
-that has the per-project setup above (for the agents that read the per-project files: Claude
-Code, Copilot, Cursor and Kiro). Requires Node.js 18 or later.
+that has the per-project setup above, for the agents that also run those files (Claude Code,
+Codex, Copilot CLI and VS Code agent mode, Cursor and Kiro). Requires Node.js 18 or later.
 
 ```
 Claude Code   claude plugin marketplace add ardeeshany/MyMarkdown
               claude plugin install mymarkdown@mymarkdown-plugins
-Cursor        nothing more once installed in Claude Code (Cursor imports it); or Customize →
-              From GitHub Repository → ardeeshany/MyMarkdown
+Cursor        Customize → Browse Marketplace → + Add Marketplace → Import from GitHub →
+              https://github.com/ardeeshany/MyMarkdown (needs a signed-in account)
+              Already installed in Claude Code? Skip this: Cursor imports it and runs the same hook.
 Copilot CLI   copilot plugin marketplace add ardeeshany/MyMarkdown
               copilot plugin install mymarkdown@mymarkdown-plugins
 Codex         codex plugin marketplace add ardeeshany/MyMarkdown
               codex plugin add mymarkdown@mymarkdown-plugins
               then in the terminal app, /hooks: trust the hook once
 Windsurf      devin plugins install ardeeshany/MyMarkdown#vscode-extension/agent-hooks/plugin
+              (Devin CLI v3000.5.20 or later runs a plugin's hooks)
 Augment       auggie plugin marketplace add ardeeshany/MyMarkdown
               auggie plugin install mymarkdown@mymarkdown-plugins
 Qoder CLI     qoder plugins marketplace add ardeeshany/MyMarkdown
               qoder plugins install mymarkdown
-OpenCode      opencode plugin add mymarkdown-hooks
+OpenCode      add "plugin": ["mymarkdown-hooks"] to ~/.config/opencode/opencode.json (or a project's opencode.json);
+              or run opencode plugin -g mymarkdown-hooks (1.x) or opencode plugin add mymarkdown-hooks (2.x)
 Antigravity   agy plugin install https://github.com/ardeeshany/MyMarkdown/vscode-extension/agent-hooks/plugin-antigravity
-Kiro          copy plugin/kiro/markdown-labels.json and plugin/hooks/markdown-labels.cjs to ~/.kiro/hooks/,
-              and plugin/skills/markdown-labels to ~/.kiro/skills/
+              (needs git), or copy that folder to ~/.gemini/config/plugins/mymarkdown/; then restart Antigravity
+Kiro          copy plugin/kiro/markdown-labels.json and plugin/hooks/markdown-labels.cjs to ~/.kiro/hooks/, and
+              plugin/skills/markdown-labels to ~/.kiro/skills/ (copies, not symlinks). The Kiro IDE runs them;
+              kiro-cli only on its v3 engine (kiro-cli --v3). Use this or the per-project setup, not both.
 Any other     cp -r plugin/skills/markdown-labels ~/.agents/skills/   (the skill only, no nudge)
 ```
 
 The plugin folder is `vscode-extension/agent-hooks/plugin` in the repository. Adding a
 marketplace clones the repository (Claude Code users can pass
-`--sparse vscode-extension/agent-hooks/plugin .claude-plugin`). Labels land in `.mymd/` at the
-top of the git repository the agent works in, so open that folder in VS Code. Cursor's Cloud
-Agents and Windsurf's cloud sessions do not run user plugins; the per-project setup covers
-them. Update and uninstall are each agent's own plugin commands. The install lines for
-Windsurf, Augment, Qoder, OpenCode, Antigravity, Cursor and Kiro follow each tool's
-documentation and have not yet been run end to end; please report what you find.
+`--sparse vscode-extension/agent-hooks/plugin .claude-plugin`). Labels land in `.mymd/` in the
+project the agent reports: its project variable, else its workspace, else the top of the git
+repository around its working folder (for Kiro, its workspace); open that folder in VS Code.
+Cursor's Cloud Agents and Windsurf's cloud sessions do not run user plugins; the per-project
+setup covers them. Update and uninstall are each agent's own plugin commands. The install
+lines for Cursor, Windsurf, Augment, Qoder, OpenCode, Antigravity and Kiro, and VS Code's
+plugin install, follow each tool's documentation and shipped code but have not been run end
+to end; Claude Code and Copilot CLI have. Please report what you find.
 
 Then each agent may need one step of its own:
 
@@ -163,6 +171,7 @@ Then each agent may need one step of its own:
 | Copilot CLI | Trust the folder when Copilot asks. |
 | VS Code agent mode | Nothing more: agent mode reads `.github/hooks`. |
 | Codex | Trust the project, then approve the hook in `/hooks`. Start Codex from the project root. |
+| Kiro | Nothing more in the Kiro IDE; kiro-cli runs hooks only on its v3 engine (kiro-cli --v3). |
 
 The hook and skill always use `.mymd`, whatever `mymarkdown.labels.storagePath` is set to.
 
