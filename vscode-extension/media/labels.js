@@ -4,11 +4,11 @@
  * mymarkdown.site draws them beside the rendered document. The extension embeds the lens
  * as JSON in a hidden element; everything here is measurement and painting.
  *
- * Positions come from the `data-line` attributes VS Code stamps on every mapped block, so
- * a bar is placed by where its lines actually ended up on screen rather than by guessing.
- * Blocks that deliberately carry no mapping — a reflowed JSON fence, a drawn Mermaid
- * diagram — simply do not contribute, and a range covering one is bounded by its mapped
- * neighbours instead.
+ * Positions come from the exact source lines of every block: its first line from VS Code's
+ * data-line (or the preview plugin's data-mymd-start, where a block has none) and how many
+ * lines follow from the plugin's data-mymd-span. So a bar is placed by where its lines
+ * actually ended up on screen rather than by guessing; counting newlines in the rendered
+ * text to find a block's last line overcounts every list, quote and table.
  */
 (function () {
   "use strict";
@@ -47,49 +47,186 @@
     return document.querySelector(".markdown-body") || document.body;
   }
 
-  /**
-   * The source line a mapped block starts at. markdown-it's `data-line` is `token.map[0]`,
-   * which is 0-based; every line number in the sidecar format (and thus every range here)
-   * is 1-based, so this is where the two get reconciled.
-   */
-  function sourceLineOf(node) {
-    return Number(node.getAttribute("data-line")) + 1;
+  var MAPPED = "[data-mymd-span]";
+  var HTML_END =
+    MAPPED + ", .code-line, .footnotes-sep, .katex-block, #" + MARKER_ID + ", #" + LAYER_ID + ", #" + CHIPS_ID;
+
+  /** A block's first source line, 1-based. data-line is VS Code's, 0-based. */
+  function startOf(el) {
+    var own = el.getAttribute("data-mymd-start");
+    if (own !== null) return Number(own);
+    var line = el.getAttribute("data-line");
+    return line === null ? NaN : Number(line) + 1;
   }
 
-  /** Every block the preview has mapped back to a source line, in document order. */
+  /** Every block the plugin mapped to its source lines, in document order. */
   function mappedBlocks(root) {
     var blocks = [];
-    var nodes = root.querySelectorAll("[data-line]");
+    var nodes = root.querySelectorAll(MAPPED);
     for (var i = 0; i < nodes.length; i += 1) {
       var node = nodes[i];
       if (node.closest("#" + LAYER_ID)) continue;
-      var start = sourceLineOf(node);
-      if (!isFinite(start)) continue;
-      var text = node.textContent || "";
-      var span = (text.match(/\n/g) || []).length;
-      blocks.push({ el: node, start: start, end: start + span });
+      // Footnote definitions are drawn at the foot of the page but keep their source lines:
+      // measured there, a range holding one would stretch to the end of the document.
+      if (node.closest(".footnotes")) continue;
+      var start = startOf(node);
+      var end = start + Number(node.getAttribute("data-mymd-span"));
+      if (!isFinite(start) || !isFinite(end)) continue;
+      blocks.push({ el: node, start: start, end: end, child: node.querySelector(MAPPED) });
     }
     return blocks;
   }
 
+  /** A block's full box. A fence's ``` lines are the padding of its <pre>, not its <code>. */
+  function outerBox(el) {
+    if (el.tagName === "CODE" && el.parentElement && el.parentElement.tagName === "PRE") {
+      el = el.parentElement;
+    }
+    var box = el.getBoundingClientRect();
+    if (box.height) return { top: box.top, bottom: box.bottom };
+    // VS Code draws an HTML block as an empty mapped marker followed by the raw HTML. The
+    // raw HTML ends at the next mapped block, or at whatever follows the last one (VS Code's
+    // end-of-document line, the footnotes, a math block, this script's own elements);
+    // without that stop, HTML at the end of a document would claim the whole page.
+    var top = Infinity;
+    var bottom = -Infinity;
+    for (var next = el.nextElementSibling; next && !next.matches(HTML_END); next = next.nextElementSibling) {
+      var part = next.getBoundingClientRect();
+      if (!part.height) continue;
+      top = Math.min(top, part.top);
+      bottom = Math.max(bottom, part.bottom);
+    }
+    return top === Infinity ? null : { top: top, bottom: bottom };
+  }
+
+  /** The slice of `box` that lines first..last take, sharing its height out evenly. */
+  function slice(box, start, end, first, last) {
+    var per = (box.bottom - box.top) / Math.max(1, end - start + 1);
+    return { top: box.top + (first - start) * per, bottom: box.top + (last - start + 1) * per };
+  }
+
   /**
-   * Map a range's source lines onto pixels. A block that only partly overlaps the range
-   * contributes the matching slice of its own height, so a bar can start mid-paragraph.
+   * Where text lines first..last (0-based, split at the newlines in the element's text)
+   * actually sit on screen, wrapping included. Null when those lines have nothing drawn.
    */
+  function textLines(el, first, last) {
+    var walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+    var range = document.createRange();
+    var line = 0;
+    var started = first === 0;
+    var node = walker.nextNode();
+    if (!node) return null;
+    if (started) range.setStart(node, 0);
+    var ended = false;
+    for (; node && !ended; node = walker.nextNode()) {
+      var text = node.nodeValue || "";
+      for (var i = text.indexOf("\n"); i !== -1; i = text.indexOf("\n", i + 1)) {
+        if (line === last) {
+          // A newline opening a text node follows a <br> or an inline element; ending at
+          // offset 0 of that node would pull in an empty box on the next row.
+          if (i === 0) range.setEndBefore(node);
+          else range.setEnd(node, i);
+          ended = true;
+          break;
+        }
+        line += 1;
+        if (line === first) {
+          range.setStart(node, i + 1);
+          started = true;
+        }
+      }
+    }
+    if (!started) return null;
+    // The last line runs to the end of the block, taking in an image or link that ends it.
+    if (!ended) range.setEnd(el, el.childNodes.length);
+    // Code text boxes are taller than the code's line pitch, so neighbouring lines' boxes
+    // overlap; trim each to its line box so adjacent one-line bars meet instead.
+    var lineHeight = /^(CODE|PRE)$/.test(el.tagName)
+      ? parseFloat(getComputedStyle((el.tagName === "PRE" && el.firstElementChild) || el).lineHeight)
+      : 0;
+    var rects = range.getClientRects();
+    var top = Infinity;
+    var bottom = -Infinity;
+    for (var r = 0; r < rects.length; r += 1) {
+      if (!rects[r].height) continue;
+      var trim = lineHeight ? Math.max(0, (rects[r].height - lineHeight) / 2) : 0;
+      top = Math.min(top, rects[r].top + trim);
+      bottom = Math.max(bottom, rects[r].bottom - trim);
+    }
+    return top === Infinity ? null : { top: top, bottom: bottom };
+  }
+
+  /** The part of a block a range covers only some of the lines of. */
+  function partOf(block, range, box) {
+    var first = Math.max(block.start, range.startLine);
+    var last = Math.min(block.end, range.endLine);
+    // A list, quote or table holding other mapped blocks owns only the lines before its
+    // first one (a list item's own text, say); the blocks inside place themselves.
+    if (block.child) {
+      var childStart = startOf(block.child);
+      var headEnd = Math.min(last, childStart - 1);
+      if (headEnd < first) return null;
+      var childBox = outerBox(block.child);
+      var head = { top: box.top, bottom: childBox ? childBox.top : box.bottom };
+      return slice(head, block.start, childStart - 1, first, headEnd);
+    }
+    // Some blocks are drawn as one piece that does not follow its source line by line: a
+    // reflowed JSON fence or Mermaid diagram (they drop data-line), raw HTML (an empty
+    // marker), a two-line setext heading. A range touching any of their lines takes all of it.
+    // Two ranges splitting one such block would both draw over all of it.
+    if (!block.el.hasAttribute("data-line") || !block.el.hasChildNodes() || /^H[1-6]$/.test(block.el.tagName)) {
+      return box;
+    }
+
+    var el = block.el;
+    var sourceLines = block.end - block.start + 1;
+    // Code text ends with a newline that closes its last line; anywhere else a trailing
+    // newline is a real line break (before an image alone on the last line, say).
+    var text = el.textContent || "";
+    if (/^(CODE|PRE)$/.test(el.tagName)) text = text.replace(/\n$/, "");
+    var shown = (text.match(/\n/g) || []).length + 1;
+    // A fence's ``` lines are in its extent but not its text: two of them, or one for a
+    // fence left open at the end of the document. Promoted JSON has none.
+    var delimiters = el.tagName === "CODE" ? sourceLines - shown : 0;
+    // Anything else shows as many text lines as it has source lines, unless rendering joined
+    // some (a code span broken across lines, a list item whose marker line is empty). Then
+    // text lines no longer name source lines, and sharing the block out beats wrong rows.
+    if (delimiters < 0 || delimiters > 2 || (el.tagName !== "CODE" && sourceLines !== shown)) {
+      return slice(box, block.start, block.end, first, last);
+    }
+    var contentStart = delimiters ? block.start + 1 : block.start;
+    var contentEnd = contentStart + shown - 1;
+    var from = Math.max(first, contentStart);
+    var to = Math.min(last, contentEnd);
+    if (from > to) {
+      // Only a fence's own ``` line: the padding of the <pre> above or below the code.
+      var opening = last < contentStart;
+      var edge = textLines(el, opening ? 0 : shown - 1, opening ? 0 : shown - 1);
+      if (edge) return opening ? { top: box.top, bottom: edge.top } : { top: edge.bottom, bottom: box.bottom };
+    }
+    var lines = from <= to ? textLines(el, from - contentStart, to - contentStart) : null;
+    if (!lines) return slice(box, block.start, block.end, first, last);
+    // A range that takes in a fence's own ``` lines reaches the edge of the <pre>.
+    return {
+      top: first < contentStart ? box.top : lines.top,
+      bottom: last > contentEnd ? box.bottom : lines.bottom,
+    };
+  }
+
+  /** Map a range's source lines onto pixels, relative to the preview root. */
   function measure(range, blocks, baseTop) {
     var top = Infinity;
     var bottom = -Infinity;
     for (var i = 0; i < blocks.length; i += 1) {
       var block = blocks[i];
       if (block.end < range.startLine || block.start > range.endLine) continue;
-      var box = block.el.getBoundingClientRect();
-      if (!box.height) continue;
-      var span = Math.max(1, block.end - block.start + 1);
-      var ownedStart = Math.max(block.start, range.startLine);
-      var ownedEnd = Math.min(block.end, range.endLine);
-      var blockTop = box.top - baseTop;
-      top = Math.min(top, blockTop + ((ownedStart - block.start) / span) * box.height);
-      bottom = Math.max(bottom, blockTop + ((ownedEnd - block.start + 1) / span) * box.height);
+      var box = outerBox(block.el);
+      if (!box) continue;
+      var whole = range.startLine <= block.start && block.end <= range.endLine;
+      var part = whole ? box : partOf(block, range, box);
+      if (!part) continue;
+      top = Math.min(top, part.top - baseTop);
+      bottom = Math.max(bottom, part.bottom - baseTop);
     }
     if (top === Infinity) return null;
     return { top: top, height: Math.max(4, bottom - top) };
@@ -156,7 +293,6 @@
     var select = document.createElement("select");
     select.className = "mymd-lens-select";
     select.setAttribute("aria-label", "Switch label lens");
-    select.disabled = payload.lenses.length < 2;
     for (var optionIndex = 0; optionIndex < payload.lenses.length; optionIndex += 1) {
       var optionLens = payload.lenses[optionIndex];
       var option = document.createElement("option");
@@ -227,9 +363,9 @@
     hintTimer = window.setTimeout(function () {
       hintTimer = null;
       state.hint = null;
-      paint();
+      repaint();
     }, 4000);
-    paint();
+    repaint();
   }
 
   /** Scroll to a label's next occurrence, wrapping at the end, the way the site's chips do. */
@@ -273,10 +409,15 @@
     var blocks = mappedBlocks(root);
     var bars = [];
 
+    // Measure every range before adding any bar: reading layout after each write would
+    // force the browser to lay the page out again once per range.
+    var boxes = [];
+    for (var m = 0; m < lens.ranges.length; m += 1) boxes.push(measure(lens.ranges[m], blocks, baseTop));
+
     host.textContent = "";
     for (var i = 0; i < lens.ranges.length; i += 1) {
       var range = lens.ranges[i];
-      var box = measure(range, blocks, baseTop);
+      var box = boxes[i];
       if (!box) continue;
 
       var key = i + ":" + range.label + ":" + range.startLine;
@@ -289,6 +430,7 @@
       bar.title = range.label;
       bar.setAttribute("aria-label", range.label);
       bar.dataset.label = range.label;
+      bar.dataset.key = key;
 
       var fill = document.createElement("span");
       fill.className = "mymd-label-fill";
@@ -310,12 +452,59 @@
     state.bars = bars;
   }
 
+  // Chips, the lens picker and bars are rebuilt on every paint, and VS Code's own updates
+  // remove them, so keyboard focus on one would drop to the page. Remember which one had
+  // it (the element being removed does not count as focus moving away) and give it back.
+  var focusKey = null;
+  function keyOf(el) {
+    if (!el || !el.closest || !el.closest("#" + CHIPS_ID + ", #" + LAYER_ID)) return null;
+    return el.className + "|" + (el.dataset.key || el.dataset.label || "");
+  }
+  document.addEventListener("focusin", function (event) {
+    focusKey = keyOf(event.target);
+  });
+  document.addEventListener("focusout", function (event) {
+    // Chrome fires this for a node it is removing while the node is still attached; only
+    // once the removal is done can focus leaving be told apart from the node going away.
+    var el = event.target;
+    var next = keyOf(event.relatedTarget);
+    queueMicrotask(function () {
+      if (el.isConnected) focusKey = next;
+    });
+  });
+  function restoreFocus() {
+    if (!focusKey || (document.activeElement && document.activeElement !== document.body)) return;
+    var candidates = document.querySelectorAll(
+      "#" + CHIPS_ID + " button, #" + CHIPS_ID + " select, #" + LAYER_ID + " button",
+    );
+    for (var i = 0; i < candidates.length; i += 1) {
+      if (keyOf(candidates[i]) !== focusKey) continue;
+      candidates[i].focus({ preventScroll: true });
+      return;
+    }
+    // Gone for good (another lens, labels off): forget it, so it cannot take focus later.
+    focusKey = null;
+  }
+
+  /** The page size the last paint left, so a resize report of that same size is skipped. */
+  var painted = { width: -1, height: -1 };
+
+  function repaint() {
+    paint();
+    // Putting the chip row and bar layer back is itself a DOM mutation; left queued, it
+    // would schedule a second, identical paint for every update.
+    observer.takeRecords();
+    var size = document.body.getBoundingClientRect();
+    painted = { width: size.width, height: size.height };
+    restoreFocus();
+  }
+
   var frame = null;
   function schedule() {
     if (frame) return;
     frame = requestAnimationFrame(function () {
       frame = null;
-      paint();
+      repaint();
     });
   }
 
@@ -350,11 +539,13 @@
     state.hint = null;
     state.activeLensName = select.value;
     state.activeKey = null;
-    paint();
+    repaint();
   });
 
   // The preview swaps its content in place when the document changes, so redraw on any
-  // mutation of the body rather than only on load.
+  // mutation of the body rather than only on load. Attribute changes count for two cases:
+  // a rewritten sidecar arrives as a new data-lens on the marker, and <details> opening
+  // moves everything below it.
   var observer = new MutationObserver(function (records) {
     for (var i = 0; i < records.length; i += 1) {
       var target = records[i].target;
@@ -367,13 +558,36 @@
   });
 
   function start() {
-    paint();
-    observer.observe(document.body, { childList: true, subtree: true, characterData: true });
+    repaint();
+    observer.observe(document.body, {
+      childList: true,
+      subtree: true,
+      characterData: true,
+      attributes: true,
+      attributeFilter: ["data-lens", "open"],
+    });
     window.addEventListener("resize", schedule, { passive: true });
+    // Fired by VS Code's preview after every content update, including edits that only
+    // shift line numbers and so change no text the observer above would see.
+    window.addEventListener("vscode.markdown.updateContent", schedule);
     if (document.fonts && document.fonts.ready) document.fonts.ready.then(schedule);
-    // Images and Mermaid diagrams settle after first paint and move everything below them.
-    window.setTimeout(schedule, 300);
-    window.setTimeout(schedule, 1200);
+    // Images, fonts, Mermaid and math settle whenever they settle, and move everything
+    // below them without touching the DOM; the page changing size is the one signal.
+    // Painting cannot loop through this (the bar layer is absolutely positioned), but the
+    // chip row appearing does resize the page, and that paint has already been done.
+    if (window.ResizeObserver) {
+      new ResizeObserver(function (entries) {
+        var size = entries[0].borderBoxSize && entries[0].borderBoxSize[0];
+        if (
+          size &&
+          Math.abs(size.inlineSize - painted.width) < 0.5 &&
+          Math.abs(size.blockSize - painted.height) < 0.5
+        ) {
+          return;
+        }
+        schedule();
+      }).observe(document.body);
+    }
   }
 
   if (document.readyState === "loading") {

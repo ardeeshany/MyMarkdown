@@ -9,7 +9,9 @@
 "use strict";
 
 const fs = require("fs");
+const os = require("os");
 const path = require("path");
+const { spawnSync } = require("child_process");
 const MD = require("./lib/mymarkdown.js");
 const { mymarkdownPlugin } = require("./lib/preview-plugin.js");
 const Labels = require("./lib/labels.js");
@@ -226,11 +228,77 @@ check("a JSON block only claims source lines it really covers", () => {
   includes(expanded, '<span class="tok-key">', "it is still coloured");
 });
 
+check("every block carries its exact source lines for the label bars", () => {
+  const html = preview().render(
+    [
+      "# Title", //                1
+      "", //                       2
+      "- one", //                  3
+      "- two", //                  4
+      "", //                       5
+      "| a | b |", //              6
+      "|---|---|", //              7
+      "| 1 | 2 |", //              8
+      "", //                       9
+      "> quote line one", //       10
+      "> quote line two", //       11
+      "", //                       12
+      "```js", //                  13
+      "x", //                      14
+      "```", //                    15
+      "", //                       16
+      "```mermaid", //             17
+      "graph TD", //               18
+      "```", //                    19
+      "", //                       20
+      "> [!NOTE]", //              21
+      "> Body.", //                22
+      "", //                       23
+      "> - quoted one", //         24
+      "> - quoted two", //         25
+      ">", //                      26
+      "> After.", //               27
+    ].join("\n") + "\n",
+  );
+  // Each block's lines as media/labels.js reads them: data-mymd-start, else data-line + 1,
+  // then data-mymd-span more.
+  const blocks = [...html.matchAll(/<(\w+)([^>]*\bdata-mymd-span="(\d+)"[^>]*)>/g)].map(([, tag, attrs, span]) => {
+    const own = /data-mymd-start="(\d+)"/.exec(attrs);
+    const line = /data-line="(\d+)"/.exec(attrs);
+    const start = own ? Number(own[1]) : Number(line[1]) + 1;
+    return { tag, start, end: start + Number(span) };
+  });
+  const spans = (tag, start, end) => blocks.some((b) => b.tag === tag && b.start === start && b.end === end);
+  assert(!/data-mymd-start="\d+"[^>]*data-line=|data-line="\d+"[^>]*data-mymd-start=/.test(html), "an absolute start only where there is no data-line");
+  // Counting newlines in the rendered text gave the list 3..6 and the table 6..20 or so.
+  assert(spans("h1", 1, 1), "heading");
+  assert(spans("ul", 3, 4), "a list ends on its last item, not the blank line after it");
+  assert(spans("li", 4, 4), "the last item ends on its own line");
+  assert(spans("table", 6, 8), "table");
+  assert(spans("tr", 8, 8), "table row");
+  assert(spans("blockquote", 10, 11), "quote");
+  assert(spans("code", 13, 15), "a fence covers its own ``` lines");
+  assert(spans("div", 17, 19), "a Mermaid diagram keeps its lines though it drops data-line");
+  assert(spans("p", 21, 21), "a callout title sits on the [!NOTE] line");
+  assert(spans("p", 22, 22), "the callout body starts on the line after it");
+  assert(spans("li", 25, 25), "a quoted list's last item does not take the quote's bare > line");
+});
+
+check("a line added above leaves every block below equal but for data-line, as VS Code's update expects", () => {
+  // VS Code's preview update copies only a new data-line onto blocks that are otherwise
+  // equal; a stamp of our own that changed with every line shift would make it redo them all.
+  const body = ["# T", "", "- a", "- b", "", "| x | y |", "|---|---|", "| 1 | 2 |", "", "> q", "", "```js", "x", "```", "", "Para."].join("\n") + "\n";
+  const strip = (html) => html.replace(/ data-line="\d+"/g, "");
+  const before = strip(preview().render(body));
+  const after = strip(preview().render("Intro.\n\n" + body));
+  assert(after.endsWith(before), "blocks below an inserted line should differ only in data-line");
+});
+
 check("loose JSON in prose is promoted, without shifting later lines", () => {
   const md = preview();
   const html = md.render('Response:\n\n{"ok":true,"n":3}\n\nDone.\n');
   includes(html, '<pre class="mymd-json">', "a bare JSON paragraph becomes a block");
-  includes(html, '<p data-line="4"', "the paragraph after it keeps its own line");
+  assert(/<p [^>]*data-line="4"/.test(html), "the paragraph after it keeps its own line");
   includes(md.render('The default is `{"retries":3}` here.\n'), "mymd-json-inline", "inline JSON");
   assert(md.render("Run `npm run build` now.\n").indexOf("mymd-json") === -1, "plain inline code");
 });
@@ -275,6 +343,8 @@ check("Mermaid preview is packaged as one ordered script", () => {
   );
   for (const file of scripts) {
     assert(fs.existsSync(path.join(__dirname, file)), "previewScripts points at a missing file: " + file);
+    // A syntax error would otherwise ship: nothing else here runs the preview scripts.
+    new (require("vm").Script)(fs.readFileSync(path.join(__dirname, file), "utf8"), { filename: file });
   }
   const bundle = fs.readFileSync(path.join(__dirname, "media", "mermaid-preview.bundle.js"), "utf8");
   const engine = bundle.indexOf("globalThis");
@@ -551,6 +621,7 @@ check("the manifest and the extension host agree", () => {
       onDidOpenTextDocument: () => off,
       onDidCloseTextDocument: () => off,
       onDidChangeConfiguration: () => off,
+      createFileSystemWatcher: () => ({ onDidCreate: () => off, onDidChange: () => off, onDidDelete: () => off, dispose() {} }),
       textDocuments: [],
       applyEdit: async () => true,
       getWorkspaceFolder: () => undefined,
@@ -707,6 +778,48 @@ check("a moved end-anchor line does not swell a range over its neighbours", () =
   assert(byLabel.c.startLine === 5 && byLabel.c.endLine === 6, "c should keep its own lines, got " + JSON.stringify(byLabel.c));
 });
 
+check("a range ending on a closing fence is not cut short at an earlier fence inside it", () => {
+  const doc = ["## Install", "", "```bash", "npm ci", "```", "", "```bash", "npm test", "```", "", "## Next"].join("\n");
+  const file = Labels.writeLabels(doc, [{ name: "L", ranges: [{ label: "Setup", color: "#111111", startLine: 1, endLine: 9 }] }], null);
+  // No hash, as the hook leaves a skill-written sidecar, so the range is always re-anchored:
+  // its closing ``` also appears on line 5, and matching that first gave 1..5.
+  delete file.sourceHash;
+  const range = Labels.readLabels(file, doc).lenses[0].ranges[0];
+  assert(range.startLine === 1 && range.endLine === 9, "the range should keep 1..9, got " + range.startLine + ".." + range.endLine);
+  const moved = Labels.readLabels(file, "Preface.\n\n" + doc).lenses[0].ranges[0];
+  assert(moved.startLine === 3 && moved.endLine === 11, "and move whole after an edit above it, got " + moved.startLine + ".." + moved.endLine);
+});
+
+check("a range that shrank is not stretched over the next section's identical closing line", () => {
+  const install = ["## Install", "p1", "p2", "p3", "p4", "p5", "p6", "```bash", "npm ci", "```"];
+  const rest = ["", "## Test", "```bash", "npm test", "```", "", "## End"];
+  const file = Labels.writeLabels([...install, ...rest].join("\n"), [{ name: "L", ranges: [{ label: "Install", color: "#111111", startLine: 1, endLine: 10 }] }], null);
+  delete file.sourceHash; // as the hook leaves a skill-written sidecar: always re-anchored
+  // Prose deleted inside the range: at some counts the old span lands exactly on the Test
+  // section's own closing ```, or on the blank line after it.
+  for (let deleted = 0; deleted <= 6; deleted += 1) {
+    const shrunk = ["## Install", ...install.slice(1 + deleted, 7), ...install.slice(7), ...rest].join("\n");
+    const range = Labels.readLabels(file, shrunk).lenses[0]?.ranges?.[0];
+    assert(range, "the range should survive, " + deleted + " deleted");
+    const end = 10 - deleted;
+    assert(range.startLine === 1 && range.endLine === end, `${deleted} deleted: expected 1..${end}, got ${range.startLine}..${range.endLine}`);
+  }
+});
+
+check("a skill-written range keeps its place on an unchanged document with a repeated heading", () => {
+  // Two "### Example" sections, each range ending on the blank line before the next heading,
+  // stamped the way the hook stamps them: anchors, no sourceHash, so read as stale.
+  const doc = ["# API", "", "## Create", "", "### Example", "", "```js", "create()", "```", "", "## Remove", "", "### Example", "", "```js", "remove()", "more()", "```", "", "## End"].join("\n");
+  const lines = doc.split("\n");
+  const stamp = (range) => ({ ...range, ...Labels.anchorsFor(lines, range.startLine, range.endLine) });
+  const file = { version: 1, lenses: [{ name: "L", ranges: [
+    stamp({ label: "Create ex", color: "#111111", startLine: 5, endLine: 10 }),
+    stamp({ label: "Remove ex", color: "#222222", startLine: 13, endLine: 19 }),
+  ] }] };
+  const got = Labels.readLabels(file, doc).lenses[0].ranges.map((r) => `${r.label} ${r.startLine}-${r.endLine}`).join(", ");
+  assert(got === "Create ex 5-9, Remove ex 13-18", "each range should stay on its own section, got " + got);
+});
+
 check("a range anchored on a repeated heading follows its own distinct body", () => {
   // Six identical "## Notes" headings; only the body text tells them apart.
   const rep = Array.from({ length: 6 }, (_, i) => ["## Notes", "body " + i, ""].join("\n")).join("\n");
@@ -835,7 +948,7 @@ check("suggestions are held to three short, distinct questions", () => {
  * discarding them, so a check can invoke `mymarkdown.toggleLabels` etc. directly rather
  * than only confirming it is *declared*.
  */
-function driveLabelCommands(sidecarByPath, activeDocument) {
+function driveLabelCommands(sidecarByPath, activeDocument, openDocuments) {
   const path_ = require("path");
   const Module = require("module");
   const load = Module._load;
@@ -843,7 +956,15 @@ function driveLabelCommands(sidecarByPath, activeDocument) {
   const configStore = { "labels.enabled": true };
   const commandHandlers = {};
   const quickPickQueue = [];
+  const warningAnswers = [];
+  const messages = [];
   const written = [];
+  const refreshes = [];
+  const watchers = [];
+  const configListeners = [];
+  const editorListeners = [];
+  const changeListeners = [];
+  let statusItem;
   let deleted = false;
 
   const stub = {
@@ -885,17 +1006,30 @@ function driveLabelCommands(sidecarByPath, activeDocument) {
     window: {
       activeTextEditor: activeDocument ? { document: activeDocument } : undefined,
       registerTreeDataProvider: () => off,
-      onDidChangeActiveTextEditor: () => off,
-      showInformationMessage() {},
-      showWarningMessage() {},
-      showErrorMessage() {},
+      onDidChangeActiveTextEditor: (listener) => {
+        editorListeners.push(listener);
+        return off;
+      },
+      showInformationMessage: (text) => {
+        messages.push({ kind: "info", text });
+      },
+      // Each call consumes the next queued answer, like the quick picks below: a check plays
+      // the part of whoever presses a modal's button.
+      showWarningMessage: async (text) => {
+        messages.push({ kind: "warning", text });
+        return warningAnswers.shift();
+      },
+      showErrorMessage: (text) => {
+        messages.push({ kind: "error", text });
+      },
       // Each call consumes the next queued answer, in the order the code under test asks -
       // the same shape as a person clicking through a chain of quick picks by hand.
       showQuickPick: async () => quickPickQueue.shift(),
       showInputBox: async () => undefined,
       setStatusBarMessage() {},
       withProgress: async (_options, work) => work({ onCancellationRequested: () => off }),
-      createStatusBarItem: () => ({ text: "", tooltip: "", command: "", show() {}, hide() {}, dispose() {} }),
+      createStatusBarItem: () =>
+        (statusItem = { text: "", tooltip: "", command: "", show() {}, hide() {}, dispose() {} }),
     },
     workspace: {
       getConfiguration: () => ({
@@ -904,11 +1038,38 @@ function driveLabelCommands(sidecarByPath, activeDocument) {
           configStore[key] = value;
         },
       }),
-      onDidChangeTextDocument: () => off,
+      onDidChangeTextDocument: (listener) => {
+        changeListeners.push(listener);
+        return off;
+      },
       onDidOpenTextDocument: () => off,
       onDidCloseTextDocument: () => off,
-      onDidChangeConfiguration: () => off,
-      textDocuments: [],
+      onDidChangeConfiguration: (listener) => {
+        configListeners.push(listener);
+        return off;
+      },
+      // Records each watcher's glob and handlers, so a check can play the part of a file
+      // written on disk behind the extension's back.
+      createFileSystemWatcher: (glob) => {
+        const watcher = { glob, disposed: false, handlers: {} };
+        watchers.push(watcher);
+        const on = (kind) => (handler) => {
+          watcher.handlers[kind] = handler;
+          return off;
+        };
+        return {
+          onDidCreate: on("create"),
+          onDidChange: on("change"),
+          onDidDelete: on("delete"),
+          dispose() {
+            watcher.disposed = true;
+          },
+        };
+      },
+      textDocuments: openDocuments || (activeDocument ? [activeDocument] : []),
+      openTextDocument: async (uri) => {
+        throw new Error("not open: " + uri);
+      },
       applyEdit: async () => true,
       getWorkspaceFolder: () => ({ uri: { fsPath: "/ws" } }),
       fs: {
@@ -931,18 +1092,21 @@ function driveLabelCommands(sidecarByPath, activeDocument) {
         commandHandlers[name] = handler;
         return off;
       },
-      executeCommand: async () => undefined,
+      executeCommand: async (name) => {
+        if (name === "markdown.preview.refresh") refreshes.push(name);
+      },
     },
     lm: { selectChatModels: async () => [] },
   };
 
   Module._load = (request, ...rest) => (request === "vscode" ? stub : load(request, ...rest));
   let handlers;
+  let api;
   try {
     const entry = path_.join(__dirname, "extension.js");
     delete require.cache[require.resolve(entry)];
     const extension = require(entry);
-    extension.activate({ subscriptions: [] });
+    api = extension.activate({ subscriptions: [] });
     handlers = commandHandlers;
   } finally {
     Module._load = load;
@@ -950,12 +1114,34 @@ function driveLabelCommands(sidecarByPath, activeDocument) {
 
   return {
     handlers,
+    api,
     configStore,
     queueQuickPick: (...answers) => quickPickQueue.push(...answers),
+    queueWarningAnswer: (...answers) => warningAnswers.push(...answers),
+    messages,
+    vscode: stub,
+    // Make `document` the active editor, as clicking its tab does.
+    activate: (document) => {
+      stub.window.activeTextEditor = { document };
+      for (const listener of editorListeners) listener(stub.window.activeTextEditor);
+    },
+    edit: (document) => {
+      for (const listener of changeListeners) listener({ document });
+    },
     written,
     deleted: () => deleted,
+    refreshes,
+    watchers,
+    status: () => statusItem,
+    changeConfig: (key, value) => {
+      configStore[key] = value;
+      for (const listener of configListeners) listener({ affectsConfiguration: (name) => name === "mymarkdown." + key });
+    },
   };
 }
+
+/** Long enough for the extension's 300 ms label refresh to fire and its disk read to land. */
+const settle = () => new Promise((resolve) => setTimeout(resolve, 400));
 
 check("toggling labels flips the setting both ways and is reachable with no document open", () => {
   const host = driveLabelCommands({});
@@ -1051,6 +1237,851 @@ check("switchLens's own toggle item disables labels without a separate command",
   return host.handlers["mymarkdown.switchLens"]().then(() => {
     assert(host.configStore["labels.enabled"] === false, "the picker's toggle item should flip the setting");
   });
+});
+
+const sidecarUri = (fsPath) => ({ fsPath, toString: () => fsPath });
+
+check("a sidecar written outside the extension (by an agent) shows up without editing the document", () => {
+  const doc = "# A\n\nabc\n";
+  const sidecars = {};
+  const host = driveLabelCommands(sidecars, fakeMarkdownDocument("/ws/doc.md", doc));
+  const watcher = host.watchers[0];
+  assert(watcher && watcher.glob === "**/.mymd/**", "the sidecar folder should be watched, got " + (watcher && watcher.glob));
+  return settle()
+    .then(() => {
+      assert(host.status().text === "$(tag) Label", "no labels before the sidecar exists, got " + host.status().text);
+      sidecars["/ws/.mymd/doc.md.json"] = Labels.writeLabels(
+        doc,
+        [{ name: "Parts", ranges: [{ label: "One", color: "#111111", startLine: 1, endLine: 3 }] }],
+        null,
+      );
+      host.refreshes.length = 0;
+      watcher.handlers.create(sidecarUri("/ws/.mymd/doc.md.json"));
+      return settle();
+    })
+    .then(() => {
+      assert(host.status().text === "$(tag) Parts", "the new lens should be picked up, got " + host.status().text);
+      assert(host.refreshes.length > 0, "the preview should be told to render again");
+      delete sidecars["/ws/.mymd/doc.md.json"];
+      watcher.handlers.delete(sidecarUri("/ws/.mymd/doc.md.json"));
+      return settle();
+    })
+    .then(() => {
+      assert(host.status().text === "$(tag) Label", "a deleted sidecar should take its labels with it, got " + host.status().text);
+    });
+});
+
+check("changing labels.storagePath re-points the watcher and rereads labels from the new folder", () => {
+  const doc = "# A\n\nabc\n";
+  const lens = (name) =>
+    Labels.writeLabels(doc, [{ name, ranges: [{ label: "One", color: "#111111", startLine: 1, endLine: 3 }] }], null);
+  const host = driveLabelCommands(
+    { "/ws/.mymd/doc.md.json": lens("Old"), "/ws/.labels/doc.md.json": lens("New") },
+    fakeMarkdownDocument("/ws/doc.md", doc),
+  );
+  return settle()
+    .then(() => {
+      assert(host.status().text === "$(tag) Old", "starts on the default folder, got " + host.status().text);
+      host.changeConfig("labels.storagePath", ".labels");
+      return settle();
+    })
+    .then(() => {
+      assert(host.watchers[0].disposed, "the watcher on the old folder should be disposed");
+      assert(host.watchers[1] && host.watchers[1].glob === "**/.labels/**", "a watcher should cover the new folder");
+      assert(host.status().text === "$(tag) New", "labels should come from the new folder, got " + host.status().text);
+    });
+});
+
+check("storagePath values like './labels/' still give a watcher that can match", () => {
+  const host = driveLabelCommands({});
+  host.changeConfig("labels.storagePath", "./labels/");
+  const glob = host.watchers[host.watchers.length - 1].glob;
+  assert(glob === "**/labels/**", "the glob should be normalised like the sidecar path, got " + glob);
+  host.changeConfig("labels.storagePath", "notes[old]");
+  const escaped = host.watchers[host.watchers.length - 1].glob;
+  assert(escaped === "**/notes[[]old[]]/**", "glob characters should be escaped, got " + escaped);
+});
+
+check("a folder-only watcher event (a new sidecar subfolder, a deleted .mymd) reloads the documents under it", () => {
+  const doc = "# A\n\nabc\n";
+  const sidecars = {};
+  const host = driveLabelCommands(sidecars, fakeMarkdownDocument("/ws/docs/doc.md", doc));
+  return settle()
+    .then(() => {
+      sidecars["/ws/.mymd/docs/doc.md.json"] = Labels.writeLabels(
+        doc,
+        [{ name: "Parts", ranges: [{ label: "One", color: "#111111", startLine: 1, endLine: 3 }] }],
+        null,
+      );
+      // VS Code often reports only the new folder, not the file inside it.
+      host.watchers[0].handlers.create(sidecarUri("/ws/.mymd/docs"));
+      return settle();
+    })
+    .then(() => {
+      assert(host.status().text === "$(tag) Parts", "a sidecar in a new folder should show, got " + host.status().text);
+      delete sidecars["/ws/.mymd/docs/doc.md.json"];
+      host.watchers[0].handlers.delete(sidecarUri("/ws/.mymd"));
+      return settle();
+    })
+    .then(() => {
+      assert(host.status().text === "$(tag) Label", "deleting the whole folder should clear the labels, got " + host.status().text);
+    });
+});
+
+check("a preview restored on startup, with no editor for its document, still gets its labels", () => {
+  const doc = "# A\n\nabc\n";
+  const document = fakeMarkdownDocument("/ws/doc.md", doc);
+  const sidecars = {
+    "/ws/.mymd/doc.md.json": Labels.writeLabels(
+      doc,
+      [{ name: "Parts", ranges: [{ label: "One", color: "#111111", startLine: 1, endLine: 3 }] }],
+      null,
+    ),
+  };
+  // The document is open (the preview opened it) but no editor has ever been active.
+  const host = driveLabelCommands(sidecars, undefined, [document]);
+  const engine = host.api.extendMarkdownIt(new MarkdownIt());
+  const render = () => engine.render(doc, { currentDocument: document.uri });
+  render();
+  return settle().then(() => {
+    assert(host.refreshes.length > 0, "the preview should be told to render again once its labels are read");
+    includes(render(), 'id="mymd-labels"', "the preview's next render");
+    assert(host.status().text === "$(tag) Parts", "the status bar should follow the preview, got " + host.status().text);
+  });
+});
+
+check("a sidecar change to a lens other than the active one still re-renders the preview", () => {
+  const doc = "# A\n\nabc\n";
+  const lens = (name) => ({ name, ranges: [{ label: "One", color: "#111111", startLine: 1, endLine: 3 }] });
+  const sidecars = { "/ws/.mymd/doc.md.json": Labels.writeLabels(doc, [lens("First")], null) };
+  const host = driveLabelCommands(sidecars, fakeMarkdownDocument("/ws/doc.md", doc));
+  return settle()
+    .then(() => {
+      // An agent adds a second lens; the first, active one is untouched.
+      sidecars["/ws/.mymd/doc.md.json"] = Labels.writeLabels(doc, [lens("First"), lens("Second")], null);
+      host.refreshes.length = 0;
+      host.watchers[0].handlers.change(sidecarUri("/ws/.mymd/doc.md.json"));
+      return settle();
+    })
+    .then(() => {
+      assert(host.refreshes.length > 0, "the preview's lens dropdown needs the new lens, so it must render again");
+    });
+});
+
+// The agent hook, run the way each agent runs it: a copy dropped into a scratch repo (it
+// finds its repo from its own location) and fed that agent's payload shape on stdin. The
+// shapes are trimmed from payloads captured from Claude Code, Copilot CLI and Codex, and
+// from VS Code's tool schemas.
+const REPO = path.join(__dirname, "..");
+
+function hookRepo() {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "mymd-hook-"));
+  const script = path.join(root, ".agents", "hooks", "markdown-labels.cjs");
+  fs.mkdirSync(path.dirname(script), { recursive: true });
+  fs.copyFileSync(path.join(REPO, ".agents", "hooks", "markdown-labels.cjs"), script);
+  fs.mkdirSync(path.join(root, "docs"));
+  const doc = path.join(root, "docs", "big.md");
+  const parts = [1, 2, 3].map((n) => `## Part ${n}\n\n${"word ".repeat(150).trim()}\n`);
+  fs.writeFileSync(doc, "# Guide\n\n" + parts.join("\n"));
+
+  const run = (payload, { args = [], env = {}, preload } = {}) => {
+    const inherited = { ...process.env };
+    delete inherited.COPILOT_CLI;
+    delete inherited.CLAUDE_PROJECT_DIR;
+    const result = spawnSync(process.execPath, [...(preload ? ["-r", preload] : []), script, ...args], {
+      input: JSON.stringify(payload),
+      env: { ...inherited, ...env },
+      encoding: "utf8",
+    });
+    assert(result.status === 0, "the hook must always exit 0, got " + result.status + ": " + result.stderr);
+    return result.stdout ? JSON.parse(result.stdout) : null;
+  };
+  return { root, doc, run, cleanup: () => fs.rmSync(root, { recursive: true, force: true }) };
+}
+
+check("label hook: each agent's write gets the nudge, in the format that agent reads", () => {
+  const repo = hookRepo();
+  try {
+    const claude = { env: { CLAUDE_PROJECT_DIR: repo.root }, args: ["--claude-settings"] };
+    const patch = "*** Begin Patch\n*** Update File: docs/big.md\n@@\n-a\n+b\n*** End Patch";
+    const cases = [
+      ["Claude Code Write", { tool_name: "Write", tool_input: { file_path: repo.doc, content: "…" }, tool_response: {} }, claude],
+      // COPILOT_CLI is inherited by anything started from a Copilot shell; Claude Code's own
+      // hook must not mistake itself for Copilot's second run.
+      [
+        "Claude Code started from a Copilot shell",
+        { tool_name: "Edit", tool_input: { file_path: repo.doc }, tool_response: {} },
+        { env: { CLAUDE_PROJECT_DIR: repo.root, COPILOT_CLI: "1" }, args: ["--claude-settings"] },
+      ],
+      ["Copilot CLI edit", { toolName: "edit", toolArgs: { path: repo.doc, old_str: "a", new_str: "b" } }, { env: { COPILOT_CLI: "1" } }],
+      ["Copilot CLI str_replace_editor", { toolName: "str_replace_editor", toolArgs: { command: "create", path: repo.doc, file_text: "…" } }, {}],
+      ["Copilot CLI apply_patch as a bare patch", { toolName: "apply_patch", toolArgs: patch }, {}],
+      ["VS Code create_file", { tool_name: "create_file", tool_input: { filePath: repo.doc, content: "…" } }, {}],
+      [
+        "VS Code multi_replace_string_in_file",
+        { tool_name: "multi_replace_string_in_file", tool_input: { replacements: [{ filePath: repo.doc, oldString: "a", newString: "b" }] } },
+        {},
+      ],
+      // Codex sends patch text with paths relative to its cwd, here a subfolder of the repo.
+      [
+        "Codex apply_patch",
+        { tool_name: "apply_patch", tool_input: { command: "*** Begin Patch\n*** Update File: big.md\n@@\n-a\n+b\n*** End Patch" }, cwd: path.join(repo.root, "docs") },
+        {},
+      ],
+    ];
+    for (const [name, payload, opts] of cases) {
+      const out = repo.run({ hook_event_name: "PostToolUse", cwd: repo.root, ...payload }, opts);
+      const context = "toolName" in payload ? out?.additionalContext : out?.hookSpecificOutput?.additionalContext;
+      assert(context && context.includes("docs/big.md is now") && context.includes("markdown-labels skill"), name + " got " + JSON.stringify(out));
+    }
+  } finally {
+    repo.cleanup();
+  }
+});
+
+check("label hook: reads, and a second agent running Claude's hooks, stay quiet", () => {
+  const repo = hookRepo();
+  try {
+    const quiet = [
+      ["Claude Code Read", { tool_name: "Read", tool_input: { file_path: repo.doc }, tool_response: {} }, { env: { CLAUDE_PROJECT_DIR: repo.root }, args: ["--claude-settings"] }],
+      ["Copilot CLI str_replace_editor view", { toolName: "str_replace_editor", toolArgs: { command: "view", path: repo.doc } }, {}],
+      ["Copilot CLI view", { toolName: "view", toolArgs: { path: repo.doc } }, { env: { COPILOT_CLI: "1" } }],
+      // Copilot CLI also runs .claude/settings.json (it sets CLAUDE_PROJECT_DIR too) but drops
+      // hookSpecificOutput; its .github/hooks entry already spoke.
+      [
+        "Copilot CLI via .claude/settings.json",
+        { tool_name: "Write", tool_input: { path: repo.doc, file_text: "…" }, tool_result: {} },
+        { env: { COPILOT_CLI: "1", CLAUDE_PROJECT_DIR: repo.root }, args: ["--claude-settings"] },
+      ],
+      ["VS Code via chat.useClaudeHooks", { tool_name: "create_file", tool_input: { filePath: repo.doc } }, { args: ["--claude-settings"] }],
+    ];
+    for (const [name, payload, opts] of quiet) {
+      const out = repo.run({ cwd: repo.root, ...payload }, opts);
+      assert(out === null, name + " should print nothing, got " + JSON.stringify(out));
+    }
+    // One real heading; the "# ..." lines are shell comments inside a fence.
+    const oneHeading = path.join(repo.root, "docs", "one-heading.md");
+    fs.writeFileSync(oneHeading, "# Notes\n\n" + "word ".repeat(450) + "\n\n```bash\n# install\nnpm ci\n# test\nnpm test\n```\n");
+    const out = repo.run({ cwd: repo.root, tool_name: "create_file", tool_input: { filePath: oneHeading } });
+    assert(out === null, "comments in a code fence are not headings, got " + JSON.stringify(out));
+  } finally {
+    repo.cleanup();
+  }
+});
+
+check("label hook: a skill-written sidecar gets anchors on save, follows its text, and ends the nudge", () => {
+  const repo = hookRepo();
+  try {
+    // Whitespace runs and a range with blank lines at both ends: the two places the hook's
+    // copy of the anchor rules could drift from the extension's.
+    const text = fs.readFileSync(repo.doc, "utf8").replace("## Part 2\n\n", "## Part 2\n\n|  A  |\tb |\n\n");
+    fs.writeFileSync(repo.doc, text);
+    const lines = text.split("\n");
+    const start = lines.indexOf("## Part 2") + 1;
+    // Exactly what the skill writes: no sourceHash, no anchors.
+    const sidecar = path.join(repo.root, ".mymd", "docs", "big.md.json");
+    fs.mkdirSync(path.dirname(sidecar), { recursive: true });
+    const wanted = [
+      { label: "Two", color: "#059669", startLine: start, endLine: start + 2 },
+      { label: "Around", color: "#dc2626", startLine: start - 1, endLine: start + 5 },
+    ];
+    fs.writeFileSync(sidecar, JSON.stringify({ version: 1, lenses: [{ name: "Parts", generatedBy: "skill", ranges: wanted.slice(0, 1) }, { name: "Edges", ranges: wanted.slice(1) }] }));
+    const saved = repo.run({ tool_name: "apply_patch", tool_input: { command: "*** Begin Patch\n*** Add File: .mymd/docs/big.md.json\n+…\n*** End Patch" }, cwd: repo.root });
+    assert(saved === null, "saving a sidecar is not itself worth a nudge: " + JSON.stringify(saved));
+    const stampedLenses = JSON.parse(fs.readFileSync(sidecar, "utf8")).lenses;
+    for (const range of stampedLenses.flatMap((lens) => lens.ranges)) {
+      const expected = Labels.anchorsFor(lines, range.startLine, range.endLine);
+      for (const key of ["anchor", "endAnchor", "prevAnchor"]) {
+        assert(range[key] === expected[key], `${key} must match the extension's for ${range.label}: ${JSON.stringify(range)}`);
+      }
+    }
+
+    // Two lines added above the section push it down two lines.
+    const edited = "Preface.\n\n" + text;
+    fs.writeFileSync(repo.doc, edited);
+    const out = repo.run({ tool_name: "Edit", tool_input: { file_path: repo.doc }, tool_response: {}, cwd: repo.root }, { env: { CLAUDE_PROJECT_DIR: repo.root }, args: ["--claude-settings"] });
+    assert(out === null, "an edit to a labelled document should not re-nag: " + JSON.stringify(out));
+    const range = Labels.readLabels(JSON.parse(fs.readFileSync(sidecar, "utf8")), edited).lenses.find((l) => l.name === "Parts").ranges[0];
+    assert(range.startLine === start + 2, "the label should follow its section to line " + (start + 2) + ", got " + range.startLine);
+  } finally {
+    repo.cleanup();
+  }
+});
+
+check("label hook wiring: every agent points at the one script, and both skill copies match", () => {
+  const read = (file) => fs.readFileSync(path.join(REPO, file), "utf8");
+  const claude = JSON.parse(read(".claude/settings.json")).hooks.PostToolUse[0].hooks[0].command;
+  const copilot = JSON.parse(read(".github/hooks/markdown-labels.json")).hooks.postToolUse[0];
+  const codex = JSON.parse(read(".codex/hooks.json")).hooks.PostToolUse[0].hooks[0].command;
+  for (const [name, command] of [["Claude Code", claude], ["Copilot bash", copilot.bash], ["Copilot powershell", copilot.powershell], ["Codex", codex]]) {
+    includes(command, ".agents/hooks/markdown-labels.cjs", name + " command");
+  }
+  includes(claude, "--claude-settings", "Claude Code command");
+  assert(
+    read(".claude/skills/markdown-labels/SKILL.md") === read(".agents/skills/markdown-labels/SKILL.md"),
+    ".claude/skills/markdown-labels/SKILL.md has drifted from .agents/skills/markdown-labels/SKILL.md",
+  );
+});
+
+// Installing the hook and skill into other projects: agent-hooks/install.js, shared by the
+// extension's command and the mymarkdown-hooks CLI.
+const Hooks = require("./agent-hooks/install.js");
+const HOOK_CLI = path.join(__dirname, "agent-hooks", "cli.js");
+
+function scratchProject() {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "mymd-install-"));
+  const file = (dest) => path.join(root, ...dest.split("/"));
+  return {
+    root,
+    file,
+    read: (dest) => fs.readFileSync(file(dest), "utf8"),
+    put: (dest, text) => {
+      fs.mkdirSync(path.dirname(file(dest)), { recursive: true });
+      fs.writeFileSync(file(dest), text);
+    },
+    cleanup: () => fs.rmSync(root, { recursive: true, force: true }),
+  };
+}
+
+const statuses = (results) => Object.fromEntries(results.map((result) => [result.file, result.status]));
+const template = (dest) =>
+  fs.readFileSync(path.join(__dirname, "agent-hooks", "files", Hooks.TARGETS.find((t) => t.dest === dest).from), "utf8");
+
+check("agent hooks installer: an empty project gets all six files, and running it again changes nothing", () => {
+  const project = scratchProject();
+  try {
+    const first = Hooks.installAgentHooks(project.root);
+    assert(first.length === 6 && first.every((result) => result.status === "created"), JSON.stringify(first));
+    for (const target of Hooks.TARGETS) {
+      assert(project.read(target.dest) === template(target.dest), target.dest + " should be the template");
+    }
+    const second = Hooks.installAgentHooks(project.root);
+    assert(second.every((result) => result.status === "unchanged"), "a second run should change nothing: " + JSON.stringify(second));
+
+    // The installed hook runs from its new home and nudges about a big unlabelled document.
+    project.put("docs/big.md", "# Guide\n\n## One\n\n" + "word ".repeat(420) + "\n\n## Two\n\nend\n");
+    const run = spawnSync(process.execPath, [project.file(".agents/hooks/markdown-labels.cjs"), "--claude-settings"], {
+      input: JSON.stringify({ tool_name: "Write", tool_input: { file_path: project.file("docs/big.md") }, tool_response: {} }),
+      env: { ...process.env, CLAUDE_PROJECT_DIR: project.root, COPILOT_CLI: "" },
+      encoding: "utf8",
+    });
+    includes(run.stdout, "docs/big.md is now", "the installed hook's nudge");
+  } finally {
+    project.cleanup();
+  }
+});
+
+check("agent hooks installer: existing agent configs are merged into, never replaced", () => {
+  const project = scratchProject();
+  try {
+    const theirs = { type: "command", command: "npm run lint" };
+    project.put(
+      ".claude/settings.json",
+      JSON.stringify({ permissions: { allow: ["Bash(ls)"] }, hooks: { PostToolUse: [{ matcher: "Write", hooks: [theirs] }] } }, null, "\t") + "\n",
+    );
+    project.put(".codex/hooks.json", JSON.stringify({ hooks: { Stop: [{ hooks: [{ type: "command", command: "echo done" }] }] } }));
+
+    const results = statuses(Hooks.installAgentHooks(project.root));
+    assert(results[".claude/settings.json"] === "merged" && results[".codex/hooks.json"] === "merged", JSON.stringify(results));
+
+    const claude = JSON.parse(project.read(".claude/settings.json"));
+    assert(claude.permissions.allow[0] === "Bash(ls)", "their permissions must survive");
+    assert(JSON.stringify(claude.hooks.PostToolUse[0].hooks[0]) === JSON.stringify(theirs), "their hook must survive, first");
+    includes(claude.hooks.PostToolUse[1].hooks[0].command, ".agents/hooks/markdown-labels.cjs", "our hook, added after theirs");
+    assert(project.read(".claude/settings.json").startsWith('{\n\t"permissions"'), "their tab indentation should be kept");
+    assert(project.read(".claude/settings.json").endsWith("}\n"), "their trailing newline should be kept");
+
+    const codex = JSON.parse(project.read(".codex/hooks.json"));
+    assert(codex.hooks.Stop[0].hooks[0].command === "echo done", "their Codex hook must survive");
+    includes(codex.hooks.PostToolUse[0].hooks[0].command, "markdown-labels.cjs", "our Codex hook");
+    assert(!project.read(".codex/hooks.json").endsWith("\n"), "a file with no trailing newline stays that way");
+  } finally {
+    project.cleanup();
+  }
+});
+
+check("agent hooks installer: files that differ are kept unless forced, and forcing keeps what shares our entry", () => {
+  const project = scratchProject();
+  try {
+    Hooks.installAgentHooks(project.root);
+    project.put(".agents/hooks/markdown-labels.cjs", "// my own tweaks\n");
+    // An entry from the release before this one, sharing its group with someone else's hook.
+    const old = { type: "command", command: 'node "$CLAUDE_PROJECT_DIR/.claude/hooks/markdown-labels.cjs"' };
+    const theirs = { type: "command", command: "prettier --write" };
+    project.put(".claude/settings.json", JSON.stringify({ hooks: { PostToolUse: [{ matcher: "Write|Edit", hooks: [theirs, old] }] } }, null, 2) + "\n");
+    const before = project.read(".claude/settings.json");
+
+    const kept = statuses(Hooks.installAgentHooks(project.root));
+    assert(kept[".agents/hooks/markdown-labels.cjs"] === "differs" && kept[".claude/settings.json"] === "differs", JSON.stringify(kept));
+    assert(project.read(".agents/hooks/markdown-labels.cjs") === "// my own tweaks\n", "an edited file must not be touched");
+    assert(project.read(".claude/settings.json") === before, "a differing entry must not be touched");
+
+    const forced = statuses(Hooks.installAgentHooks(project.root, { force: true }));
+    assert(forced[".agents/hooks/markdown-labels.cjs"] === "updated" && forced[".claude/settings.json"] === "updated", JSON.stringify(forced));
+    assert(project.read(".agents/hooks/markdown-labels.cjs") === template(".agents/hooks/markdown-labels.cjs"), "forced: the hook is replaced");
+    const groups = JSON.parse(project.read(".claude/settings.json")).hooks.PostToolUse;
+    assert(groups.length === 2, "ours should move to its own entry, got " + JSON.stringify(groups));
+    assert(JSON.stringify(groups[0]) === JSON.stringify({ matcher: "Write|Edit", hooks: [theirs] }), "their hook keeps its entry and matcher");
+    includes(groups[1].hooks[0].command, ".agents/hooks/markdown-labels.cjs", "the replacement entry");
+    assert(Hooks.installAgentHooks(project.root).every((result) => result.status === "unchanged"), "and then it is up to date");
+  } finally {
+    project.cleanup();
+  }
+});
+
+check("agent hooks installer: a config it cannot read is reported and left alone, and the rest still installs", () => {
+  const project = scratchProject();
+  try {
+    project.put(".claude/settings.json", "{ this is not json");
+    project.put(".github", "a file where a folder is needed\n");
+    const results = Hooks.installAgentHooks(project.root);
+    const byFile = statuses(results);
+    assert(byFile[".claude/settings.json"] === "invalid", JSON.stringify(results));
+    assert(project.read(".claude/settings.json") === "{ this is not json", "an unreadable config must not be touched");
+    assert(byFile[".github/hooks/markdown-labels.json"] === "failed", JSON.stringify(results));
+    assert(results.find((result) => result.status === "failed").reason, "a failure should say why");
+    assert(byFile[".agents/hooks/markdown-labels.cjs"] === "created" && byFile[".codex/hooks.json"] === "created", JSON.stringify(results));
+  } finally {
+    project.cleanup();
+  }
+});
+
+/** A file symlink, or false where the OS refuses one (Windows without Developer Mode). */
+function fileSymlink(target, link) {
+  try {
+    fs.symlinkSync(target, link, "file");
+    return true;
+  } catch (error) {
+    if (process.platform === "win32" && error.code === "EPERM") return false;
+    throw error;
+  }
+}
+
+/** Run `fn` with a throwaway home folder, so a broken guard can never write into the real one. */
+function withFakeHome(fn) {
+  const home = scratchProject();
+  const saved = { HOME: process.env.HOME, USERPROFILE: process.env.USERPROFILE };
+  process.env.HOME = process.env.USERPROFILE = home.root;
+  try {
+    return fn(home, { ...process.env, HOME: home.root, USERPROFILE: home.root });
+  } finally {
+    for (const [key, value] of Object.entries(saved)) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+    home.cleanup();
+  }
+}
+
+check("agent hooks installer: refuses the home folder, however it is reached", () => {
+  withFakeHome((home, env) => {
+    const refused = (root) => {
+      try {
+        Hooks.installAgentHooks(root);
+      } catch (error) {
+        return /home folder/.test(error.message);
+      }
+      return false;
+    };
+    assert(refused(home.root), "the home folder itself must be refused");
+    assert(refused(home.root + path.sep), "with a trailing separator too");
+    // Through a symlink: the spelling differs, the folder is the same (like a lower-case
+    // drive letter from VS Code on Windows).
+    const link = path.join(os.tmpdir(), "mymd-homelink-" + process.pid);
+    fs.symlinkSync(home.root, link, "junction");
+    try {
+      assert(refused(link), "a symlink to the home folder must be refused");
+    } finally {
+      fs.unlinkSync(link);
+    }
+    // The CLI outside any git repo falls back to the folder it runs in: from ~ that is refused.
+    const run = spawnSync(process.execPath, [HOOK_CLI, "init"], { cwd: home.root, env, encoding: "utf8" });
+    assert(run.status === 1 && /home folder/.test(run.stderr), "the CLI in ~ should refuse: " + run.stderr);
+    assert(!fs.existsSync(home.file(".claude/settings.json")) && !fs.existsSync(home.file(".codex")), "nothing written");
+
+    // A dotfiles repository in ~ is not the project for a folder under it that has none.
+    fs.mkdirSync(home.file(".git"));
+    fs.mkdirSync(home.file("notes"));
+    const notes = spawnSync(process.execPath, [HOOK_CLI, "init"], { cwd: home.file("notes"), env, encoding: "utf8" });
+    assert(notes.status === 0, "a folder under a dotfiles repo should install: " + notes.stderr);
+    assert(fs.existsSync(home.file("notes/.agents/hooks/markdown-labels.cjs")), "into the folder it was run from");
+  });
+});
+
+check("agent hooks installer: never writes through a symlink out of the project", () => {
+  const project = scratchProject();
+  const outside = scratchProject();
+  try {
+    // A symlinked folder (.claude shared with ~/.claude, say).
+    fs.symlinkSync(outside.root, project.file(".claude"), "junction");
+    const results = statuses(Hooks.installAgentHooks(project.root));
+    assert(results[".claude/settings.json"] === "failed" && results[".claude/skills/markdown-labels/SKILL.md"] === "failed", JSON.stringify(results));
+    assert(results[".codex/hooks.json"] === "created", "the rest still installs: " + JSON.stringify(results));
+    // A dangling symlink at a target would otherwise create its target, wherever that is.
+    fs.rmSync(project.file(".agents"), { recursive: true });
+    fs.mkdirSync(project.file(".agents/hooks"), { recursive: true });
+    if (fileSymlink(outside.file("made-by-installer.cjs"), project.file(".agents/hooks/markdown-labels.cjs"))) {
+      const dangling = statuses(Hooks.installAgentHooks(project.root));
+      assert(dangling[".agents/hooks/markdown-labels.cjs"] === "failed", JSON.stringify(dangling));
+    }
+    assert(fs.readdirSync(outside.root).length === 0, "nothing may appear outside the project: " + fs.readdirSync(outside.root));
+  } finally {
+    project.cleanup();
+    outside.cleanup();
+  }
+});
+
+check("agent hooks installer: a failed write leaves the old file whole", () => {
+  const project = scratchProject();
+  const original = JSON.stringify({ permissions: { deny: ["Read(.env)"] } }, null, 2) + "\n";
+  project.put(".claude/settings.json", original);
+  // Disk full midway through the settings file: half the text lands, then the write fails.
+  const realWrite = fs.writeFileSync;
+  try {
+    fs.writeFileSync = (file, text, ...rest) => {
+      if (!String(file).includes("settings.json")) return realWrite(file, text, ...rest);
+      realWrite(file, String(text).slice(0, 10), ...rest);
+      throw Object.assign(new Error("ENOSPC: no space left on device"), { code: "ENOSPC" });
+    };
+    const results = statuses(Hooks.installAgentHooks(project.root));
+    fs.writeFileSync = realWrite;
+    assert(results[".claude/settings.json"] === "failed", JSON.stringify(results));
+    assert(project.read(".claude/settings.json") === original, "the user's settings must survive a failed write");
+    assert(!fs.readdirSync(project.file(".claude")).some((name) => name.endsWith(".tmp")), "no temporary file is left behind");
+  } finally {
+    fs.writeFileSync = realWrite;
+    project.cleanup();
+  }
+});
+
+check("agent hooks installer: configs are not pointed at a hook script that could not be written", () => {
+  const project = scratchProject();
+  try {
+    project.put(".agents", "a file where the folder should be\n");
+    const results = statuses(Hooks.installAgentHooks(project.root));
+    assert(results[".agents/hooks/markdown-labels.cjs"] === "failed", JSON.stringify(results));
+    for (const config of [".claude/settings.json", ".github/hooks/markdown-labels.json", ".codex/hooks.json"]) {
+      assert(results[config] === "skipped" && !fs.existsSync(project.file(config)), config + " must not register a missing script");
+    }
+    const run = spawnSync(process.execPath, [HOOK_CLI, "init", project.root], { encoding: "utf8" });
+    assert(run.status === 1 && !run.stdout.includes("pick the hook up"), "no success line when the hook is not active: " + run.stdout);
+  } finally {
+    project.cleanup();
+  }
+});
+
+check("agent hooks installer: replacing clears every copy of our entry, and leaves hooks that only mention it", () => {
+  const project = scratchProject();
+  try {
+    Hooks.installAgentHooks(project.root);
+    const current = JSON.parse(project.read(".claude/settings.json")).hooks.PostToolUse[0];
+    const old = { matcher: "Write|Edit", hooks: [{ type: "command", command: 'node "$CLAUDE_PROJECT_DIR/.claude/hooks/markdown-labels.cjs"' }] };
+    const settings = (groups) => project.put(".claude/settings.json", JSON.stringify({ hooks: { PostToolUse: groups } }) + "\n");
+    const groups = () => JSON.parse(project.read(".claude/settings.json")).hooks.PostToolUse;
+
+    settings([current, old]);
+    assert(statuses(Hooks.installAgentHooks(project.root))[".claude/settings.json"] === "differs", "a second, older copy is not 'unchanged'");
+    Hooks.installAgentHooks(project.root, { force: true });
+    assert(groups().length === 1 && JSON.stringify(groups()[0]) === JSON.stringify(current), "forced: exactly one, current: " + JSON.stringify(groups()));
+
+    const lint = { matcher: "Write", hooks: [{ type: "command", command: "npx eslint --fix .agents/hooks/markdown-labels.cjs" }] };
+    settings([lint]);
+    const forced = Hooks.installAgentHooks(project.root, { force: true }).find((result) => result.file === ".claude/settings.json");
+    assert(forced.status === "differs" && /its own way/.test(forced.reason), "a hook that mentions the script is theirs: " + JSON.stringify(forced));
+    assert(JSON.stringify(groups()) === JSON.stringify([lint]), "and it is left exactly as it was");
+  } finally {
+    project.cleanup();
+  }
+});
+
+check("agent hooks installer: Windows line endings are not a difference", () => {
+  const project = scratchProject();
+  try {
+    Hooks.installAgentHooks(project.root);
+    for (const target of Hooks.TARGETS) project.put(target.dest, project.read(target.dest).replace(/\n/g, "\r\n"));
+    const results = Hooks.installAgentHooks(project.root);
+    assert(results.every((result) => result.status === "unchanged"), "a CRLF checkout is up to date: " + JSON.stringify(results));
+  } finally {
+    project.cleanup();
+  }
+});
+
+check("the repo's own agent files are exactly what the installer ships", () => {
+  // They are this repo's own install. After editing a template in agent-hooks/files, run
+  // `node vscode-extension/agent-hooks/cli.js init --force` from the repo root to refresh them.
+  const project = scratchProject();
+  try {
+    for (const target of Hooks.TARGETS) project.put(target.dest, fs.readFileSync(path.join(REPO, ...target.dest.split("/")), "utf8"));
+    const results = Hooks.installAgentHooks(project.root);
+    const stale = results.filter((result) => result.status !== "unchanged").map((result) => result.file);
+    assert(!stale.length, "out of date with agent-hooks/files: " + stale.join(", "));
+  } finally {
+    project.cleanup();
+  }
+});
+
+check("mymarkdown-hooks CLI: init installs at the git root from a subfolder, and reports bad usage and bad configs", () => {
+  const project = scratchProject();
+  try {
+    fs.mkdirSync(path.join(project.root, ".git"));
+    fs.mkdirSync(path.join(project.root, "src", "deep"), { recursive: true });
+    const cli = (args, cwd = project.root) => spawnSync(process.execPath, [HOOK_CLI, ...args], { cwd, encoding: "utf8" });
+
+    const init = cli(["init"], path.join(project.root, "src", "deep"));
+    assert(init.status === 0, "init should succeed: " + init.stderr);
+    assert(fs.existsSync(project.file(".agents/hooks/markdown-labels.cjs")), "files belong at the git root");
+    assert(!fs.existsSync(path.join(project.root, "src", "deep", ".agents")), "not in the folder it was run from");
+    includes(init.stdout, "created", "the report");
+
+    includes(cli(["init"]).stdout, "Already up to date", "a second run");
+    const help = cli(["--help"]);
+    assert(help.status === 0 && help.stdout.startsWith("Usage: mymarkdown-hooks init"), "--help: " + help.stdout);
+    assert(cli([]).status === 1 && cli(["install"]).status === 1 && cli(["init", "--yes"]).status === 1, "bad usage exits 1");
+
+    project.put(".codex/hooks.json", "not json");
+    const broken = cli(["init", project.root]);
+    assert(broken.status === 1, "an unreadable config should fail the run");
+    includes(broken.stdout, "invalid", "the report");
+  } finally {
+    project.cleanup();
+  }
+});
+
+check("the mymarkdown-hooks npm package ships everything the installer reads, and the VSIX keeps it", () => {
+  const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, "agent-hooks", "package.json"), "utf8"));
+  assert(pkg.name === "mymarkdown-hooks" && pkg.bin["mymarkdown-hooks"] === "cli.js", "name and bin");
+  assert(fs.readFileSync(HOOK_CLI, "utf8").startsWith("#!/usr/bin/env node\n"), "the bin needs a node shebang");
+  for (const needed of ["cli.js", "install.js", "files/"]) assert(pkg.files.includes(needed), "package files should include " + needed);
+  for (const target of Hooks.TARGETS) assert(fs.existsSync(path.join(__dirname, "agent-hooks", "files", target.from)), target.from);
+  // npm packs a LICENSE from the package folder itself, and a symlink is not followed.
+  assert(
+    fs.readFileSync(path.join(__dirname, "agent-hooks", "LICENSE"), "utf8") === fs.readFileSync(path.join(__dirname, "LICENSE"), "utf8"),
+    "agent-hooks/LICENSE should be a copy of the extension's LICENSE",
+  );
+  const ignored = fs.readFileSync(path.join(__dirname, ".vscodeignore"), "utf8").split("\n").map((line) => line.trim());
+  assert(!ignored.some((line) => line.startsWith("agent-hooks")), ".vscodeignore must not drop agent-hooks: the command needs it");
+});
+
+check("Install Label Hooks command: installs into the open folder, and replaces changed files only when confirmed", () => {
+  const project = scratchProject();
+  const other = scratchProject();
+  const host = driveLabelCommands({});
+  const run = () => host.handlers["mymarkdown.installAgentHooks"]();
+  const folder = (p, name) => ({ name, uri: { fsPath: p.root, scheme: "file" } });
+  return run()
+    .then(() => {
+      assert(host.messages.pop().text.includes("open a project folder first"), "no folder: a warning, nothing else");
+      host.vscode.workspace.workspaceFolders = [folder(project, "proj")];
+      return run();
+    })
+    .then(() => {
+      assert(fs.existsSync(project.file(".agents/hooks/markdown-labels.cjs")), "installed into the only folder");
+      includes(host.messages.pop().text, "label hooks installed in proj", "the confirmation");
+      project.put(".agents/hooks/markdown-labels.cjs", "// edited\n");
+      host.queueWarningAnswer(undefined); // the modal dismissed
+      return run();
+    })
+    .then(() => {
+      assert(host.messages.some((m) => m.kind === "warning" && m.text.includes("Replace them?")), "it should ask before replacing");
+      assert(project.read(".agents/hooks/markdown-labels.cjs") === "// edited\n", "dismissed: the edit stays");
+      host.queueWarningAnswer("Replace");
+      return run();
+    })
+    .then(() => {
+      assert(project.read(".agents/hooks/markdown-labels.cjs") === template(".agents/hooks/markdown-labels.cjs"), "confirmed: replaced");
+      // Several folders: the one picked, and only that one.
+      host.vscode.workspace.workspaceFolders = [folder(project, "proj"), folder(other, "other")];
+      host.queueQuickPick({ label: "other", folder: folder(other, "other") });
+      return run();
+    })
+    .then(() => {
+      assert(fs.existsSync(other.file(".codex/hooks.json")), "installed into the folder picked");
+      includes(host.messages.pop().text, "installed in other", "the confirmation names it");
+      // A config it cannot update: a warning that says what to fix, and no claim of success.
+      host.messages.length = 0;
+      host.vscode.workspace.workspaceFolders = [folder(other, "other")];
+      other.put(".claude/settings.json", "{ not json");
+      return run();
+    })
+    .then(() => {
+      assert(host.messages.length === 1 && host.messages[0].kind === "warning", "only a warning: " + JSON.stringify(host.messages));
+      includes(host.messages[0].text, ".claude/settings.json (not valid JSON)", "the warning");
+      // Folders open, none on disk (a virtual workspace).
+      host.messages.length = 0;
+      host.vscode.workspace.workspaceFolders = [{ name: "vfs", uri: { fsPath: "/x", scheme: "vscode-vfs" } }];
+      return run();
+    })
+    .then(() => {
+      includes(host.messages.pop().text, "only be installed into a folder on disk", "a virtual workspace");
+    })
+    .finally(() => {
+      project.cleanup();
+      other.cleanup();
+    });
+});
+
+check("a background document's sidecar changing does not make later edits re-render every preview", () => {
+  const lens = (name) => ({ name, ranges: [{ label: "One", color: "#111111", startLine: 1, endLine: 3 }] });
+  const text = "# A\n\nabc\n";
+  const a = fakeMarkdownDocument("/ws/a.md", text);
+  const b = fakeMarkdownDocument("/ws/b.md", text);
+  const sidecars = { "/ws/.mymd/a.md.json": Labels.writeLabels(text, [lens("A")], null), "/ws/.mymd/b.md.json": Labels.writeLabels(text, [lens("B")], null) };
+  const host = driveLabelCommands(sidecars, a, [a, b]);
+  return settle()
+    .then(() => {
+      // An agent labels B, open in another tab.
+      sidecars["/ws/.mymd/b.md.json"] = Labels.writeLabels(text, [lens("B2")], null);
+      host.watchers[0].handlers.change(sidecarUri("/ws/.mymd/b.md.json"));
+      return settle();
+    })
+    .then(() => {
+      host.refreshes.length = 0;
+      host.edit(a); // typing in A changes nothing A's preview draws
+      return settle();
+    })
+    .then(() => {
+      assert(host.refreshes.length === 0, "an edit that changes nothing drawn must not reload the previews, got " + host.refreshes.length);
+      host.activate(b);
+      return settle();
+    })
+    .then(() => {
+      host.refreshes.length = 0;
+      host.activate(a); // back to a document whose labels have not changed
+      return settle();
+    })
+    .then(() => {
+      assert(host.refreshes.length === 0, "switching back to an unchanged document must not reload the previews, got " + host.refreshes.length);
+    });
+});
+
+check("label hook: a failed write while stamping leaves the agent's sidecar whole", () => {
+  const repo = hookRepo();
+  try {
+    const sidecar = path.join(repo.root, ".mymd", "docs", "big.md.json");
+    fs.mkdirSync(path.dirname(sidecar), { recursive: true });
+    const original = JSON.stringify({ version: 1, lenses: [{ name: "Parts", ranges: [{ label: "One", color: "#111111", startLine: 1, endLine: 3 }] }] });
+    fs.writeFileSync(sidecar, original);
+    // Disk full inside the hook's own process: every write under .mymd lands half, then fails.
+    const preload = path.join(repo.root, "full-disk.cjs");
+    fs.writeFileSync(
+      preload,
+      'const fs = require("fs"); const write = fs.writeFileSync;\n' +
+        'fs.writeFileSync = (file, text, ...rest) => { if (!String(file).includes(".mymd")) return write(file, text, ...rest);\n' +
+        '  write(file, String(text).slice(0, 10), ...rest); throw Object.assign(new Error("ENOSPC"), { code: "ENOSPC" }); };\n',
+    );
+    repo.run({ tool_name: "Write", tool_input: { file_path: sidecar }, cwd: repo.root }, { preload });
+    assert(fs.readFileSync(sidecar, "utf8") === original, "the sidecar must be untouched when stamping fails");
+    assert(!fs.readdirSync(path.dirname(sidecar)).some((name) => name.endsWith(".tmp")), "no temporary file is left behind");
+  } finally {
+    repo.cleanup();
+  }
+});
+
+check("label hook: a huge fence run cannot stall the agent", () => {
+  const repo = hookRepo();
+  try {
+    // One line of 20,000 backticks in a 2 MB file: a regex over the whole text backtracks on
+    // every run length, taking many seconds per save.
+    fs.writeFileSync(repo.doc, "# A\n\n## B\n\n" + "word ".repeat(500) + "\n\n" + "`".repeat(20000) + "\n" + "x\n".repeat(1000000));
+    const started = Date.now();
+    repo.run({ tool_name: "Write", tool_input: { file_path: repo.doc }, cwd: repo.root });
+    assert(Date.now() - started < 5000, "the hook took " + (Date.now() - started) + " ms");
+  } finally {
+    repo.cleanup();
+  }
+});
+
+check("label hook: follows Claude Code worktrees and every Markdown file extension", () => {
+  const repo = hookRepo();
+  try {
+    // A worktree under .claude/worktrees/<name>/ with its own document and .mymd, while the
+    // hook still runs from the main checkout.
+    const wt = path.join(repo.root, ".claude", "worktrees", "feat");
+    fs.mkdirSync(path.join(wt, "docs"), { recursive: true });
+    fs.copyFileSync(repo.doc, path.join(wt, "docs", "big.md"));
+    const nudge = repo.run({ tool_name: "apply_patch", tool_input: { command: "*** Begin Patch\n*** Add File: docs/big.md\n*** End Patch" }, cwd: wt });
+    includes(nudge.hookSpecificOutput.additionalContext, "docs/big.md is now", "the worktree's own path");
+    assert(!nudge.hookSpecificOutput.additionalContext.includes(".claude/worktrees"), "named from the worktree, not the main checkout");
+    const sidecar = path.join(wt, ".mymd", "docs", "big.md.json");
+    fs.mkdirSync(path.dirname(sidecar), { recursive: true });
+    fs.writeFileSync(sidecar, JSON.stringify({ version: 1, lenses: [{ name: "L", ranges: [{ label: "One", color: "#111111", startLine: 1, endLine: 3 }] }] }));
+    repo.run({ tool_name: "apply_patch", tool_input: { command: "*** Begin Patch\n*** Add File: .mymd/docs/big.md.json\n*** End Patch" }, cwd: wt });
+    assert(JSON.parse(fs.readFileSync(sidecar, "utf8")).lenses[0].ranges[0].anchor === "# guide", "the worktree's sidecar is stamped");
+
+    // .markdown is Markdown to VS Code, so it is to the hook.
+    const other = path.join(repo.root, "docs", "guide.markdown");
+    fs.copyFileSync(repo.doc, other);
+    const out = repo.run({ tool_name: "create_file", tool_input: { filePath: other }, cwd: repo.root });
+    includes(out.hookSpecificOutput.additionalContext, "docs/guide.markdown is now", "a .markdown document");
+  } finally {
+    repo.cleanup();
+  }
+});
+
+check("the installed agent configs run the hook from a subfolder, with or without the project variable", () => {
+  const project = scratchProject();
+  try {
+    Hooks.installAgentHooks(project.root);
+    project.put("docs/big.md", "# Guide\n\n## One\n\n" + "word ".repeat(420) + "\n\n## Two\n\nend\n");
+    fs.mkdirSync(project.file("docs/sub"));
+    const config = (dest) => JSON.parse(project.read(dest));
+    const commands = [
+      ["Claude Code", config(".claude/settings.json").hooks.PostToolUse[0].hooks[0].command, { CLAUDE_PROJECT_DIR: project.root }, { tool_name: "Write", tool_input: { file_path: project.file("docs/big.md") }, tool_response: {} }],
+      ["Codex", config(".codex/hooks.json").hooks.PostToolUse[0].hooks[0].command, {}, { tool_name: "apply_patch", tool_input: { command: "*** Begin Patch\n*** Update File: ../big.md\n*** End Patch" } }],
+      ["Copilot", config(".github/hooks/markdown-labels.json").hooks.postToolUse[0].bash, {}, { toolName: "edit", toolArgs: { path: project.file("docs/big.md") } }],
+    ];
+    for (const [agent, command, env, payload] of commands) {
+      const inherited = { ...process.env };
+      delete inherited.CLAUDE_PROJECT_DIR;
+      delete inherited.COPILOT_CLI;
+      const cwd = project.file("docs/sub");
+      // Through the platform's own shell (sh, or cmd.exe on Windows), as the agents run them.
+      const run = spawnSync(command, { shell: true, cwd, env: { ...inherited, ...env }, input: JSON.stringify({ cwd, ...payload }), encoding: "utf8" });
+      assert(run.status === 0 && run.stdout.includes("docs/big.md is now"), `${agent} from a subfolder: exit ${run.status}, ${run.stdout || run.stderr}`);
+    }
+  } finally {
+    project.cleanup();
+  }
+});
+
+check("agent hooks installer: never takes a user's own hook for ours, and never writes through a planted temp file", () => {
+  const project = scratchProject();
+  const outside = scratchProject();
+  try {
+    // The user's own script that happens to share the name.
+    const theirs = { matcher: "Write", hooks: [{ type: "command", command: "node tools/lint/markdown-labels.cjs --fix" }] };
+    project.put(".claude/settings.json", JSON.stringify({ hooks: { PostToolUse: [theirs] } }) + "\n");
+    assert(statuses(Hooks.installAgentHooks(project.root))[".claude/settings.json"] === "merged", "ours is added beside theirs");
+    const groups = JSON.parse(project.read(".claude/settings.json")).hooks.PostToolUse;
+    assert(groups.length === 2 && JSON.stringify(groups[0]) === JSON.stringify(theirs), "theirs is kept: " + JSON.stringify(groups));
+    assert(statuses(Hooks.installAgentHooks(project.root, { force: true }))[".claude/settings.json"] === "unchanged", "and forcing leaves it");
+
+    // A repository can commit a symlink at the temporary file's name.
+    project.put(".codex/hooks.json", "{}\n");
+    outside.put("victim.txt", "keep me\n");
+    if (fileSymlink(outside.file("victim.txt"), project.file(`.codex/hooks.json.${process.pid}.tmp`))) {
+      const result = statuses(Hooks.installAgentHooks(project.root))[".codex/hooks.json"];
+      assert(result === "failed", "a planted temp file must stop the write, got " + result);
+      assert(outside.read("victim.txt") === "keep me\n", "nothing outside the project may be written");
+      assert(project.read(".codex/hooks.json") === "{}\n", "and the config is untouched");
+    }
+  } finally {
+    project.cleanup();
+    outside.cleanup();
+  }
+});
+
+check("Install Label Hooks command: does not offer to replace what it cannot, and says why", () => {
+  const project = scratchProject();
+  const host = driveLabelCommands({});
+  project.put(".claude/settings.json", JSON.stringify({ hooks: { PostToolUse: [{ matcher: "Write", hooks: [{ type: "command", command: "sh -c 'node .agents/hooks/markdown-labels.cjs'" }] }] } }) + "\n");
+  host.vscode.workspace.workspaceFolders = [{ name: "proj", uri: { fsPath: project.root, scheme: "file" } }];
+  return host.handlers["mymarkdown.installAgentHooks"]()
+    .then(() => {
+      assert(!host.messages.some((m) => /Replace them\?/.test(m.text)), "no Replace prompt for a change that cannot happen");
+      includes(host.messages.pop().text, "runs markdown-labels.cjs its own way", "the reason");
+    })
+    .finally(() => project.cleanup());
 });
 
 Promise.all(pending).then(() => {
