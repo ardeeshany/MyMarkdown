@@ -57,3 +57,5 @@
 - [x] Replace the two older VS Code README screenshots with the new overview image
 - [x] Package VS Code extension 0.2.1 and explain AI-assisted smart labeling more clearly on its page
 - [x] Replace the old screenshots on the main GitHub README with the new VS Code overview image
+
+- 2026-10-02: App packages security update + extension 0.2.2 packaged and served (landing page updated).

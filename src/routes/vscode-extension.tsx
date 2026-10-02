@@ -18,7 +18,7 @@ import overviewImage from "@/assets/vscode-overview.webp.asset.json";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
 
-const VERSION = "0.2.1";
+const VERSION = "0.2.2";
 
 const INSTALL_COMMAND = `code --install-extension mymarkdown-${VERSION}.vsix`;
 
